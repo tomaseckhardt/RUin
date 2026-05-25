@@ -1,3 +1,9 @@
+const basePath = import.meta.env.BASE_URL || '/'
+
+function normalizePath(path) {
+  return path.startsWith('/') ? path : `/${path}`
+}
+
 export function formatDateTime(dateString) {
   const date = new Date(dateString)
 
@@ -12,7 +18,9 @@ export function formatDateTime(dateString) {
 }
 
 export function buildAbsoluteUrl(path) {
-  return new URL(path, window.location.origin).toString()
+  const normalizedPath = normalizePath(path)
+  const base = basePath.endsWith('/') ? basePath : `${basePath}/`
+  return new URL(`${base}#${normalizedPath}`, window.location.origin).toString()
 }
 
 export function summaryText(summary) {

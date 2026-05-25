@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
+    "cors": "^2.8.6",
     "express": "^5.1.0",
     "nanoid": "^5.1.6"
   }

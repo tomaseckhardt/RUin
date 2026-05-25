@@ -1,9 +1,12 @@
+import cors from 'cors'
 import express from 'express'
 import eventsRouter from './routes/events.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3001)
 
+const corsOrigin = process.env.CORS_ORIGIN || '*'
+app.use(cors({ origin: corsOrigin }))
 app.use(express.json())
 
 app.get('/api/health', (_request, response) => {

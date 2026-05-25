@@ -1,3 +1,14 @@
+const rawBase = import.meta.env.VITE_API_BASE_URL?.trim() || ''
+const API_BASE_URL = rawBase.endsWith('/') ? rawBase.slice(0, -1) : rawBase
+
+function resolveApiUrl(path) {
+  if (API_BASE_URL) {
+    return `${API_BASE_URL}${path}`
+  }
+
+  return path
+}
+
 async function readResponse(response) {
   const contentType = response.headers.get('content-type') || ''
 
@@ -9,7 +20,7 @@ async function readResponse(response) {
 }
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(resolveApiUrl(path), {
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers || {}),
