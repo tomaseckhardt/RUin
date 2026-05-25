@@ -14,10 +14,10 @@ const initialForm = {
 function LinkCard({ label, href, tone }) {
   return (
     <div className={`rounded-[1.75rem] border p-5 ${tone}`}>
-      <p className="text-sm font-semibold uppercase tracking-[0.2em]">{label}</p>
+      <p className="text-sm font-medium uppercase tracking-[0.2em]">{label}</p>
       <a
         href={href}
-        className="mt-3 block break-all text-lg font-semibold underline decoration-2 underline-offset-4"
+        className="mt-3 block break-all text-lg font-medium underline decoration-1 underline-offset-4"
       >
         {href}
       </a>
@@ -65,21 +65,21 @@ function CreateEventPage() {
         <section className="panel">
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-orange-600">
+              <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
                 Organizátor
               </p>
-              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
                 Vytvoř novou akci
               </h2>
             </div>
-            <div className="rounded-full bg-orange-100 px-3 py-1 text-sm font-semibold text-orange-700">
+            <div className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               bez registrace
             </div>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Název akce</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Název akce</label>
               <input
                 className="field"
                 value={form.name}
@@ -90,7 +90,7 @@ function CreateEventPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Místo</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Místo</label>
                 <input
                   className="field"
                   value={form.location}
@@ -100,7 +100,7 @@ function CreateEventPage() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Datum a čas</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Datum a čas</label>
                 <input
                   type="datetime-local"
                   className="field"
@@ -111,7 +111,7 @@ function CreateEventPage() {
               </div>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Popis</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Popis</label>
               <textarea
                 className="field min-h-32"
                 value={form.description}
@@ -124,7 +124,7 @@ function CreateEventPage() {
               <button type="submit" className="primary-button" disabled={isSubmitting}>
                 {isSubmitting ? 'Zakládám akci…' : 'Vytvořit akci'}
               </button>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Po vytvoření dostaneš veřejný odkaz i soukromý organizátorský link.
               </p>
             </div>
@@ -132,11 +132,11 @@ function CreateEventPage() {
         </section>
 
         <aside className="space-y-6">
-          <section className="panel bg-slate-950 text-white shadow-[0_28px_80px_rgba(15,23,42,0.22)]">
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-orange-200">
+          <section className="panel">
+            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
               Jak to funguje
             </p>
-            <ol className="mt-4 space-y-4 text-sm leading-6 text-slate-300">
+            <ol className="mt-4 space-y-4 text-sm leading-6 text-slate-600 dark:text-stone-50">
               <li>1. Vytvoříš akci a zkopíruješ veřejný odkaz do skupiny.</li>
               <li>2. Každý odpoví jménem a buď přijde, nebo pošle omluvenku.</li>
               <li>3. Ty v soukromém organizátorském odkazu rozhodneš, co bereš.</li>
@@ -150,12 +150,12 @@ function CreateEventPage() {
                 <LinkCard
                   label="Veřejná pozvánka"
                   href={buildAbsoluteUrl(createdLinks.guestPath)}
-                  tone="border-emerald-200 bg-emerald-50 text-emerald-900"
+                  tone="border-slate-200 bg-white/50 text-slate-900 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
                 />
                 <LinkCard
                   label="Organizátorský odkaz"
                   href={buildAbsoluteUrl(createdLinks.organizerPath)}
-                  tone="border-slate-200 bg-slate-50 text-slate-900"
+                  tone="border-slate-200 bg-white/50 text-slate-900 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
                 />
               </div>
             </section>

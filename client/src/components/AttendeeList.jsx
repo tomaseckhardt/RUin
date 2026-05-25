@@ -3,26 +3,26 @@ import { summaryText } from '../lib/format.js'
 const statusConfig = {
   confirmed: {
     label: 'Potvrzeno',
-    tone: 'bg-emerald-100 text-emerald-800',
-    accent: 'border-emerald-200/80 bg-emerald-50/80',
+    tone: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
+    accent: 'border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-900/70 dark:bg-emerald-950/20',
     icon: '✅',
   },
   excused: {
     label: 'Čeká na posouzení',
-    tone: 'bg-orange-100 text-orange-800',
-    accent: 'border-orange-200/80 bg-orange-50/80',
+    tone: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+    accent: 'border-amber-200/80 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20',
     icon: '⏳',
   },
   excused_accepted: {
     label: 'Omluvenka přijatá',
-    tone: 'bg-rose-100 text-rose-800',
-    accent: 'border-rose-200/80 bg-rose-50/80',
+    tone: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300',
+    accent: 'border-rose-200/80 bg-rose-50/70 dark:border-rose-900/70 dark:bg-rose-950/20',
     icon: '❌',
   },
   excused_rejected: {
     label: 'Omluvenka zamítnutá',
-    tone: 'bg-slate-200 text-slate-700',
-    accent: 'border-slate-200 bg-slate-100/90',
+    tone: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    accent: 'border-slate-200 bg-slate-100/90 dark:border-slate-700 dark:bg-slate-900/50',
     icon: '⚪',
   },
 }
@@ -30,21 +30,21 @@ const statusConfig = {
 function AttendeeList({ attendees, summary, showModeration = false, onModerate, busyId }) {
   return (
     <section className="panel">
-      <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-950">Kdo je v tom s tebou</h2>
-          <p className="mt-1 text-sm text-slate-500">{summaryText(summary)}</p>
+          <h2 className="text-2xl font-semibold text-slate-950 dark:text-slate-50">Kdo je v tom s tebou</h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{summaryText(summary)}</p>
         </div>
-        <div className="flex flex-wrap gap-2 text-sm font-medium text-slate-500">
-          <span className="status-chip bg-emerald-100 text-emerald-800">✅ {summary.confirmed} přijde</span>
-          <span className="status-chip bg-orange-100 text-orange-800">⏳ {summary.excused} omluvenky</span>
-          <span className="status-chip bg-slate-200 text-slate-700">⚪ {summary.rejected} zamítnuté</span>
+        <div className="flex flex-wrap gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+          <span className="status-chip bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✅ {summary.confirmed} přijde</span>
+          <span className="status-chip bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">⏳ {summary.excused} omluvenky</span>
+          <span className="status-chip bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">⚪ {summary.rejected} zamítnuté</span>
         </div>
       </div>
 
       <div className="mt-5 space-y-3">
         {attendees.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-10 text-center text-slate-500">
+          <div className="rounded-3xl border border-dashed border-slate-300 px-4 py-10 text-center text-slate-500 dark:border-slate-700 dark:text-slate-400">
             Zatím nikdo neodpověděl. První jméno čeká právě na tebe.
           </div>
         ) : null}
@@ -63,14 +63,14 @@ function AttendeeList({ attendees, summary, showModeration = false, onModerate, 
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
                     <span
-                      className={`text-lg font-bold ${acceptedExcuse ? 'text-rose-700 line-through' : ''} ${rejected ? 'text-slate-500' : 'text-slate-900'}`}
+                      className={`text-lg font-semibold ${acceptedExcuse ? 'text-rose-700 line-through dark:text-rose-300' : ''} ${rejected ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-slate-50'}`}
                     >
                       {config.icon} {attendee.name}
                     </span>
                     <span className={`status-chip ${config.tone}`}>{config.label}</span>
                   </div>
                   {attendee.excuse_reason ? (
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
                       „{attendee.excuse_reason}“
                     </p>
                   ) : null}
@@ -80,7 +80,7 @@ function AttendeeList({ attendees, summary, showModeration = false, onModerate, 
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <button
                       type="button"
-                      className="secondary-button border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                      className="secondary-button border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
                       disabled={busyId === attendee.id}
                       onClick={() => onModerate(attendee.id, 'excused_accepted')}
                     >
@@ -88,7 +88,7 @@ function AttendeeList({ attendees, summary, showModeration = false, onModerate, 
                     </button>
                     <button
                       type="button"
-                      className="secondary-button border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      className="secondary-button border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                       disabled={busyId === attendee.id}
                       onClick={() => onModerate(attendee.id, 'excused_rejected')}
                     >

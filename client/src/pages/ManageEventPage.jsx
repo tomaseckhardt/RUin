@@ -150,10 +150,10 @@ function ManageEventPage() {
       <main className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(350px,0.9fr)]">
         <section className="space-y-6">
           <article className="panel">
-            <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Interní poznámka</p>
-            <p className="mt-3 text-lg leading-8 text-slate-700">{event.description}</p>
-            <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              Veřejná pozvánka: <Link className="font-semibold text-slate-900 underline" to={`/event/${id}`}>otevřít RSVP stránku</Link>
+            <p className="text-sm uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">Interní poznámka</p>
+            <p className="mt-3 text-lg leading-8 text-slate-700 dark:text-slate-300">{event.description}</p>
+            <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+              Veřejná pozvánka: <Link className="font-medium text-slate-900 underline dark:text-slate-50" to={`/event/${id}`}>otevřít RSVP stránku</Link>
             </div>
           </article>
 
@@ -168,33 +168,33 @@ function ManageEventPage() {
 
         <aside className="space-y-6">
           <section className="panel">
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-orange-600">
+            <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
               Přehled hostů
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <div className="rounded-[1.5rem] bg-emerald-50 p-4 text-emerald-900">
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Potvrzeno</div>
-                <div className="mt-2 text-3xl font-black">{summary.confirmed}</div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-4 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">
+                <div className="text-sm font-medium uppercase tracking-[0.18em]">Potvrzeno</div>
+                <div className="mt-2 text-3xl font-semibold">{summary.confirmed}</div>
               </div>
-              <div className="rounded-[1.5rem] bg-orange-50 p-4 text-orange-900">
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Čeká / omluveno</div>
-                <div className="mt-2 text-3xl font-black">{summary.excused}</div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-4 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">
+                <div className="text-sm font-medium uppercase tracking-[0.18em]">Čeká / omluveno</div>
+                <div className="mt-2 text-3xl font-semibold">{summary.excused}</div>
               </div>
-              <div className="rounded-[1.5rem] bg-slate-100 p-4 text-slate-800">
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Zamítnuto</div>
-                <div className="mt-2 text-3xl font-black">{summary.rejected}</div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-4 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">
+                <div className="text-sm font-medium uppercase tracking-[0.18em]">Zamítnuto</div>
+                <div className="mt-2 text-3xl font-semibold">{summary.rejected}</div>
               </div>
             </div>
           </section>
 
-          <section className="panel bg-slate-950 text-white shadow-[0_28px_80px_rgba(15,23,42,0.2)]">
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-orange-200">
+          <section className="panel">
+            <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
               Soukromý odkaz
             </p>
-            <p className="mt-3 break-all text-sm leading-6 text-slate-300">
+            <p className="mt-3 break-all text-sm leading-6 text-slate-700 dark:text-slate-300">
               {buildAbsoluteUrl(`/event/${id}/manage?token=${token}`)}
             </p>
-            <p className="mt-4 text-sm text-slate-400">
+            <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
               Tenhle link si nech pro sebe. Právě on dovoluje schvalovat omluvenky a mazat akci.
             </p>
           </section>
