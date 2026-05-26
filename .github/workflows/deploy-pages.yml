@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
   pages: write
   id-token: write
@@ -23,14 +24,17 @@ jobs:
       VITE_BASE_PATH: /RUin-/
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: client/package-lock.json
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
 
       - name: Install client dependencies
         run: npm ci --prefix client
