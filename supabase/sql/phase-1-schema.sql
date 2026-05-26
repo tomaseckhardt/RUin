@@ -11,6 +11,8 @@ create table if not exists public.events (
   description text not null,
   organizer_token text not null unique,
   organizer_pin_hash text not null,
+  organizer_pin_failed_attempts integer not null default 0,
+  organizer_pin_locked_until timestamptz,
   created_at timestamptz not null default now()
 );
 
