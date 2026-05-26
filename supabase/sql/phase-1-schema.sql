@@ -10,6 +10,7 @@ create table if not exists public.events (
   datetime timestamp without time zone not null,
   description text not null,
   organizer_token text not null unique,
+  organizer_pin_hash text not null,
   created_at timestamptz not null default now()
 );
 
