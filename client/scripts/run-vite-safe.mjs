@@ -11,6 +11,18 @@ const safeRoot = path.join(os.tmpdir(), 'r-u-in-client')
 const command = process.argv[2] || 'dev'
 const extraArgs = process.argv.slice(3)
 
+function syncBuildOutput() {
+  const sourceDist = path.join(safeRoot, 'dist')
+  const targetDist = path.join(clientRoot, 'dist')
+
+  if (!fs.existsSync(sourceDist)) {
+    return
+  }
+
+  fs.rmSync(targetDist, { recursive: true, force: true })
+  fs.cpSync(sourceDist, targetDist, { recursive: true, force: true })
+}
+
 try {
   fs.rmSync(safeRoot, { recursive: true, force: true })
 } catch (error) {
@@ -38,6 +50,10 @@ const child = spawn(process.execPath, ['--preserve-symlinks', '--preserve-symlin
 })
 
 child.on('exit', (code) => {
+  if ((code ?? 0) === 0 && command === 'build') {
+    syncBuildOutput()
+  }
+
   process.exit(code ?? 0)
 })
 
