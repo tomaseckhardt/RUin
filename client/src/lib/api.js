@@ -18,6 +18,7 @@ export function createEvent(data) {
       p_location: data.location,
       p_datetime: data.datetime,
       p_description: data.description,
+      p_organizer_name: data.organizerName,
     },
     'Akci se nepodařilo vytvořit.',
   )
