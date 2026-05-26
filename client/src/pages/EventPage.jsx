@@ -111,7 +111,7 @@ function EventPage() {
 
   return (
     <PageShell
-      eyebrow="Veřejná pozvánka"
+      eyebrow="live invite page"
       title={event.name}
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
@@ -120,22 +120,50 @@ function EventPage() {
         </button>
       }
     >
-      <main className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.95fr)]">
-        <section className="space-y-6">
-          <article className="panel">
-            <p className="text-sm uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">Co se chystá</p>
-            <p className="mt-3 text-lg leading-8 text-slate-700 dark:text-slate-300">{event.description}</p>
+      <main className="space-y-6">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+          <article className="panel relative overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
+            <div className="relative">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">Co se chystá</p>
+              <p className="mt-3 max-w-3xl text-lg leading-8 text-slate-700 dark:text-slate-300">{event.description}</p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="surface-subtle">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-300">Rychlá odpověď</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Stačí jméno a jeden klik.</p>
+                </div>
+                <div className="surface-subtle">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-300">Všechno přehledně</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Potvrzení i omluvenky jsou na jednom místě.</p>
+                </div>
+                <div className="surface-subtle sm:col-span-2 xl:col-span-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-300">Žádný login</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Lidi nepřemýšlí, jen kliknou a odešlou.</p>
+                </div>
+              </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <div className="stat-tile">
+                  <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Dorazí</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{summary.confirmed}</div>
+                </div>
+                <div className="stat-tile">
+                  <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Omluvenky</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{summary.excused}</div>
+                </div>
+                <div className="stat-tile">
+                  <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Rejected</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{summary.rejected}</div>
+                </div>
+              </div>
+            </div>
           </article>
 
-          <AttendeeList attendees={attendees} summary={summary} />
-        </section>
-
-        <aside className="panel h-fit lg:sticky lg:top-6">
-          <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
-            Odpověz organizátorovi
-          </p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">Přijdeš, nebo se omlouváš?</h2>
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          <aside className="panel h-fit xl:sticky xl:top-6">
+            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
+              Odpověz organizátorovi
+            </p>
+            <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Přijdeš, nebo ghostíš?</h2>
+            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tvoje jméno</label>
               <input
@@ -150,23 +178,23 @@ function EventPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                className={`rounded-[1.5rem] border px-4 py-4 text-left transition ${selectedStatus === 'confirmed' ? 'border-slate-400 bg-slate-100 text-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
+                className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'confirmed' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
                 onClick={() => setSelectedStatus('confirmed')}
               >
-                <span className="block text-sm font-medium uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
+                <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
                   Potvrzuji účast
                 </span>
-                <span className="mt-2 block text-sm text-slate-500 dark:text-slate-400">Jdeš a chceš být v seznamu potvrzených.</span>
+                <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Jdeš a chceš být v line-upu potvrzených.</span>
               </button>
               <button
                 type="button"
-                className={`rounded-[1.5rem] border px-4 py-4 text-left transition ${selectedStatus === 'excused' ? 'border-slate-400 bg-slate-100 text-slate-950 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
+                className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'excused' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
                 onClick={() => setSelectedStatus('excused')}
               >
-                <span className="block text-sm font-medium uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
+                <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
                   Omlouvám se
                 </span>
-                <span className="mt-2 block text-sm text-slate-500 dark:text-slate-400">Můžeš připsat důvod, pokud chceš.</span>
+                <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Můžeš přihodit důvod, pokud chceš znít důvěryhodně.</span>
               </button>
             </div>
 
@@ -185,8 +213,11 @@ function EventPage() {
             <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
               {isSubmitting ? 'Odesílám odpověď…' : selectedStatus === 'confirmed' ? 'Potvrzuji účast' : 'Poslat omluvenku'}
             </button>
-          </form>
-        </aside>
+            </form>
+          </aside>
+        </section>
+
+        <AttendeeList attendees={attendees} summary={summary} />
       </main>
     </PageShell>
   )

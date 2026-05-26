@@ -30,6 +30,12 @@ function CreateEventPage() {
   const [createdLinks, setCreatedLinks] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const whyItWorks = [
+    'Všichni vidí stejný plán, žádné ztracené zprávy v chatu.',
+    'Odpověď je na jedno kliknutí, takže lidi to fakt vyplní.',
+    'Organizátor má backstage odkaz a drží věci pod kontrolou.',
+  ]
+
   async function handleSubmit(event) {
     event.preventDefault()
     setIsSubmitting(true)
@@ -57,24 +63,115 @@ function CreateEventPage() {
 
   return (
     <PageShell
-      eyebrow="Pozvánky bez dramatu"
+      eyebrow="group plans, less chaos"
       title="R U in?"
-      subtitle="Založ akci, pošli odkaz a nech kamarády, ať konečně přestanou odpovídat jenom emojičkem."
+      subtitle="Pozvánka, co vypadá fresh, funguje rychle a nenechá skupinový chat spadnout do tří dnů ticha a šesti výmluv."
     >
-      <main className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <section className="panel">
-          <div className="mb-6 flex items-start justify-between gap-4">
-            <div>
-              <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-                Organizátor
-              </p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-                Vytvoř novou akci
-              </h2>
+      <main className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]">
+        <section className="space-y-6">
+          <article className="panel relative overflow-hidden">
+            <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(111,76,255,0.18),transparent_68%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(111,76,255,0.24),transparent_68%)]" />
+            <div className="pointer-events-none absolute -left-16 bottom-0 h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(122,28,63,0.18),transparent_66%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(122,28,63,0.28),transparent_66%)]" />
+            <div className="relative grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:items-end">
+              <div>
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.28em]">Organizátor</p>
+                <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-[-0.06em] text-slate-950 dark:text-slate-50 sm:text-5xl lg:text-6xl">
+                  Vytvoř událost, kterou lidi fakt chtějí otevřít
+                </h2>
+                <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
+                  Jedna krásná stránka místo nekonečného přepisování do chatu. Nahoď název, místo a čas, pošli odkaz a hned vidíš, kdo dorazí.
+                </p>
+                <div className="mt-8 flex flex-wrap gap-3">
+                  <a href="#create-form" className="primary-button">
+                    Začít tvořit
+                  </a>
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-white/70 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
+                    Bez přihlašování, bez zdržování
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+                <div className="stat-tile">
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">Rychlost</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">30 s</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Připraveno k odeslání během chvilky.</p>
+                </div>
+                <div className="stat-tile">
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">Flow</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">1 link</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Veřejně pro hosty, privátně pro organizátora.</p>
+                </div>
+                <div className="stat-tile">
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">Stav</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">Live</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Všechno vidíš přehledně na jednom místě.</p>
+                </div>
+              </div>
             </div>
-            <div className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-              bez registrace
-            </div>
+          </article>
+
+          <section className="grid gap-4 md:grid-cols-3">
+            {whyItWorks.map((item, index) => (
+              <article key={item} className="surface-subtle">
+                <p className="accent-copy text-xs font-semibold uppercase tracking-[0.24em]">0{index + 1}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item}</p>
+              </article>
+            ))}
+          </section>
+
+          <section className="grid gap-4 md:grid-cols-3">
+            <article className="panel">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">01</p>
+              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">Dropni link</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Veřejná pozvánka jde rovnou do skupiny a všichni mají stejný přehled.</p>
+            </article>
+            <article className="panel">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">02</p>
+              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">Sbírej vibe check</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Lidi kliknou, jestli dorazí nebo pošlou omluvenku i s důvodem.</p>
+            </article>
+            <article className="panel">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">03</p>
+              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">Rozhodni backstage</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Z privátního linku vidíš seznam a držíš nad akcí moderátorský přehled.</p>
+            </article>
+          </section>
+
+          {createdLinks ? (
+            <section className="panel">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Share pack</p>
+                  <h2 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Odkazy jsou připravené</h2>
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Můžeš je hned poslat do skupiny.</p>
+              </div>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <LinkCard
+                  label="Veřejná pozvánka"
+                  href={buildAbsoluteUrl(createdLinks.guestPath)}
+                  tone="border-fuchsia-200/70 bg-[linear-gradient(135deg,rgba(122,28,63,0.08),rgba(111,76,255,0.08))] text-slate-900 dark:border-fuchsia-900/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.18),rgba(111,76,255,0.2))] dark:text-slate-100"
+                />
+                <LinkCard
+                  label="Organizátorský odkaz"
+                  href={buildAbsoluteUrl(createdLinks.organizerPath)}
+                  tone="border-fuchsia-200/70 bg-[linear-gradient(135deg,rgba(122,28,63,0.08),rgba(111,76,255,0.08))] text-slate-900 dark:border-fuchsia-900/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.18),rgba(111,76,255,0.2))] dark:text-slate-100"
+                />
+              </div>
+            </section>
+          ) : null}
+        </section>
+
+        <aside id="create-form" className="panel h-fit xl:sticky xl:top-6">
+          <div className="mb-6">
+            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Composer</p>
+            <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">
+              Poskládej akci
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Vyplň jen to důležité. Po uložení dostaneš odkaz, který můžeš rovnou poslat do skupiny.
+            </p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
@@ -121,7 +218,7 @@ function CreateEventPage() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button type="submit" className="primary-button" disabled={isSubmitting}>
+              <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
                 {isSubmitting ? 'Zakládám akci…' : 'Vytvořit akci'}
               </button>
               <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -129,37 +226,6 @@ function CreateEventPage() {
               </p>
             </div>
           </form>
-        </section>
-
-        <aside className="space-y-6">
-          <section className="panel">
-            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-              Jak to funguje
-            </p>
-            <ol className="mt-4 space-y-4 text-sm leading-6 text-slate-600 dark:text-stone-50">
-              <li>1. Vytvoříš akci a zkopíruješ veřejný odkaz do skupiny.</li>
-              <li>2. Každý odpoví jménem a buď přijde, nebo pošle omluvenku.</li>
-              <li>3. Ty v soukromém organizátorském odkazu rozhodneš, co bereš.</li>
-            </ol>
-          </section>
-
-          {createdLinks ? (
-            <section className="panel">
-              <h2 className="text-2xl font-bold text-slate-950">Odkazy jsou připravené</h2>
-              <div className="mt-4 space-y-4">
-                <LinkCard
-                  label="Veřejná pozvánka"
-                  href={buildAbsoluteUrl(createdLinks.guestPath)}
-                  tone="border-slate-200 bg-white/50 text-slate-900 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
-                />
-                <LinkCard
-                  label="Organizátorský odkaz"
-                  href={buildAbsoluteUrl(createdLinks.organizerPath)}
-                  tone="border-slate-200 bg-white/50 text-slate-900 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
-                />
-              </div>
-            </section>
-          ) : null}
         </aside>
       </main>
     </PageShell>

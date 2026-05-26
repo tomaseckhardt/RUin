@@ -30,9 +30,10 @@ const statusConfig = {
 function AttendeeList({ attendees, summary, showModeration = false, onModerate, busyId }) {
   return (
     <section className="panel">
-      <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-200/70 pb-5 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-950 dark:text-slate-50">Kdo je v tom s tebou</h2>
+          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.2em]">Guest roster</p>
+          <h2 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Kdo je v tom s tebou</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{summaryText(summary)}</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
@@ -57,7 +58,7 @@ function AttendeeList({ attendees, summary, showModeration = false, onModerate, 
           return (
             <article
               key={attendee.id}
-              className={`rounded-[1.5rem] border p-4 shadow-sm transition ${config.accent}`}
+              className={`rounded-[1.75rem] border p-4 shadow-sm transition hover:-translate-y-0.5 ${config.accent}`}
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
