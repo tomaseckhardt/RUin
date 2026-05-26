@@ -5,6 +5,8 @@ import PageShell from '../components/PageShell.jsx'
 import { createEvent } from '../lib/api.js'
 
 const initialForm = {
+  organizerName: '',
+  organizerPin: '',
   name: '',
   location: '',
   datetime: '',
@@ -138,6 +140,35 @@ function CreateEventPage() {
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Tvoje jméno</label>
+                <input
+                  className="field"
+                  value={form.organizerName}
+                  onChange={updateField('organizerName')}
+                  placeholder="Např. Tomáš"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Správcovský PIN</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]{4}"
+                  maxLength={4}
+                  className="field"
+                  value={form.organizerPin}
+                  onChange={updateField('organizerPin')}
+                  placeholder="Např. 1234"
+                  required
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  4 číslice. Bude potřeba pro vstup do správy akce.
+                </p>
+              </div>
+            </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Název akce</label>
               <input

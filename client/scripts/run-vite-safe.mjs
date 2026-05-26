@@ -7,9 +7,18 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const clientRoot = path.resolve(__dirname, '..')
-const safeRoot = path.join(os.tmpdir(), 'r-u-in-client')
 const command = process.argv[2] || 'dev'
 const extraArgs = process.argv.slice(3)
+const safeRootPrefix = path.join(os.tmpdir(), `r-u-in-client-${command}-`)
+const safeRoot = fs.mkdtempSync(safeRootPrefix)
+
+function cleanupSafeRoot() {
+  try {
+    fs.rmSync(safeRoot, { recursive: true, force: true })
+  } catch {
+    // Best-effort cleanup. The process is already terminating.
+  }
+}
 
 function syncBuildOutput() {
   const sourceDist = path.join(safeRoot, 'dist')
@@ -21,14 +30,6 @@ function syncBuildOutput() {
 
   fs.rmSync(targetDist, { recursive: true, force: true })
   fs.cpSync(sourceDist, targetDist, { recursive: true, force: true })
-}
-
-try {
-  fs.rmSync(safeRoot, { recursive: true, force: true })
-} catch (error) {
-  if (error.code !== 'ENOENT') {
-    throw error
-  }
 }
 
 fs.cpSync(clientRoot, safeRoot, {
@@ -54,10 +55,18 @@ child.on('exit', (code) => {
     syncBuildOutput()
   }
 
+  cleanupSafeRoot()
   process.exit(code ?? 0)
 })
 
 child.on('error', (error) => {
+  cleanupSafeRoot()
   console.error(error)
   process.exit(1)
 })
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    child.kill(signal)
+  })
+}

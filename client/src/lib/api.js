@@ -18,8 +18,21 @@ export function createEvent(data) {
       p_location: data.location,
       p_datetime: data.datetime,
       p_description: data.description,
+      p_organizer_name: data.organizerName,
+      p_organizer_pin: data.organizerPin,
     },
     'Akci se nepodařilo vytvořit.',
+  )
+}
+
+export function unlockManageWithPin(eventId, pin) {
+  return callRpc(
+    'get_organizer_path_with_pin',
+    {
+      p_event_id: eventId,
+      p_pin: pin,
+    },
+    'Správu akce se nepodařilo odemknout.',
   )
 }
 

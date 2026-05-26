@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import AttendeeList from '../components/AttendeeList.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { getEvent, submitRsvp } from '../lib/api.js'
+import { getEvent, submitRsvp, unlockManageWithPin } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 
 async function fetchEventPayload(id) {
@@ -12,12 +12,16 @@ async function fetchEventPayload(id) {
 
 function EventPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [payload, setPayload] = useState(null)
   const [name, setName] = useState('')
   const [excuseReason, setExcuseReason] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('confirmed')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUnlockingManage, setIsUnlockingManage] = useState(false)
+  const [showManageModal, setShowManageModal] = useState(false)
+  const [managePin, setManagePin] = useState('')
   const [error, setError] = useState('')
 
   async function loadEvent() {
@@ -95,6 +99,37 @@ function EventPage() {
     toast.success('Pozvánka zkopírovaná do schránky.')
   }
 
+  function openManageModal() {
+    setManagePin('')
+    setShowManageModal(true)
+  }
+
+  function closeManageModal() {
+    if (isUnlockingManage) {
+      return
+    }
+
+    setShowManageModal(false)
+    setManagePin('')
+  }
+
+  async function handleUnlockManage(event) {
+    event.preventDefault()
+    setIsUnlockingManage(true)
+
+    try {
+      const payload = await unlockManageWithPin(id, managePin)
+      toast.success('Správa odemčená.')
+      setShowManageModal(false)
+      setManagePin('')
+      navigate(payload.organizerPath)
+    } catch (unlockError) {
+      toast.error(unlockError.message)
+    } finally {
+      setIsUnlockingManage(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <PageShell eyebrow="Veřejná pozvánka" title="Načítám akci…" subtitle="Chvilka, lovím data z databáze." />
@@ -115,9 +150,14 @@ function EventPage() {
       title={event.name}
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
-        <button type="button" className="secondary-button" onClick={copyInviteLink}>
-          Sdílet pozvánku
-        </button>
+        <>
+          <button type="button" className="secondary-button" onClick={copyInviteLink}>
+            Sdílet pozvánku
+          </button>
+          <button type="button" className="secondary-button" onClick={openManageModal}>
+            Spravovat akci
+          </button>
+        </>
       }
     >
       <main className="space-y-6">
@@ -218,6 +258,47 @@ function EventPage() {
         </section>
 
         <AttendeeList attendees={attendees} summary={summary} />
+
+        {showManageModal ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-5">
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Správa akce</p>
+                <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Zadej PIN</h3>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  Pro vstup do správy akce zadej 4místný správcovský PIN.
+                </p>
+              </div>
+
+              <form className="space-y-4" onSubmit={handleUnlockManage}>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Správcovský PIN</label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]{4}"
+                    maxLength={4}
+                    className="field"
+                    value={managePin}
+                    onChange={(event) => setManagePin(event.target.value)}
+                    placeholder="1234"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button type="button" className="secondary-button flex-1 justify-center" onClick={closeManageModal}>
+                    Zrušit
+                  </button>
+                  <button type="submit" className="primary-button flex-1" disabled={isUnlockingManage}>
+                    {isUnlockingManage ? 'Ověřuji…' : 'Vstoupit'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
       </main>
     </PageShell>
   )
