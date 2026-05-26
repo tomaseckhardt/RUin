@@ -1,12 +1,11 @@
 # ruin
 
-Full-stack RSVP app for friend groups.
+RSVP app for friend groups powered by Supabase.
 
 ## Stack
 
 - Frontend: React + Vite + Tailwind CSS
-- Backend: Node.js + Express
-- Database: SQLite via `better-sqlite3`
+- Backend: Supabase Postgres + RPC
 
 ## Run locally
 
@@ -15,12 +14,12 @@ npm install
 npm run dev
 ```
 
-The root script runs both client and server with `concurrently`.
+The root script runs the Vite client.
 
 ## Structure
 
 - `client` - Vite frontend
-- `server` - Express API and SQLite database
+- `supabase/sql` - SQL scripts for schema, RPC functions, and RLS
 
 ## Notes
 
@@ -30,35 +29,23 @@ The root script runs both client and server with `concurrently`.
 
 This repo is configured to deploy the frontend from `client` to GitHub Pages using `.github/workflows/deploy-pages.yml`.
 
-Important: GitHub Pages hosts only static files. The backend must run separately (for example Render or Railway).
+Important: GitHub Pages hosts only static files, which is fine because data/API is handled by Supabase.
 
-### 1. Deploy backend first
-
-Deploy `server` and copy your public API URL, for example:
-
-`https://ruin-api.onrender.com`
-
-### 2. Set repo variable for frontend API
+### 1. Set repository variables
 
 On GitHub repository `RUin-`, set:
 
 - Settings -> Secrets and variables -> Actions -> Variables -> New repository variable
-- Name: `VITE_API_BASE_URL`
-- Value: your backend URL (without trailing slash), e.g. `https://ruin-api.onrender.com`
+- Name: `VITE_SUPABASE_URL`
+- Value: your Supabase project URL, e.g. `https://your-project-ref.supabase.co`
+- Name: `VITE_SUPABASE_ANON_KEY`
+- Value: your Supabase anon/publishable key
 
-### 3. Enable GitHub Pages
+### 2. Enable GitHub Pages
 
 - Settings -> Pages
 - Source: GitHub Actions
 
-### 4. Push to `main`
+### 3. Push to `main`
 
 Every push to `main` deploys frontend automatically.
-
-### 5. Backend CORS
-
-Set backend environment variable:
-
-- `CORS_ORIGIN=https://tomaseckhardt.github.io`
-
-If needed, you can temporarily use `*`, but explicit origin is better for production.
