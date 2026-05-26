@@ -8,12 +8,14 @@ alter table public.events
   using datetime::timestamp;
 
 drop function if exists public.create_event(text, text, timestamptz, text);
+drop function if exists public.create_event(text, text, timestamp without time zone, text);
 
 create or replace function public.create_event(
   p_name text,
   p_location text,
   p_datetime timestamp without time zone,
-  p_description text
+  p_description text,
+  p_organizer_name text
 )
 returns jsonb
 language plpgsql
@@ -24,12 +26,13 @@ declare
   v_name text := nullif(trim(p_name), '');
   v_location text := nullif(trim(p_location), '');
   v_description text := nullif(trim(p_description), '');
+  v_organizer_name text := nullif(trim(p_organizer_name), '');
   v_id text;
   v_token text;
   attempts integer := 0;
 begin
-  if v_name is null or v_location is null or p_datetime is null or v_description is null then
-    raise exception 'Vyplň název, místo, datum a stručný popis akce.';
+  if v_name is null or v_location is null or p_datetime is null or v_description is null or v_organizer_name is null then
+    raise exception 'Vyplň svoje jméno, název, místo, datum a stručný popis akce.';
   end if;
 
   loop
@@ -50,6 +53,9 @@ begin
   insert into public.events (id, name, location, datetime, description, organizer_token)
   values (v_id, v_name, v_location, p_datetime, v_description, v_token);
 
+  insert into public.attendees (event_id, name, status, excuse_reason)
+  values (v_id, v_organizer_name, 'confirmed', null);
+
   return jsonb_build_object(
     'event', jsonb_build_object(
       'id', v_id,
@@ -64,6 +70,6 @@ begin
 end;
 $$;
 
-grant execute on function public.create_event(text, text, timestamp without time zone, text) to anon, authenticated;
+grant execute on function public.create_event(text, text, timestamp without time zone, text, text) to anon, authenticated;
 
 commit;
