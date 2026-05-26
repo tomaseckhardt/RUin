@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 import PageShell from '../components/PageShell.jsx'
 import { createEvent } from '../lib/api.js'
-import { buildAbsoluteUrl } from '../lib/format.js'
 
 const initialForm = {
   name: '',
@@ -11,23 +11,9 @@ const initialForm = {
   description: '',
 }
 
-function LinkCard({ label, href, tone }) {
-  return (
-    <div className={`rounded-[1.75rem] border p-5 ${tone}`}>
-      <p className="text-sm font-medium uppercase tracking-[0.2em]">{label}</p>
-      <a
-        href={href}
-        className="mt-3 block break-all text-lg font-medium underline decoration-1 underline-offset-4"
-      >
-        {href}
-      </a>
-    </div>
-  )
-}
-
 function CreateEventPage() {
+  const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
-  const [createdLinks, setCreatedLinks] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const whyItWorks = [
@@ -42,9 +28,9 @@ function CreateEventPage() {
 
     try {
       const payload = await createEvent(form)
-      setCreatedLinks(payload)
       toast.success('Akce je připravená. Odkazy můžeš rovnou sdílet.')
       setForm(initialForm)
+      navigate(payload.organizerPath)
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -138,29 +124,6 @@ function CreateEventPage() {
             </article>
           </section>
 
-          {createdLinks ? (
-            <section className="panel">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Share pack</p>
-                  <h2 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Odkazy jsou připravené</h2>
-                </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Můžeš je hned poslat do skupiny.</p>
-              </div>
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <LinkCard
-                  label="Veřejná pozvánka"
-                  href={buildAbsoluteUrl(createdLinks.guestPath)}
-                  tone="border-fuchsia-200/70 bg-[linear-gradient(135deg,rgba(122,28,63,0.08),rgba(111,76,255,0.08))] text-slate-900 dark:border-fuchsia-900/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.18),rgba(111,76,255,0.2))] dark:text-slate-100"
-                />
-                <LinkCard
-                  label="Organizátorský odkaz"
-                  href={buildAbsoluteUrl(createdLinks.organizerPath)}
-                  tone="border-fuchsia-200/70 bg-[linear-gradient(135deg,rgba(122,28,63,0.08),rgba(111,76,255,0.08))] text-slate-900 dark:border-fuchsia-900/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.18),rgba(111,76,255,0.2))] dark:text-slate-100"
-                />
-              </div>
-            </section>
-          ) : null}
         </section>
 
         <aside id="create-form" className="panel h-fit xl:sticky xl:top-6">
