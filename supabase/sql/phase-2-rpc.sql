@@ -148,8 +148,28 @@ begin
     exit when not exists (select 1 from public.events e where e.organizer_token = v_token);
   end loop;
 
-  insert into public.events (id, name, location, datetime, description, organizer_token, organizer_pin_hash)
-  values (v_id, v_name, v_location, p_datetime, v_description, v_token, crypt(v_organizer_pin, gen_salt('bf')));
+  insert into public.events (
+    id,
+    name,
+    location,
+    datetime,
+    description,
+    organizer_token,
+    organizer_pin_hash,
+    organizer_pin_failed_attempts,
+    organizer_pin_locked_until
+  )
+  values (
+    v_id,
+    v_name,
+    v_location,
+    p_datetime,
+    v_description,
+    v_token,
+    crypt(v_organizer_pin, gen_salt('bf')),
+    0,
+    null
+  );
 
   insert into public.attendees (event_id, name, status, excuse_reason)
   values (v_id, v_organizer_name, 'confirmed', null);
@@ -180,11 +200,13 @@ as $$
 declare
   v_event public.events%rowtype;
   v_pin text := nullif(trim(p_pin), '');
+  v_max_attempts constant integer := 5;
 begin
   select *
   into v_event
   from public.events e
-  where e.id = p_event_id;
+  where e.id = p_event_id
+  for update;
 
   if not found then
     raise exception 'Akce neexistuje.';
@@ -194,9 +216,28 @@ begin
     raise exception 'Správa přes PIN zatím pro tuto akci není dostupná.';
   end if;
 
+  if v_event.organizer_pin_locked_until is not null and v_event.organizer_pin_locked_until > now() then
+    raise exception 'PIN je dočasně zablokovaný. Zkus to později.';
+  end if;
+
   if v_pin is null or crypt(v_pin, v_event.organizer_pin_hash) <> v_event.organizer_pin_hash then
+    update public.events
+    set
+      organizer_pin_failed_attempts = organizer_pin_failed_attempts + 1,
+      organizer_pin_locked_until = case
+        when organizer_pin_failed_attempts + 1 >= v_max_attempts then now() + interval '15 minutes'
+        else organizer_pin_locked_until
+      end
+    where id = p_event_id;
+
     raise exception 'Neplatný správcovský PIN.';
   end if;
+
+  update public.events
+  set
+    organizer_pin_failed_attempts = 0,
+    organizer_pin_locked_until = null
+  where id = p_event_id;
 
   return jsonb_build_object(
     'organizerPath', '/event/' || p_event_id || '/manage?token=' || v_event.organizer_token

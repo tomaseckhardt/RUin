@@ -39,6 +39,15 @@ function ManageEventPage() {
     let cancelled = false
 
     async function hydrateEvent() {
+      if (!token) {
+        if (!cancelled) {
+          setError('Chybí organizátorský token v odkazu.')
+          setIsLoading(false)
+        }
+
+        return
+      }
+
       try {
         const nextPayload = await fetchEventPayload(id)
 
