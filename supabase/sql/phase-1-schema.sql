@@ -7,7 +7,7 @@ create table if not exists public.events (
   id text primary key,
   name text not null,
   location text not null,
-  datetime timestamptz not null,
+  datetime timestamp without time zone not null,
   description text not null,
   organizer_token text not null unique,
   created_at timestamptz not null default now()

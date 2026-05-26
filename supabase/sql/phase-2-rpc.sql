@@ -5,6 +5,8 @@ begin;
 
 create extension if not exists pgcrypto;
 
+drop function if exists public.create_event(text, text, timestamptz, text);
+
 create or replace function public._random_token(token_length integer)
 returns text
 language plpgsql
@@ -100,7 +102,7 @@ $$;
 create or replace function public.create_event(
   p_name text,
   p_location text,
-  p_datetime timestamptz,
+  p_datetime timestamp without time zone,
   p_description text
 )
 returns jsonb
@@ -284,7 +286,7 @@ end;
 $$;
 
 grant execute on function public.get_event_payload(text) to anon, authenticated;
-grant execute on function public.create_event(text, text, timestamptz, text) to anon, authenticated;
+grant execute on function public.create_event(text, text, timestamp without time zone, text) to anon, authenticated;
 grant execute on function public.submit_rsvp(text, text, text, text) to anon, authenticated;
 grant execute on function public.moderate_attendee(text, bigint, text, text) to anon, authenticated;
 grant execute on function public.delete_event(text, text) to anon, authenticated;
