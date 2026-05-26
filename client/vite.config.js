@@ -6,7 +6,7 @@ const env = globalThis.process?.env ?? {}
 const repositoryName = env.GITHUB_REPOSITORY?.split('/')[1]
 const basePath =
   env.VITE_BASE_PATH ||
-  (env.GITHUB_ACTIONS ? `/${repositoryName || 'RUin-'}/` : '/')
+  (env.GITHUB_ACTIONS ? `/${repositoryName || 'RUin'}/` : '/')
 
 // https://vite.dev/config/
 export default defineConfig({

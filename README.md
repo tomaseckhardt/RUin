@@ -33,7 +33,7 @@ Important: GitHub Pages hosts only static files, which is fine because data/API 
 
 ### 1. Set repository variables
 
-On GitHub repository `RUin-`, set:
+On GitHub repository `RUin`, set:
 
 - Settings -> Secrets and variables -> Actions -> Variables -> New repository variable
 - Name: `VITE_SUPABASE_URL`
