@@ -6,6 +6,8 @@ import PageShell from '../components/PageShell.jsx'
 import { getEvent, submitRsvp, unlockManageWithPin } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 
+const AUTO_REFRESH_MS = 10000
+
 async function fetchEventPayload(id) {
   return getEvent(id)
 }
@@ -66,6 +68,43 @@ function EventPage() {
 
     return () => {
       cancelled = true
+    }
+  }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    let inFlight = false
+
+    async function refreshEvent() {
+      if (inFlight || document.visibilityState !== 'visible') {
+        return
+      }
+
+      inFlight = true
+
+      try {
+        const nextPayload = await fetchEventPayload(id)
+
+        if (cancelled) {
+          return
+        }
+
+        setPayload(nextPayload)
+        setError('')
+      } catch (refreshError) {
+        if (!cancelled) {
+          setError(refreshError.message)
+        }
+      } finally {
+        inFlight = false
+      }
+    }
+
+    const intervalId = setInterval(refreshEvent, AUTO_REFRESH_MS)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
     }
   }, [id])
 
