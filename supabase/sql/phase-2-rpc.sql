@@ -166,7 +166,7 @@ begin
     p_datetime,
     v_description,
     v_token,
-    crypt(v_organizer_pin, gen_salt('bf')),
+    extensions.crypt(v_organizer_pin, extensions.gen_salt('bf')),
     0,
     null
   );
@@ -220,7 +220,7 @@ begin
     raise exception 'PIN je dočasně zablokovaný. Zkus to později.';
   end if;
 
-  if v_pin is null or crypt(v_pin, v_event.organizer_pin_hash) <> v_event.organizer_pin_hash then
+  if v_pin is null or extensions.crypt(v_pin, v_event.organizer_pin_hash) <> v_event.organizer_pin_hash then
     update public.events
     set
       organizer_pin_failed_attempts = organizer_pin_failed_attempts + 1,
