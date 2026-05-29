@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useNavigate, useParams } from 'react-router-dom'
 import AttendeeList from '../components/AttendeeList.jsx'
+import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { getEvent, submitRsvp, unlockManageWithPin } from '../lib/api.js'
+import { getEvent, pingAttendee, submitRsvp, unlockManageWithPin } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 
 const AUTO_REFRESH_MS = 10000
@@ -21,6 +22,7 @@ function EventPage() {
   const [selectedStatus, setSelectedStatus] = useState('confirmed')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [pingBusyId, setPingBusyId] = useState(null)
   const [isUnlockingManage, setIsUnlockingManage] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
   const [managePin, setManagePin] = useState('')
@@ -133,6 +135,20 @@ function EventPage() {
     }
   }
 
+  async function handlePing(attendeeId) {
+    setPingBusyId(attendeeId)
+
+    try {
+      await pingAttendee(id, attendeeId, name)
+      toast.success('Šťouchnutí odeslané.')
+      await loadEvent()
+    } catch (pingError) {
+      toast.error(pingError.message)
+    } finally {
+      setPingBusyId(null)
+    }
+  }
+
   async function copyInviteLink() {
     await navigator.clipboard.writeText(buildAbsoluteUrl(`/event/${id}`))
     toast.success('Pozvánka zkopírovaná do schránky.')
@@ -190,6 +206,7 @@ function EventPage() {
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
         <>
+          <AddToCalendarButton eventData={event} />
           <button type="button" className="secondary-button" onClick={copyInviteLink}>
             Sdílet pozvánku
           </button>
@@ -296,7 +313,14 @@ function EventPage() {
           </aside>
         </section>
 
-        <AttendeeList attendees={attendees} summary={summary} />
+        <AttendeeList
+          attendees={attendees}
+          summary={summary}
+          showPing
+          onPing={handlePing}
+          pingBusyId={pingBusyId}
+          canPing={Boolean(name.trim())}
+        />
 
         {showManageModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">

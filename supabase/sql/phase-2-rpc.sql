@@ -9,6 +9,8 @@ drop function if exists public.create_event(text, text, timestamptz, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text, text, text);
+drop function if exists public.ping_attendee(text, bigint, text);
+drop function if exists public.delete_attendee(text, bigint, text);
 
 create or replace function public._random_token(token_length integer)
 returns text
@@ -59,7 +61,8 @@ begin
         'name', a.name,
         'status', a.status,
         'excuse_reason', a.excuse_reason,
-        'created_at', a.created_at
+        'created_at', a.created_at,
+        'ping_count', coalesce(p.ping_count, 0)
       )
       order by
         case a.status
@@ -76,6 +79,11 @@ begin
   )
   into v_attendees
   from public.attendees a
+  left join lateral (
+    select count(*)::integer as ping_count
+    from public.attendee_pings ap
+    where ap.event_id = p_event_id and ap.target_attendee_id = a.id
+  ) p on true
   where a.event_id = p_event_id;
 
   select jsonb_build_object(
@@ -98,6 +106,62 @@ begin
     ),
     'attendees', v_attendees,
     'summary', v_summary
+  );
+end;
+$$;
+
+create or replace function public.ping_attendee(
+  p_event_id text,
+  p_target_attendee_id bigint,
+  p_source_name text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_source_name text := nullif(trim(p_source_name), '');
+  v_attendee public.attendees%rowtype;
+  v_ping_count integer;
+begin
+  if not exists (select 1 from public.events e where e.id = p_event_id) then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if v_source_name is null then
+    raise exception 'Vyplň svoje jméno pro šťouchnutí.';
+  end if;
+
+  select *
+  into v_attendee
+  from public.attendees a
+  where a.event_id = p_event_id and a.id = p_target_attendee_id;
+
+  if not found then
+    raise exception 'Účastník nebyl nalezen.';
+  end if;
+
+  if v_attendee.status not in ('excused', 'excused_rejected') then
+    raise exception 'Šťouchnout jde jen účastníka, který nejde.';
+  end if;
+
+  insert into public.attendee_pings (event_id, target_attendee_id, source_name)
+  values (p_event_id, p_target_attendee_id, v_source_name)
+  on conflict (event_id, target_attendee_id, lower(source_name)) do nothing;
+
+  if not found then
+    raise exception 'Tohle šťouchnutí už od tebe dorazilo.';
+  end if;
+
+  select count(*)::integer
+  into v_ping_count
+  from public.attendee_pings ap
+  where ap.event_id = p_event_id and ap.target_attendee_id = p_target_attendee_id;
+
+  return jsonb_build_object(
+    'success', true,
+    'pingCount', coalesce(v_ping_count, 0)
   );
 end;
 $$;
@@ -376,11 +440,56 @@ begin
 end;
 $$;
 
+create or replace function public.delete_attendee(
+  p_event_id text,
+  p_attendee_id bigint,
+  p_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event public.events%rowtype;
+  v_attendee public.attendees%rowtype;
+begin
+  select *
+  into v_event
+  from public.events e
+  where e.id = p_event_id;
+
+  if not found then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if v_event.organizer_token <> p_token then
+    raise exception 'Neplatný organizátorský odkaz.';
+  end if;
+
+  select *
+  into v_attendee
+  from public.attendees a
+  where a.event_id = p_event_id and a.id = p_attendee_id;
+
+  if not found then
+    raise exception 'Účastník nebyl nalezen.';
+  end if;
+
+  delete from public.attendees a
+  where a.event_id = p_event_id and a.id = p_attendee_id;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
 grant execute on function public.get_event_payload(text) to anon, authenticated;
 grant execute on function public.create_event(text, text, timestamp without time zone, text, text, text) to anon, authenticated;
 grant execute on function public.get_organizer_path_with_pin(text, text) to anon, authenticated;
+grant execute on function public.ping_attendee(text, bigint, text) to anon, authenticated;
 grant execute on function public.submit_rsvp(text, text, text, text) to anon, authenticated;
 grant execute on function public.moderate_attendee(text, bigint, text, text) to anon, authenticated;
+grant execute on function public.delete_attendee(text, bigint, text) to anon, authenticated;
 grant execute on function public.delete_event(text, text) to anon, authenticated;
 
 commit;

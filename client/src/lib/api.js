@@ -66,6 +66,30 @@ export function moderateAttendee(eventId, attendeeId, data) {
   )
 }
 
+export function pingAttendee(eventId, attendeeId, sourceName) {
+  return callRpc(
+    'ping_attendee',
+    {
+      p_event_id: eventId,
+      p_target_attendee_id: Number(attendeeId),
+      p_source_name: sourceName,
+    },
+    'Šťouchnutí se nepodařilo odeslat.',
+  )
+}
+
+export function deleteAttendee(eventId, attendeeId, token) {
+  return callRpc(
+    'delete_attendee',
+    {
+      p_event_id: eventId,
+      p_attendee_id: Number(attendeeId),
+      p_token: token,
+    },
+    'Účastníka se nepodařilo smazat.',
+  )
+}
+
 export function removeEvent(eventId, token) {
   return callRpc(
     'delete_event',

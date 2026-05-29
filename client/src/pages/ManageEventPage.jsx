@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import AttendeeList from '../components/AttendeeList.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { getEvent, moderateAttendee, removeEvent } from '../lib/api.js'
+import { deleteAttendee, getEvent, moderateAttendee, removeEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 
 const AUTO_REFRESH_MS = 10000
@@ -21,6 +22,7 @@ function ManageEventPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [deleteBusyId, setDeleteBusyId] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
   const inviteUrl = useMemo(() => buildAbsoluteUrl(`/event/${id}`), [id])
@@ -159,6 +161,31 @@ function ManageEventPage() {
     }
   }
 
+  async function handleDeleteAttendee(attendeeId, attendeeName) {
+    if (!token) {
+      toast.error('Chybí organizátorský token v odkazu.')
+      return
+    }
+
+    const confirmed = window.confirm(`Opravdu chceš smazat účastníka ${attendeeName}?`)
+
+    if (!confirmed) {
+      return
+    }
+
+    setDeleteBusyId(attendeeId)
+
+    try {
+      await deleteAttendee(id, attendeeId, token)
+      toast.success('Účastník byl smazaný.')
+      await loadEvent()
+    } catch (deleteError) {
+      toast.error(deleteError.message)
+    } finally {
+      setDeleteBusyId(null)
+    }
+  }
+
   async function handleShare() {
     await navigator.clipboard.writeText(inviteUrl)
     toast.success('Veřejná pozvánka je ve schránce.')
@@ -185,6 +212,7 @@ function ManageEventPage() {
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
         <>
+          <AddToCalendarButton eventData={event} />
           <button type="button" className="secondary-button" onClick={handleShare}>
             Sdílet pozvánku
           </button>
@@ -278,6 +306,9 @@ function ManageEventPage() {
           showModeration
           onModerate={handleModeration}
           busyId={busyId}
+          showDelete
+          onDelete={handleDeleteAttendee}
+          deleteBusyId={deleteBusyId}
         />
       </main>
     </PageShell>
