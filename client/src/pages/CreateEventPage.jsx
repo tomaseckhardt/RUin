@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
+import AddToHomeButton from '../components/AddToHomeButton.jsx'
 import PageShell from '../components/PageShell.jsx'
 import { createEvent } from '../lib/api.js'
 
@@ -54,6 +55,7 @@ function CreateEventPage() {
       eyebrow="group plans, less chaos"
       title="R U in?"
       subtitle="Pozvánka, co vypadá fresh, funguje rychle a nenechá skupinový chat spadnout do tří dnů ticha a šesti výmluv."
+      actions={<AddToHomeButton />}
     >
       <main className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]">
         <section className="space-y-6">

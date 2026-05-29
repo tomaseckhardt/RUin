@@ -27,7 +27,20 @@ const statusConfig = {
   },
 }
 
-function AttendeeList({ attendees, summary, showModeration = false, onModerate, busyId }) {
+function AttendeeList({
+  attendees,
+  summary,
+  showModeration = false,
+  onModerate,
+  busyId,
+  showPing = false,
+  onPing,
+  pingBusyId,
+  canPing = true,
+  showDelete = false,
+  onDelete,
+  deleteBusyId,
+}) {
   return (
     <section className="panel">
       <div className="flex flex-col gap-4 border-b border-slate-200/70 pb-5 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
@@ -54,6 +67,9 @@ function AttendeeList({ attendees, summary, showModeration = false, onModerate, 
           const config = statusConfig[attendee.status]
           const rejected = attendee.status === 'excused_rejected'
           const acceptedExcuse = attendee.status === 'excused_accepted'
+          const pingCount = attendee.ping_count ?? 0
+          const pingable = attendee.status === 'excused' || attendee.status === 'excused_rejected'
+          const showPingAction = showPing && pingable
 
           return (
             <article
@@ -75,6 +91,16 @@ function AttendeeList({ attendees, summary, showModeration = false, onModerate, 
                       „{attendee.excuse_reason}“
                     </p>
                   ) : null}
+
+                  {pingCount > 0 ? (
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                      Šťouchnutí: {pingCount}
+                    </p>
+                  ) : null}
+
+                  {rejected && pingCount > 0 ? (
+                    <p className="mt-2 text-sm font-medium text-rose-700 dark:text-rose-300">Skupina tě šťouchla.</p>
+                  ) : null}
                 </div>
 
                 {showModeration && attendee.status === 'excused' ? (
@@ -94,6 +120,42 @@ function AttendeeList({ attendees, summary, showModeration = false, onModerate, 
                       onClick={() => onModerate(attendee.id, 'excused_rejected')}
                     >
                       ❌ Zamítnout
+                    </button>
+                    {showDelete ? (
+                      <button
+                        type="button"
+                        className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+                        disabled={deleteBusyId === attendee.id}
+                        onClick={() => onDelete(attendee.id, attendee.name)}
+                      >
+                        Smazat
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {showModeration && attendee.status !== 'excused' && showDelete ? (
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+                      disabled={deleteBusyId === attendee.id}
+                      onClick={() => onDelete(attendee.id, attendee.name)}
+                    >
+                      Smazat
+                    </button>
+                  </div>
+                ) : null}
+
+                {!showModeration && showPingAction ? (
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="secondary-button border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 hover:bg-fuchsia-100 dark:border-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200"
+                      disabled={!canPing || pingBusyId === attendee.id}
+                      onClick={() => onPing(attendee.id)}
+                    >
+                      {pingBusyId === attendee.id ? 'Šťouchám…' : 'Šťouchnout'}
                     </button>
                   </div>
                 ) : null}
