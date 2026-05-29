@@ -54,4 +54,7 @@ create index if not exists attendee_pings_event_target_idx
 create index if not exists events_created_at_idx
   on public.events (created_at desc);
 
+create index if not exists events_datetime_idx
+  on public.events (datetime);
+
 commit;
