@@ -37,10 +37,13 @@ function AttendeeList({
   onPing,
   pingBusyId,
   canPing = true,
+  currentName = '',
   showDelete = false,
   onDelete,
   deleteBusyId,
 }) {
+  const normalizedCurrentName = currentName.trim().toLocaleLowerCase('cs-CZ')
+
   return (
     <section className="panel">
       <div className="flex flex-col gap-4 border-b border-slate-200/70 pb-5 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
@@ -70,7 +73,8 @@ function AttendeeList({
           const pingCount = attendee.ping_count ?? 0
           const pingLastMessage = attendee.ping_last_message
           const pingable = attendee.status === 'excused' || attendee.status === 'excused_rejected'
-          const showPingAction = showPing && pingable
+          const isSelf = normalizedCurrentName !== '' && attendee.name.trim().toLocaleLowerCase('cs-CZ') === normalizedCurrentName
+          const showPingAction = showPing && pingable && !isSelf
 
           return (
             <article

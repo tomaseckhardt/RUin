@@ -248,6 +248,10 @@ begin
     raise exception 'Účastník nebyl nalezen.';
   end if;
 
+  if lower(trim(v_attendee.name)) = lower(v_source_name) then
+    raise exception 'Nemůžeš šťouchnout sám sebe.';
+  end if;
+
   if v_attendee.status not in ('excused', 'excused_rejected') then
     raise exception 'Šťouchnout jde jen účastníka, který nejde.';
   end if;
