@@ -32,6 +32,7 @@ create table if not exists public.attendee_pings (
   event_id text not null references public.events(id) on delete cascade,
   target_attendee_id bigint not null references public.attendees(id) on delete cascade,
   source_name text not null,
+  message text,
   created_at timestamptz not null default now()
 );
 
