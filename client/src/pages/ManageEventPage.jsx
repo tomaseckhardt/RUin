@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import AttendeeList from '../components/AttendeeList.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { deleteAttendee, getEvent, moderateAttendee, removeEvent } from '../lib/api.js'
+import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 
 const AUTO_REFRESH_MS = 10000
@@ -22,6 +22,7 @@ function ManageEventPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [pingBusyId, setPingBusyId] = useState(null)
   const [deleteBusyId, setDeleteBusyId] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -186,6 +187,26 @@ function ManageEventPage() {
     }
   }
 
+  async function handlePing(attendeeId, sourceName) {
+    const pingMessage = window.prompt('Přidej zprávu ke šťouchnutí (volitelné, max 280 znaků):', '')
+
+    if (pingMessage === null) {
+      return
+    }
+
+    setPingBusyId(attendeeId)
+
+    try {
+      await pingAttendee(id, attendeeId, sourceName, pingMessage)
+      toast.success('Šťouchnutí odeslané.')
+      await loadEvent()
+    } catch (pingError) {
+      toast.error(pingError.message)
+    } finally {
+      setPingBusyId(null)
+    }
+  }
+
   async function handleShare() {
     await navigator.clipboard.writeText(inviteUrl)
     toast.success('Veřejná pozvánka je ve schránce.')
@@ -204,6 +225,7 @@ function ManageEventPage() {
   }
 
   const { event, attendees, summary } = payload
+  const organizerName = attendees[0]?.name || ''
 
   return (
     <PageShell
@@ -306,6 +328,11 @@ function ManageEventPage() {
           showModeration
           onModerate={handleModeration}
           busyId={busyId}
+          showPing
+          onPing={(attendeeId) => handlePing(attendeeId, organizerName)}
+          pingBusyId={pingBusyId}
+          canPing={Boolean(organizerName.trim())}
+          currentName={organizerName}
           showDelete
           onDelete={handleDeleteAttendee}
           deleteBusyId={deleteBusyId}
