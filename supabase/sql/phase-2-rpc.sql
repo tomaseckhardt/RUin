@@ -333,7 +333,6 @@ as $$
 declare
   v_event public.events%rowtype;
   v_pin text := nullif(trim(p_pin), '');
-  v_max_attempts constant integer := 5;
 begin
   perform public._delete_expired_events();
 
@@ -360,7 +359,9 @@ begin
     set
       organizer_pin_failed_attempts = organizer_pin_failed_attempts + 1,
       organizer_pin_locked_until = case
-        when organizer_pin_failed_attempts + 1 >= v_max_attempts then now() + interval '15 minutes'
+        when organizer_pin_failed_attempts + 1 >= 15 then now() + interval '24 hours'
+        when organizer_pin_failed_attempts + 1 >= 10 then now() + interval '1 hour'
+        when organizer_pin_failed_attempts + 1 >= 5 then now() + interval '15 minutes'
         else organizer_pin_locked_until
       end
     where id = p_event_id;
