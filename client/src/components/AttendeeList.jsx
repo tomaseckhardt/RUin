@@ -158,7 +158,7 @@ function AttendeeList({
                   </div>
                 ) : null}
 
-                {!showModeration && showPingAction ? (
+                {showPingAction ? (
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <button
                       type="button"
