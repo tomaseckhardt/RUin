@@ -79,7 +79,7 @@ function AddToHomeButton() {
     }
 
     if (iosInstall) {
-      toast.info('V Safari klepni na Sdílet a zvol Přidat na plochu.')
+      toast.info('V Safari klepni na Sdílet, poté na Zobrazit další a poté zvol Přidat na plochu.')
     }
   }
 

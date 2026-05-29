@@ -39,6 +39,23 @@ drop function if exists public.create_event(text, text, timestamp without time z
 drop function if exists public.ping_attendee(text, bigint, text);
 drop function if exists public.delete_attendee(text, bigint, text);
 
+create or replace function public._delete_expired_events()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted integer := 0;
+begin
+  delete from public.events e
+  where e.datetime + interval '7 days' < now()::timestamp;
+
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+
 create or replace function public.create_event(
   p_name text,
   p_location text,
@@ -62,6 +79,8 @@ declare
   v_token text;
   attempts integer := 0;
 begin
+  perform public._delete_expired_events();
+
   if v_name is null or v_location is null or p_datetime is null or v_description is null or v_organizer_name is null then
     raise exception 'Vyplň svoje jméno, název, místo, datum a stručný popis akce.';
   end if;
@@ -139,6 +158,8 @@ declare
   v_pin text := nullif(trim(p_pin), '');
   v_max_attempts constant integer := 5;
 begin
+  perform public._delete_expired_events();
+
   select *
   into v_event
   from public.events e
@@ -197,6 +218,8 @@ declare
   v_attendee public.attendees%rowtype;
   v_ping_count integer;
 begin
+  perform public._delete_expired_events();
+
   if not exists (select 1 from public.events e where e.id = p_event_id) then
     raise exception 'Akce neexistuje.';
   end if;
@@ -252,6 +275,8 @@ declare
   v_event public.events%rowtype;
   v_attendee public.attendees%rowtype;
 begin
+  perform public._delete_expired_events();
+
   select *
   into v_event
   from public.events e
