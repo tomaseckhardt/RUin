@@ -455,6 +455,7 @@ function EventPage() {
           onPing={handlePing}
           pingBusyId={pingBusyId}
           canPing={Boolean(name.trim())}
+          currentName={sessionName || name}
         />
 
         {showManageModal ? (
