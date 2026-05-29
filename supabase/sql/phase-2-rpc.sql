@@ -5,11 +5,15 @@ begin;
 
 create extension if not exists pgcrypto;
 
+alter table if exists public.attendee_pings
+  add column if not exists message text;
+
 drop function if exists public.create_event(text, text, timestamptz, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text, text, text);
 drop function if exists public.ping_attendee(text, bigint, text);
+drop function if exists public.ping_attendee(text, bigint, text, text);
 drop function if exists public.delete_attendee(text, bigint, text);
 
 create or replace function public._random_token(token_length integer)
@@ -81,7 +85,10 @@ begin
         'status', a.status,
         'excuse_reason', a.excuse_reason,
         'created_at', a.created_at,
-        'ping_count', coalesce(p.ping_count, 0)
+        'ping_count', coalesce(p.ping_count, 0),
+        'ping_last_source_name', p.last_source_name,
+        'ping_last_message', p.last_message,
+        'ping_last_created_at', p.last_created_at
       )
       order by
         case a.status
@@ -99,9 +106,37 @@ begin
   into v_attendees
   from public.attendees a
   left join lateral (
-    select count(*)::integer as ping_count
-    from public.attendee_pings ap
-    where ap.event_id = p_event_id and ap.target_attendee_id = a.id
+    select
+      (
+        select count(*)::integer
+        from public.attendee_pings ap_count
+        where ap_count.event_id = p_event_id
+          and ap_count.target_attendee_id = a.id
+      ) as ping_count,
+      (
+        select ap_last.source_name
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_source_name,
+      (
+        select ap_last.message
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_message,
+      (
+        select ap_last.created_at
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_created_at
   ) p on true
   where a.event_id = p_event_id;
 
@@ -132,7 +167,8 @@ $$;
 create or replace function public.ping_attendee(
   p_event_id text,
   p_target_attendee_id bigint,
-  p_source_name text
+  p_source_name text,
+  p_message text default null
 )
 returns jsonb
 language plpgsql
@@ -141,6 +177,7 @@ set search_path = public
 as $$
 declare
   v_source_name text := nullif(trim(p_source_name), '');
+  v_message text := nullif(trim(coalesce(p_message, '')), '');
   v_attendee public.attendees%rowtype;
   v_ping_count integer;
 begin
@@ -152,6 +189,10 @@ begin
 
   if v_source_name is null then
     raise exception 'Vyplň svoje jméno pro šťouchnutí.';
+  end if;
+
+  if v_message is not null and length(v_message) > 280 then
+    raise exception 'Zpráva ke šťouchnutí může mít maximálně 280 znaků.';
   end if;
 
   select *
@@ -167,8 +208,8 @@ begin
     raise exception 'Šťouchnout jde jen účastníka, který nejde.';
   end if;
 
-  insert into public.attendee_pings (event_id, target_attendee_id, source_name)
-  values (p_event_id, p_target_attendee_id, v_source_name)
+  insert into public.attendee_pings (event_id, target_attendee_id, source_name, message)
+  values (p_event_id, p_target_attendee_id, v_source_name, v_message)
   on conflict (event_id, target_attendee_id, lower(source_name)) do nothing;
 
   if not found then
@@ -182,7 +223,8 @@ begin
 
   return jsonb_build_object(
     'success', true,
-    'pingCount', coalesce(v_ping_count, 0)
+    'pingCount', coalesce(v_ping_count, 0),
+    'lastMessage', v_message
   );
 end;
 $$;
@@ -519,7 +561,7 @@ $$;
 grant execute on function public.get_event_payload(text) to anon, authenticated;
 grant execute on function public.create_event(text, text, timestamp without time zone, text, text, text) to anon, authenticated;
 grant execute on function public.get_organizer_path_with_pin(text, text) to anon, authenticated;
-grant execute on function public.ping_attendee(text, bigint, text) to anon, authenticated;
+grant execute on function public.ping_attendee(text, bigint, text, text) to anon, authenticated;
 grant execute on function public.submit_rsvp(text, text, text, text) to anon, authenticated;
 grant execute on function public.moderate_attendee(text, bigint, text, text) to anon, authenticated;
 grant execute on function public.delete_attendee(text, bigint, text) to anon, authenticated;

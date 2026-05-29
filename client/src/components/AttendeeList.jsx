@@ -68,6 +68,7 @@ function AttendeeList({
           const rejected = attendee.status === 'excused_rejected'
           const acceptedExcuse = attendee.status === 'excused_accepted'
           const pingCount = attendee.ping_count ?? 0
+          const pingLastMessage = attendee.ping_last_message
           const pingable = attendee.status === 'excused' || attendee.status === 'excused_rejected'
           const showPingAction = showPing && pingable
 
@@ -95,6 +96,12 @@ function AttendeeList({
                   {pingCount > 0 ? (
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Šťouchnutí: {pingCount}
+                    </p>
+                  ) : null}
+
+                  {pingLastMessage ? (
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                      Poslední vzkaz: „{pingLastMessage}“
                     </p>
                   ) : null}
 

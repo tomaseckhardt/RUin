@@ -23,8 +23,12 @@ create table if not exists public.attendee_pings (
   event_id text not null references public.events(id) on delete cascade,
   target_attendee_id bigint not null references public.attendees(id) on delete cascade,
   source_name text not null,
+  message text,
   created_at timestamptz not null default now()
 );
+
+alter table if exists public.attendee_pings
+  add column if not exists message text;
 
 create unique index if not exists attendee_pings_event_target_source_uidx
   on public.attendee_pings (event_id, target_attendee_id, lower(source_name));
@@ -37,6 +41,7 @@ drop function if exists public.create_event(text, text, timestamp without time z
 drop function if exists public.create_event(text, text, timestamp without time zone, text, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text, text, text);
 drop function if exists public.ping_attendee(text, bigint, text);
+drop function if exists public.ping_attendee(text, bigint, text, text);
 drop function if exists public.delete_attendee(text, bigint, text);
 
 create or replace function public._delete_expired_events()
@@ -206,7 +211,8 @@ $$;
 create or replace function public.ping_attendee(
   p_event_id text,
   p_target_attendee_id bigint,
-  p_source_name text
+  p_source_name text,
+  p_message text default null
 )
 returns jsonb
 language plpgsql
@@ -215,6 +221,7 @@ set search_path = public
 as $$
 declare
   v_source_name text := nullif(trim(p_source_name), '');
+  v_message text := nullif(trim(coalesce(p_message, '')), '');
   v_attendee public.attendees%rowtype;
   v_ping_count integer;
 begin
@@ -226,6 +233,10 @@ begin
 
   if v_source_name is null then
     raise exception 'Vyplň svoje jméno pro šťouchnutí.';
+  end if;
+
+  if v_message is not null and length(v_message) > 280 then
+    raise exception 'Zpráva ke šťouchnutí může mít maximálně 280 znaků.';
   end if;
 
   select *
@@ -241,8 +252,8 @@ begin
     raise exception 'Šťouchnout jde jen účastníka, který nejde.';
   end if;
 
-  insert into public.attendee_pings (event_id, target_attendee_id, source_name)
-  values (p_event_id, p_target_attendee_id, v_source_name)
+  insert into public.attendee_pings (event_id, target_attendee_id, source_name, message)
+  values (p_event_id, p_target_attendee_id, v_source_name, v_message)
   on conflict (event_id, target_attendee_id, lower(source_name)) do nothing;
 
   if not found then
@@ -256,7 +267,8 @@ begin
 
   return jsonb_build_object(
     'success', true,
-    'pingCount', coalesce(v_ping_count, 0)
+    'pingCount', coalesce(v_ping_count, 0),
+    'lastMessage', v_message
   );
 end;
 $$;
@@ -308,7 +320,7 @@ $$;
 
 grant execute on function public.create_event(text, text, timestamp without time zone, text, text, text) to anon, authenticated;
 grant execute on function public.get_organizer_path_with_pin(text, text) to anon, authenticated;
-grant execute on function public.ping_attendee(text, bigint, text) to anon, authenticated;
+grant execute on function public.ping_attendee(text, bigint, text, text) to anon, authenticated;
 grant execute on function public.delete_attendee(text, bigint, text) to anon, authenticated;
 
 commit;

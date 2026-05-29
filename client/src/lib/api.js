@@ -66,13 +66,14 @@ export function moderateAttendee(eventId, attendeeId, data) {
   )
 }
 
-export function pingAttendee(eventId, attendeeId, sourceName) {
+export function pingAttendee(eventId, attendeeId, sourceName, message = null) {
   return callRpc(
     'ping_attendee',
     {
       p_event_id: eventId,
       p_target_attendee_id: Number(attendeeId),
       p_source_name: sourceName,
+      p_message: message,
     },
     'Šťouchnutí se nepodařilo odeslat.',
   )

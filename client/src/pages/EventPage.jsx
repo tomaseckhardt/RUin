@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useNavigate, useParams } from 'react-router-dom'
 import AttendeeList from '../components/AttendeeList.jsx'
@@ -8,6 +8,40 @@ import { getEvent, pingAttendee, submitRsvp, unlockManageWithPin } from '../lib/
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 
 const AUTO_REFRESH_MS = 10000
+const IDENTITY_STORAGE_PREFIX = 'ruin-event-identity'
+const PING_SEEN_STORAGE_PREFIX = 'ruin-event-last-seen-ping'
+
+function normalizeName(value) {
+  return value.trim().toLocaleLowerCase('cs-CZ')
+}
+
+function identityStorageKey(eventId) {
+  return `${IDENTITY_STORAGE_PREFIX}:${eventId}`
+}
+
+function pingSeenStorageKey(eventId, attendeeName) {
+  return `${PING_SEEN_STORAGE_PREFIX}:${eventId}:${normalizeName(attendeeName)}`
+}
+
+function statusLabel(status) {
+  if (status === 'confirmed') {
+    return 'Potvrzeno'
+  }
+
+  if (status === 'excused') {
+    return 'Omluveno (čeká na posouzení)'
+  }
+
+  if (status === 'excused_accepted') {
+    return 'Omluvenka přijatá'
+  }
+
+  if (status === 'excused_rejected') {
+    return 'Omluvenka zamítnutá'
+  }
+
+  return 'Neznámý stav'
+}
 
 async function fetchEventPayload(id) {
   return getEvent(id)
@@ -16,22 +50,71 @@ async function fetchEventPayload(id) {
 function EventPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const initialIdentity = typeof window === 'undefined'
+    ? ''
+    : window.localStorage.getItem(identityStorageKey(id)) || ''
   const [payload, setPayload] = useState(null)
-  const [name, setName] = useState('')
+  const [name, setName] = useState(initialIdentity)
   const [excuseReason, setExcuseReason] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('confirmed')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [sessionName, setSessionName] = useState(initialIdentity)
+  const [isIdentityLocked, setIsIdentityLocked] = useState(Boolean(initialIdentity))
   const [pingBusyId, setPingBusyId] = useState(null)
+  const [incomingPing, setIncomingPing] = useState(null)
   const [isUnlockingManage, setIsUnlockingManage] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
+  const [showPingModal, setShowPingModal] = useState(false)
   const [managePin, setManagePin] = useState('')
   const [error, setError] = useState('')
 
-  async function loadEvent() {
+  const maybeShowIncomingPing = useCallback((nextPayload, forcedSessionName = null) => {
+    if (typeof window === 'undefined' || !nextPayload) {
+      return
+    }
+
+    const activeName = forcedSessionName || (isIdentityLocked ? sessionName : '')
+
+    if (!activeName) {
+      return
+    }
+
+    const attendee = nextPayload.attendees.find(
+      (item) => normalizeName(item.name) === normalizeName(activeName),
+    )
+
+    if (!attendee) {
+      return
+    }
+
+    const lastPingAt = attendee.ping_last_created_at
+    const lastPingSource = attendee.ping_last_source_name
+
+    if (!lastPingAt || !lastPingSource) {
+      return
+    }
+
+    const key = pingSeenStorageKey(id, activeName)
+    const seenPingAt = window.localStorage.getItem(key)
+
+    if (seenPingAt && new Date(lastPingAt).getTime() <= new Date(seenPingAt).getTime()) {
+      return
+    }
+
+    setIncomingPing({
+      sourceName: lastPingSource,
+      message: attendee.ping_last_message,
+    })
+    setShowPingModal(true)
+    window.localStorage.setItem(key, lastPingAt)
+  }, [id, isIdentityLocked, sessionName])
+
+  async function loadEvent(forcedSessionName = null) {
     try {
       const nextPayload = await fetchEventPayload(id)
       setPayload(nextPayload)
+      maybeShowIncomingPing(nextPayload, forcedSessionName)
       setError('')
     } catch (loadError) {
       setError(loadError.message)
@@ -52,6 +135,7 @@ function EventPage() {
         }
 
         setPayload(nextPayload)
+        maybeShowIncomingPing(nextPayload)
         setError('')
       } catch (loadError) {
         if (cancelled) {
@@ -71,7 +155,7 @@ function EventPage() {
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, maybeShowIncomingPing])
 
   useEffect(() => {
     let cancelled = false
@@ -92,6 +176,7 @@ function EventPage() {
         }
 
         setPayload(nextPayload)
+        maybeShowIncomingPing(nextPayload)
         setError('')
       } catch (refreshError) {
         if (!cancelled) {
@@ -108,7 +193,7 @@ function EventPage() {
       cancelled = true
       clearInterval(intervalId)
     }
-  }, [id])
+  }, [id, maybeShowIncomingPing])
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -126,8 +211,14 @@ function EventPage() {
           ? 'Máš potvrzeno. Těšíme se na tebe.'
           : 'Omluvenka byla odeslaná.',
       )
+
+      const normalizedName = name.trim()
+      window.localStorage.setItem(identityStorageKey(id), normalizedName)
+      setSessionName(normalizedName)
+      setName(normalizedName)
+      setIsIdentityLocked(true)
       setExcuseReason('')
-      await loadEvent()
+      await loadEvent(normalizedName)
     } catch (submitError) {
       toast.error(submitError.message)
     } finally {
@@ -136,10 +227,16 @@ function EventPage() {
   }
 
   async function handlePing(attendeeId) {
+    const pingMessage = window.prompt('Přidej zprávu ke šťouchnutí (volitelné, max 280 znaků):', '')
+
+    if (pingMessage === null) {
+      return
+    }
+
     setPingBusyId(attendeeId)
 
     try {
-      await pingAttendee(id, attendeeId, name)
+      await pingAttendee(id, attendeeId, name, pingMessage)
       toast.success('Šťouchnutí odeslané.')
       await loadEvent()
     } catch (pingError) {
@@ -147,6 +244,24 @@ function EventPage() {
     } finally {
       setPingBusyId(null)
     }
+  }
+
+  function handleResetIdentity() {
+    if (typeof window !== 'undefined' && sessionName) {
+      window.localStorage.removeItem(identityStorageKey(id))
+      window.localStorage.removeItem(pingSeenStorageKey(id, sessionName))
+    }
+
+    setIsIdentityLocked(false)
+    setSessionName('')
+    setName('')
+    setSelectedStatus('confirmed')
+    setExcuseReason('')
+  }
+
+  function closePingModal() {
+    setShowPingModal(false)
+    setIncomingPing(null)
   }
 
   async function copyInviteLink() {
@@ -184,6 +299,10 @@ function EventPage() {
       setIsUnlockingManage(false)
     }
   }
+
+  const sessionAttendee = isIdentityLocked && payload
+    ? payload.attendees.find((attendee) => normalizeName(attendee.name) === normalizeName(sessionName))
+    : null
 
   if (isLoading) {
     return (
@@ -255,61 +374,77 @@ function EventPage() {
           </article>
 
           <aside className="panel h-fit xl:sticky xl:top-6">
-            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-              Odpověz organizátorovi
-            </p>
-            <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Přijdeš, nebo ghostíš?</h2>
-            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tvoje jméno</label>
-              <input
-                className="field"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Třeba Viki"
-                required
-              />
-            </div>
+            {!isIdentityLocked ? (
+              <>
+                <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
+                  Odpověz organizátorovi
+                </p>
+                <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Přijdeš, nebo ghostíš?</h2>
+                <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tvoje jméno</label>
+                    <input
+                      className="field"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      placeholder="Třeba Viki"
+                      required
+                    />
+                  </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'confirmed' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
-                onClick={() => setSelectedStatus('confirmed')}
-              >
-                <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
-                  Potvrzuji účast
-                </span>
-                <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Jdeš a chceš být v line-upu potvrzených.</span>
-              </button>
-              <button
-                type="button"
-                className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'excused' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
-                onClick={() => setSelectedStatus('excused')}
-              >
-                <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
-                  Omlouvám se
-                </span>
-                <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Můžeš přihodit důvod, pokud chceš znít důvěryhodně.</span>
-              </button>
-            </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'confirmed' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
+                      onClick={() => setSelectedStatus('confirmed')}
+                    >
+                      <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
+                        Potvrzuji účast
+                      </span>
+                      <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Jdeš a chceš být v line-upu potvrzených.</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'excused' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
+                      onClick={() => setSelectedStatus('excused')}
+                    >
+                      <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
+                        Omlouvám se
+                      </span>
+                      <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Můžeš přihodit důvod, pokud chceš znít důvěryhodně.</span>
+                    </button>
+                  </div>
 
-            {selectedStatus === 'excused' ? (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Důvod omluvy</label>
-                <textarea
-                  className="field min-h-28"
-                  value={excuseReason}
-                  onChange={(event) => setExcuseReason(event.target.value)}
-                  placeholder="Nepovinné, ale často zábavné."
-                />
-              </div>
-            ) : null}
+                  {selectedStatus === 'excused' ? (
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Důvod omluvy</label>
+                      <textarea
+                        className="field min-h-28"
+                        value={excuseReason}
+                        onChange={(event) => setExcuseReason(event.target.value)}
+                        placeholder="Nepovinné, ale často zábavné."
+                      />
+                    </div>
+                  ) : null}
 
-            <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Odesílám odpověď…' : selectedStatus === 'confirmed' ? 'Potvrzuji účast' : 'Poslat omluvenku'}
-            </button>
-            </form>
+                  <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
+                    {isSubmitting ? 'Odesílám odpověď…' : selectedStatus === 'confirmed' ? 'Potvrzuji účast' : 'Poslat omluvenku'}
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Jsi přihlášený</p>
+                <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{sessionName}</h2>
+                <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  Docházka je navázaná na tvoje jméno v této session.
+                  {sessionAttendee ? ` Aktuální stav: ${statusLabel(sessionAttendee.status)}.` : ' Načítám tvůj aktuální stav…'}
+                </p>
+                <button type="button" className="secondary-button mt-5 w-full" onClick={handleResetIdentity}>
+                  Nejsem to já
+                </button>
+              </>
+            )}
           </aside>
         </section>
 
@@ -357,6 +492,23 @@ function EventPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </section>
+        ) : null}
+
+        {showPingModal && incomingPing ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Někdo tě šťouchl</p>
+              <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+                {incomingPing.sourceName}
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                {incomingPing.message ? `Vzkaz: ${incomingPing.message}` : 'Poslal ti šťouchnutí bez zprávy.'}
+              </p>
+              <button type="button" className="primary-button mt-6 w-full" onClick={closePingModal}>
+                Rozumím
+              </button>
             </div>
           </section>
         ) : null}
