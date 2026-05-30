@@ -44,6 +44,24 @@ create table if not exists public.event_chat_messages (
   created_at timestamptz not null default now()
 );
 
+create or replace function public.normalize_event_chat_message()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.sender_name := trim(new.sender_name);
+  new.message := trim(new.message);
+  return new;
+end;
+$$;
+
+drop trigger if exists event_chat_messages_normalize_tg on public.event_chat_messages;
+create trigger event_chat_messages_normalize_tg
+before insert or update on public.event_chat_messages
+for each row
+execute function public.normalize_event_chat_message();
+
 create table if not exists public.organizer_pin_attempts (
   id bigint generated always as identity primary key,
   event_id text not null references public.events(id) on delete cascade,
