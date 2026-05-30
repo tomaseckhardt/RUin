@@ -36,6 +36,14 @@ create table if not exists public.attendee_pings (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.event_chat_messages (
+  id bigint generated always as identity primary key,
+  event_id text not null references public.events(id) on delete cascade,
+  sender_name text not null check (length(trim(sender_name)) between 1 and 80),
+  message text not null check (length(trim(message)) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.organizer_pin_attempts (
   id bigint generated always as identity primary key,
   event_id text not null references public.events(id) on delete cascade,
@@ -60,6 +68,12 @@ create unique index if not exists attendee_pings_event_target_source_uidx
 create index if not exists attendee_pings_event_target_idx
   on public.attendee_pings (event_id, target_attendee_id);
 
+create index if not exists event_chat_messages_event_created_idx
+  on public.event_chat_messages (event_id, created_at asc);
+
+create index if not exists event_chat_messages_created_idx
+  on public.event_chat_messages (created_at desc);
+
 create index if not exists organizer_pin_attempts_event_idx
   on public.organizer_pin_attempts (event_id);
 
@@ -71,5 +85,23 @@ create index if not exists events_created_at_idx
 
 create index if not exists events_datetime_idx
   on public.events (datetime);
+
+grant select, insert on table public.event_chat_messages to anon, authenticated;
+grant usage, select on sequence public.event_chat_messages_id_seq to anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1
+       from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'event_chat_messages'
+     ) then
+    execute 'alter publication supabase_realtime add table public.event_chat_messages';
+  end if;
+end;
+$$;
 
 commit;

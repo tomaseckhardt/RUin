@@ -36,6 +36,84 @@ create unique index if not exists attendee_pings_event_target_source_uidx
 create index if not exists attendee_pings_event_target_idx
   on public.attendee_pings (event_id, target_attendee_id);
 
+create table if not exists public.event_chat_messages (
+  id bigint generated always as identity primary key,
+  event_id text not null references public.events(id) on delete cascade,
+  sender_name text not null check (length(trim(sender_name)) between 1 and 80),
+  message text not null check (length(trim(message)) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists event_chat_messages_event_created_idx
+  on public.event_chat_messages (event_id, created_at asc);
+
+create index if not exists event_chat_messages_created_idx
+  on public.event_chat_messages (created_at desc);
+
+grant select, insert on table public.event_chat_messages to anon, authenticated;
+grant usage, select on sequence public.event_chat_messages_id_seq to anon, authenticated;
+
+alter table if exists public.event_chat_messages enable row level security;
+
+drop policy if exists "event_chat_select_allowed" on public.event_chat_messages;
+drop policy if exists "event_chat_insert_allowed" on public.event_chat_messages;
+drop policy if exists "event_chat_update_none" on public.event_chat_messages;
+drop policy if exists "event_chat_delete_none" on public.event_chat_messages;
+
+create policy "event_chat_select_allowed"
+  on public.event_chat_messages
+  for select
+  to anon, authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_chat_messages.event_id
+    )
+  );
+
+create policy "event_chat_insert_allowed"
+  on public.event_chat_messages
+  for insert
+  to anon, authenticated
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_chat_messages.event_id
+    )
+    and length(trim(sender_name)) between 1 and 80
+    and length(trim(message)) between 1 and 500
+  );
+
+create policy "event_chat_update_none"
+  on public.event_chat_messages
+  for update
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create policy "event_chat_delete_none"
+  on public.event_chat_messages
+  for delete
+  to anon, authenticated
+  using (false);
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1
+       from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'event_chat_messages'
+     ) then
+    execute 'alter publication supabase_realtime add table public.event_chat_messages';
+  end if;
+end;
+$$;
+
 drop function if exists public.create_event(text, text, timestamptz, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text);
 drop function if exists public.create_event(text, text, timestamp without time zone, text, text);

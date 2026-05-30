@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useNavigate, useParams } from 'react-router-dom'
 import AttendeeList from '../components/AttendeeList.jsx'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
+import EventChat from '../components/EventChat.jsx'
 import PageShell from '../components/PageShell.jsx'
 import { getEvent, pingAttendee, submitRsvp, unlockManageWithPin } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
@@ -456,6 +457,12 @@ function EventPage() {
           pingBusyId={pingBusyId}
           canPing={Boolean(name.trim())}
           currentName={sessionName || name}
+        />
+
+        <EventChat
+          eventId={id}
+          currentName={sessionName}
+          canSend={isIdentityLocked && Boolean(sessionName.trim())}
         />
 
         {showManageModal ? (

@@ -75,7 +75,7 @@ function CreateEventPage() {
                   <a href="#create-form" className="primary-button">
                     Začít tvořit
                   </a>
-                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-white/70 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
+                  <span className="hero-badge inline-flex items-center rounded-full border border-slate-200 bg-white/70 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
                     Bez přihlašování, bez zdržování
                   </span>
                 </div>

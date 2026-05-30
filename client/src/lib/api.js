@@ -101,3 +101,47 @@ export function removeEvent(eventId, token) {
     'Akci se nepodařilo smazat.',
   )
 }
+
+export async function getEventChatMessages(eventId, limit = 120) {
+  const { data, error } = await supabase
+    .from('event_chat_messages')
+    .select('id, event_id, sender_name, message, created_at')
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: true })
+    .limit(limit)
+
+  if (error) {
+    throw new Error(error.message || 'Chat se nepodařilo načíst.')
+  }
+
+  return data ?? []
+}
+
+export async function sendEventChatMessage(eventId, senderName, message) {
+  const cleanSenderName = (senderName || '').trim()
+  const cleanMessage = (message || '').trim()
+
+  if (!cleanSenderName) {
+    throw new Error('Pro odeslání zprávy vyplň svoje jméno.')
+  }
+
+  if (!cleanMessage) {
+    throw new Error('Napiš zprávu do chatu.')
+  }
+
+  const { data, error } = await supabase
+    .from('event_chat_messages')
+    .insert({
+      event_id: eventId,
+      sender_name: cleanSenderName,
+      message: cleanMessage,
+    })
+    .select('id, event_id, sender_name, message, created_at')
+    .single()
+
+  if (error) {
+    throw new Error(error.message || 'Zprávu se nepodařilo odeslat.')
+  }
+
+  return data
+}

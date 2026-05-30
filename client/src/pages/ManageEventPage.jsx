@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import AttendeeList from '../components/AttendeeList.jsx'
+import EventChat from '../components/EventChat.jsx'
 import PageShell from '../components/PageShell.jsx'
 import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
@@ -336,6 +337,12 @@ function ManageEventPage() {
           showDelete
           onDelete={handleDeleteAttendee}
           deleteBusyId={deleteBusyId}
+        />
+
+        <EventChat
+          eventId={id}
+          currentName={organizerName}
+          canSend={Boolean(organizerName.trim())}
         />
       </main>
     </PageShell>
