@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const clientRoot = path.resolve(__dirname, '..')
-const safeRoot = path.join(os.tmpdir(), 'r-u-in-client')
+const safeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'r-u-in-client-'))
 const command = process.argv[2] || 'dev'
 const extraArgs = process.argv.slice(3)
 
@@ -21,14 +21,6 @@ function syncBuildOutput() {
 
   fs.rmSync(targetDist, { recursive: true, force: true })
   fs.cpSync(sourceDist, targetDist, { recursive: true, force: true })
-}
-
-try {
-  fs.rmSync(safeRoot, { recursive: true, force: true })
-} catch (error) {
-  if (error.code !== 'ENOENT') {
-    throw error
-  }
 }
 
 fs.cpSync(clientRoot, safeRoot, {
@@ -52,6 +44,12 @@ const child = spawn(process.execPath, ['--preserve-symlinks', '--preserve-symlin
 child.on('exit', (code) => {
   if ((code ?? 0) === 0 && command === 'build') {
     syncBuildOutput()
+  }
+
+  try {
+    fs.rmSync(safeRoot, { recursive: true, force: true })
+  } catch {
+    // Best-effort cleanup of per-process temp workspace.
   }
 
   process.exit(code ?? 0)
