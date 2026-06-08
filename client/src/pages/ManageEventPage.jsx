@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
@@ -7,6 +7,7 @@ import EventChat from '../components/EventChat.jsx'
 import PageShell from '../components/PageShell.jsx'
 import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
+import { supabase } from '../lib/supabase.js'
 
 const AUTO_REFRESH_MS = 10000
 
@@ -29,7 +30,7 @@ function ManageEventPage() {
 
   const inviteUrl = useMemo(() => buildAbsoluteUrl(`/event/${id}`), [id])
 
-  async function loadEvent() {
+  const loadEvent = useCallback(async () => {
     try {
       const nextPayload = await fetchEventPayload(id)
       setPayload(nextPayload)
@@ -39,7 +40,7 @@ function ManageEventPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [id])
 
   useEffect(() => {
     let cancelled = false
@@ -81,7 +82,7 @@ function ManageEventPage() {
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, token])
 
   useEffect(() => {
     if (!token) {
@@ -123,6 +124,57 @@ function ManageEventPage() {
       clearInterval(intervalId)
     }
   }, [id, token])
+
+  useEffect(() => {
+    if (!token) {
+      return undefined
+    }
+
+    let refreshTimeout = null
+
+    function scheduleRealtimeRefresh() {
+      if (refreshTimeout) {
+        return
+      }
+
+      refreshTimeout = setTimeout(() => {
+        refreshTimeout = null
+        loadEvent()
+      }, 120)
+    }
+
+    const channel = supabase
+      .channel(`manage-live:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'attendee_pings',
+          filter: `event_id=eq.${id}`,
+        },
+        scheduleRealtimeRefresh,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'event_realtime_ticks',
+          filter: `event_id=eq.${id}`,
+        },
+        scheduleRealtimeRefresh,
+      )
+      .subscribe()
+
+    return () => {
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout)
+      }
+
+      supabase.removeChannel(channel)
+    }
+  }, [id, loadEvent, token])
 
   async function handleModeration(attendeeId, status) {
     setBusyId(attendeeId)
