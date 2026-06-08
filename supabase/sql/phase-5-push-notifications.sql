@@ -40,6 +40,14 @@ begin
     return;
   end if;
 
+  if not exists (
+    select 1
+    from public.events e
+    where e.id = p_event_id
+  ) then
+    return;
+  end if;
+
   insert into public.event_realtime_ticks (event_id, reason)
   values (p_event_id, p_reason);
 end;
