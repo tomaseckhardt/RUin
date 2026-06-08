@@ -7,6 +7,7 @@ import EventChat from '../components/EventChat.jsx'
 import PageShell from '../components/PageShell.jsx'
 import { getEvent, pingAttendee, submitRsvp, unlockManageWithPin } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
+import { supabase } from '../lib/supabase.js'
 
 const AUTO_REFRESH_MS = 10000
 const IDENTITY_STORAGE_PREFIX = 'ruin-event-identity'
@@ -111,7 +112,7 @@ function EventPage() {
     window.localStorage.setItem(key, lastPingAt)
   }, [id, isIdentityLocked, sessionName])
 
-  async function loadEvent(forcedSessionName = null) {
+  const loadEvent = useCallback(async (forcedSessionName = null) => {
     try {
       const nextPayload = await fetchEventPayload(id)
       setPayload(nextPayload)
@@ -122,7 +123,7 @@ function EventPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [id, maybeShowIncomingPing])
 
   useEffect(() => {
     let cancelled = false
@@ -157,6 +158,53 @@ function EventPage() {
       cancelled = true
     }
   }, [id, maybeShowIncomingPing])
+
+  useEffect(() => {
+    let refreshTimeout = null
+
+    function scheduleRealtimeRefresh() {
+      if (refreshTimeout) {
+        return
+      }
+
+      refreshTimeout = setTimeout(() => {
+        refreshTimeout = null
+        loadEvent()
+      }, 120)
+    }
+
+    const channel = supabase
+      .channel(`event-live:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'attendee_pings',
+          filter: `event_id=eq.${id}`,
+        },
+        scheduleRealtimeRefresh,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'event_realtime_ticks',
+          filter: `event_id=eq.${id}`,
+        },
+        scheduleRealtimeRefresh,
+      )
+      .subscribe()
+
+    return () => {
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout)
+      }
+
+      supabase.removeChannel(channel)
+    }
+  }, [id, loadEvent])
 
   useEffect(() => {
     let cancelled = false

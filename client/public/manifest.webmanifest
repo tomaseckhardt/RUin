@@ -1,0 +1,16 @@
+{
+  "name": "R U in?",
+  "short_name": "R U in?",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#130914",
+  "theme_color": "#7a1c3f",
+  "icons": [
+    {
+      "src": "./icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
