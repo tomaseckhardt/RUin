@@ -27,6 +27,7 @@ function ManageEventPage() {
   const [pingBusyId, setPingBusyId] = useState(null)
   const [deleteBusyId, setDeleteBusyId] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showOverviewModal, setShowOverviewModal] = useState(false)
 
   const inviteUrl = useMemo(() => buildAbsoluteUrl(`/event/${id}`), [id])
 
@@ -288,6 +289,9 @@ function ManageEventPage() {
       actions={
         <>
           <AddToCalendarButton eventData={event} />
+          <button type="button" className="secondary-button" onClick={() => setShowOverviewModal(true)}>
+            Přehled
+          </button>
           <button type="button" className="secondary-button" onClick={handleShare}>
             Sdílet pozvánku
           </button>
@@ -346,6 +350,13 @@ function ManageEventPage() {
                 Controls
               </p>
               <div className="mt-4 space-y-3">
+                <button
+                  type="button"
+                  className="secondary-button w-full justify-center"
+                  onClick={() => setShowOverviewModal(true)}
+                >
+                  Přehled
+                </button>
                 <button type="button" className="secondary-button w-full justify-center" onClick={handleShare}>
                   Sdílet pozvánku
                 </button>
@@ -397,6 +408,67 @@ function ManageEventPage() {
           currentName={organizerName}
           canSend={Boolean(organizerName.trim())}
         />
+
+        {showOverviewModal ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Přehled</p>
+                  <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{event.name}</h3>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button shrink-0"
+                  onClick={() => setShowOverviewModal(false)}
+                >
+                  Zavřít
+                </button>
+              </div>
+
+              <div className="max-h-[60vh] space-y-5 overflow-y-auto">
+                {['confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
+                  const group = attendees.filter((a) => a.status === statusGroup)
+                  if (group.length === 0) return null
+                  const labels = {
+                    confirmed: '✅ Přijdou',
+                    excused: '⏳ Omluvenky (čeká)',
+                    excused_accepted: '❌ Omluvenka přijatá',
+                    excused_rejected: '⚪ Omluvenka zamítnutá',
+                  }
+
+                  return (
+                    <div key={statusGroup}>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                        {labels[statusGroup]} ({group.length})
+                      </p>
+                      <ul className="space-y-2">
+                        {group.map((a) => (
+                          <li
+                            key={a.id}
+                            className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{a.name}</span>
+                              {event.requirePhone && a.phone ? (
+                                <a
+                                  href={`tel:${a.phone}`}
+                                  className="text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"
+                                >
+                                  {a.phone}
+                                </a>
+                              ) : null}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        ) : null}
       </main>
     </PageShell>
   )
