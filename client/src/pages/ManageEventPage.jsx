@@ -389,6 +389,7 @@ function ManageEventPage() {
           showDelete
           onDelete={handleDeleteAttendee}
           deleteBusyId={deleteBusyId}
+          showPhone={Boolean(payload?.event?.requirePhone)}
         />
 
         <EventChat

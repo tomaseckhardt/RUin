@@ -12,6 +12,7 @@ const initialForm = {
   location: '',
   datetime: '',
   description: '',
+  requirePhone: false,
 }
 
 function CreateEventPage() {
@@ -211,6 +212,18 @@ function CreateEventPage() {
                 required
               />
             </div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                checked={form.requirePhone}
+                onChange={(e) => setForm((current) => ({ ...current, requirePhone: e.target.checked }))}
+              />
+              <div>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Vyžadovat telefonní číslo</p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Učastníci budou muset vyplnit telefon. Z organizátorské stránky pak můžeš na každého přímo zavolat.</p>
+              </div>
+            </label>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
                 {isSubmitting ? 'Zakládám akci…' : 'Vytvořit akci'}
