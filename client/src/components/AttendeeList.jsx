@@ -41,6 +41,7 @@ function AttendeeList({
   showDelete = false,
   onDelete,
   deleteBusyId,
+  showPhone = false,
 }) {
   const normalizedCurrentName = currentName.trim().toLocaleLowerCase('cs-CZ')
 
@@ -96,7 +97,14 @@ function AttendeeList({
                       „{attendee.excuse_reason}“
                     </p>
                   ) : null}
-
+                  {showPhone && attendee.phone ? (
+                    <a
+                      href={`tel:${attendee.phone}`}
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"
+                    >
+                      📞 {attendee.phone}
+                    </a>
+                  ) : null}
                   {pingCount > 0 ? (
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                       Šťouchnutí: {pingCount}

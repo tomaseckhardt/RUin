@@ -20,6 +20,7 @@ export function createEvent(data) {
       p_description: data.description,
       p_organizer_name: data.organizerName,
       p_organizer_pin: data.organizerPin,
+      p_require_phone: data.requirePhone ?? false,
     },
     'Akci se nepodařilo vytvořit.',
   )
@@ -48,6 +49,7 @@ export function submitRsvp(id, data) {
       p_name: data.name,
       p_status: data.status,
       p_excuse_reason: data.excuseReason ?? null,
+      p_phone: data.phone ?? null,
     },
     'RSVP se nepodařilo uložit.',
   )

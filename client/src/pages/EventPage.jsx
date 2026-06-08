@@ -57,6 +57,7 @@ function EventPage() {
     : window.localStorage.getItem(identityStorageKey(id)) || ''
   const [payload, setPayload] = useState(null)
   const [name, setName] = useState(initialIdentity)
+  const [phone, setPhone] = useState('')
   const [excuseReason, setExcuseReason] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('confirmed')
   const [isLoading, setIsLoading] = useState(true)
@@ -67,6 +68,7 @@ function EventPage() {
   const [incomingPing, setIncomingPing] = useState(null)
   const [isUnlockingManage, setIsUnlockingManage] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
+  const [showOverviewModal, setShowOverviewModal] = useState(false)
   const [showPingModal, setShowPingModal] = useState(false)
   const [managePin, setManagePin] = useState('')
   const [error, setError] = useState('')
@@ -253,6 +255,7 @@ function EventPage() {
         name,
         status: selectedStatus,
         excuseReason,
+        phone: phone.trim() || null,
       })
 
       toast.success(
@@ -267,6 +270,7 @@ function EventPage() {
       setName(normalizedName)
       setIsIdentityLocked(true)
       setExcuseReason('')
+      setPhone('')
       await loadEvent(normalizedName)
     } catch (submitError) {
       toast.error(submitError.message)
@@ -392,6 +396,9 @@ function EventPage() {
       actions={
         <>
           <AddToCalendarButton eventData={event} />
+          <button type="button" className="secondary-button" onClick={() => setShowOverviewModal(true)}>
+            Přehled
+          </button>
           <button type="button" className="secondary-button" onClick={copyInviteLink}>
             Sdílet pozvánku
           </button>
@@ -472,6 +479,20 @@ function EventPage() {
                     required
                   />
                 </div>
+
+                {event.requirePhone ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Telefonní číslo</label>
+                    <input
+                      type="tel"
+                      className="field"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+420 123 456 789"
+                      required
+                    />
+                  </div>
+                ) : null}
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button
@@ -580,6 +601,53 @@ function EventPage() {
               <button type="button" className="primary-button mt-6 w-full" onClick={closePingModal}>
                 Rozumím
               </button>
+            </div>
+          </section>
+        ) : null}
+
+        {showOverviewModal ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Přehled</p>
+                  <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{event.name}</h3>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button shrink-0"
+                  onClick={() => setShowOverviewModal(false)}
+                >
+                  Zavřít
+                </button>
+              </div>
+
+              <div className="space-y-5 max-h-[60vh] overflow-y-auto">
+                {['confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
+                  const group = attendees.filter((a) => a.status === statusGroup)
+                  if (group.length === 0) return null
+                  const labels = {
+                    confirmed: '✅ Přijdou',
+                    excused: '⏳ Omluvenky (čeká)',
+                    excused_accepted: '❌ Omluvenka přijatá',
+                    excused_rejected: '⚪ Omluvenka zamítnutá',
+                  }
+                  return (
+                    <div key={statusGroup}>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                        {labels[statusGroup]} ({group.length})
+                      </p>
+                      <ul className="space-y-2">
+                        {group.map((a) => (
+                          <li key={a.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60">
+                            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{a.name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </section>
         ) : null}
