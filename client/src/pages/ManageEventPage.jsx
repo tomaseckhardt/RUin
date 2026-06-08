@@ -28,6 +28,9 @@ function ManageEventPage() {
   const [deleteBusyId, setDeleteBusyId] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showOverviewModal, setShowOverviewModal] = useState(false)
+  const [showPingComposerModal, setShowPingComposerModal] = useState(false)
+  const [pingTargetId, setPingTargetId] = useState(null)
+  const [pingMessageInput, setPingMessageInput] = useState('')
 
   const inviteUrl = useMemo(() => buildAbsoluteUrl(`/event/${id}`), [id])
 
@@ -241,18 +244,37 @@ function ManageEventPage() {
     }
   }
 
-  async function handlePing(attendeeId, sourceName) {
-    const pingMessage = window.prompt('Přidej zprávu ke šťouchnutí (volitelné, max 280 znaků):', '')
+  function handlePing(attendeeId) {
+    setPingTargetId(attendeeId)
+    setPingMessageInput('')
+    setShowPingComposerModal(true)
+  }
 
-    if (pingMessage === null) {
+  function closePingComposerModal() {
+    if (pingBusyId !== null) {
       return
     }
 
-    setPingBusyId(attendeeId)
+    setShowPingComposerModal(false)
+    setPingTargetId(null)
+    setPingMessageInput('')
+  }
+
+  async function handleSubmitPing(event) {
+    event.preventDefault()
+
+    if (pingTargetId === null) {
+      return
+    }
+
+    setPingBusyId(pingTargetId)
 
     try {
-      await pingAttendee(id, attendeeId, sourceName, pingMessage)
+      await pingAttendee(id, pingTargetId, organizerName, pingMessageInput)
       toast.success('Šťouchnutí odeslané.')
+      setShowPingComposerModal(false)
+      setPingTargetId(null)
+      setPingMessageInput('')
       await loadEvent()
     } catch (pingError) {
       toast.error(pingError.message)
@@ -393,7 +415,7 @@ function ManageEventPage() {
           onModerate={handleModeration}
           busyId={busyId}
           showPing
-          onPing={(attendeeId) => handlePing(attendeeId, organizerName)}
+          onPing={handlePing}
           pingBusyId={pingBusyId}
           canPing={Boolean(organizerName.trim())}
           currentName={organizerName}
@@ -408,6 +430,40 @@ function ManageEventPage() {
           currentName={organizerName}
           canSend={Boolean(organizerName.trim())}
         />
+
+        {showPingComposerModal ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Šťouchnout účastníka</p>
+              <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Přidej zprávu</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.</p>
+
+              <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Zpráva</label>
+                  <textarea
+                    className="field min-h-24"
+                    value={pingMessageInput}
+                    onChange={(event) => setPingMessageInput(event.target.value.slice(0, 280))}
+                    placeholder="Hej, pojď s náma!"
+                    disabled={pingBusyId !== null}
+                    autoFocus
+                  />
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Zbývá {280 - pingMessageInput.length} znaků</p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button type="button" className="secondary-button flex-1 justify-center" onClick={closePingComposerModal}>
+                    Zrušit
+                  </button>
+                  <button type="submit" className="primary-button flex-1" disabled={pingBusyId !== null}>
+                    {pingBusyId !== null ? 'Šťouchám…' : 'Odeslat'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
 
         {showOverviewModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
