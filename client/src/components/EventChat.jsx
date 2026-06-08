@@ -110,7 +110,7 @@ function EventChat({ eventId, currentName, canSend }) {
     event.preventDefault()
 
     if (!canSend) {
-      toast.error('Pro chat nejdřív odešli RSVP pod svým jménem.')
+      toast.error('Pro chat se nejdřív pod svým jménem.')
       return
     }
 

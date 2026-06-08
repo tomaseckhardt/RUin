@@ -314,7 +314,24 @@ function EventPage() {
   }
 
   async function copyInviteLink() {
-    await navigator.clipboard.writeText(buildAbsoluteUrl(`/event/${id}`))
+    const url = buildAbsoluteUrl(`/event/${id}`)
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: payload?.event?.name || 'R U in?',
+          text: `Jsi na akci? ${payload?.event?.name || ''}`,
+          url,
+        })
+        return
+      } catch (shareError) {
+        if (shareError?.name === 'AbortError') {
+          return
+        }
+      }
+    }
+
+    await navigator.clipboard.writeText(url)
     toast.success('Pozvánka zkopírovaná do schránky.')
   }
 
@@ -385,8 +402,7 @@ function EventPage() {
       }
     >
       <main className="space-y-6">
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-          <article className="panel relative overflow-hidden">
+        <section className="panel relative overflow-hidden">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
             <div className="relative">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">Co se chystá</p>
@@ -420,81 +436,6 @@ function EventPage() {
                 </div>
               </div>
             </div>
-          </article>
-
-          <aside className="panel h-fit xl:sticky xl:top-6">
-            {!isIdentityLocked ? (
-              <>
-                <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-                  Odpověz organizátorovi
-                </p>
-                <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Přijdeš, nebo ghostíš?</h2>
-                <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tvoje jméno</label>
-                    <input
-                      className="field"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder="Třeba Viki"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'confirmed' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
-                      onClick={() => setSelectedStatus('confirmed')}
-                    >
-                      <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
-                        Potvrzuji účast
-                      </span>
-                      <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Jdeš a chceš být v line-upu potvrzených.</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'excused' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
-                      onClick={() => setSelectedStatus('excused')}
-                    >
-                      <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
-                        Omlouvám se
-                      </span>
-                      <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Můžeš přihodit důvod, pokud chceš znít důvěryhodně.</span>
-                    </button>
-                  </div>
-
-                  {selectedStatus === 'excused' ? (
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Důvod omluvy</label>
-                      <textarea
-                        className="field min-h-28"
-                        value={excuseReason}
-                        onChange={(event) => setExcuseReason(event.target.value)}
-                        placeholder="Nepovinné, ale často zábavné."
-                      />
-                    </div>
-                  ) : null}
-
-                  <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
-                    {isSubmitting ? 'Odesílám odpověď…' : selectedStatus === 'confirmed' ? 'Potvrzuji účast' : 'Poslat omluvenku'}
-                  </button>
-                </form>
-              </>
-            ) : (
-              <>
-                <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Jsi přihlášený</p>
-                <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{sessionName}</h2>
-                <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  Docházka je navázaná na tvoje jméno v této session.
-                  {sessionAttendee ? ` Aktuální stav: ${statusLabel(sessionAttendee.status)}.` : ' Načítám tvůj aktuální stav…'}
-                </p>
-                <button type="button" className="secondary-button mt-5 w-full" onClick={handleResetIdentity}>
-                  Nejsem to já
-                </button>
-              </>
-            )}
-          </aside>
         </section>
 
         <AttendeeList
@@ -512,6 +453,80 @@ function EventPage() {
           currentName={sessionName}
           canSend={isIdentityLocked && Boolean(sessionName.trim())}
         />
+
+        <section className="panel">
+          {!isIdentityLocked ? (
+            <>
+              <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
+                Odpověz organizátorovi
+              </p>
+              <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Přijdeš, nebo ghostíš?</h2>
+              <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tvoje jméno</label>
+                  <input
+                    className="field"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Třeba Viki"
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'confirmed' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
+                    onClick={() => setSelectedStatus('confirmed')}
+                  >
+                    <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
+                      Potvrzuji účast
+                    </span>
+                    <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Jdeš a chceš být v line-upu potvrzených.</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'excused' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
+                    onClick={() => setSelectedStatus('excused')}
+                  >
+                    <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
+                      Omlouvám se
+                    </span>
+                    <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">Můžeš přihodit důvod, pokud chceš znít důvěryhodně.</span>
+                  </button>
+                </div>
+
+                {selectedStatus === 'excused' ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Důvod omluvy</label>
+                    <textarea
+                      className="field min-h-28"
+                      value={excuseReason}
+                      onChange={(event) => setExcuseReason(event.target.value)}
+                      placeholder="Nepovinné, ale často zábavné."
+                    />
+                  </div>
+                ) : null}
+
+                <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
+                  {isSubmitting ? 'Odesílám odpověď…' : selectedStatus === 'confirmed' ? 'Potvrzuji účast' : 'Poslat omluvenku'}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Jsi přihlášený</p>
+              <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{sessionName}</h2>
+              <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                Docházka je navázaná na tvoje jméno v této session.
+                {sessionAttendee ? ` Aktuální stav: ${statusLabel(sessionAttendee.status)}.` : ' Načítám tvůj aktuální stav…'}
+              </p>
+              <button type="button" className="secondary-button mt-5 w-full" onClick={handleResetIdentity}>
+                Nejsem to já
+              </button>
+            </>
+          )}
+        </section>
 
         {showManageModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
