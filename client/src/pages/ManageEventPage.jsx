@@ -634,23 +634,6 @@ function ManageEventPage() {
       actions={
         <>
           <AddToCalendarButton eventData={event} />
-          <button type="button" className="secondary-button" onClick={() => setShowOverviewModal(true)}>
-            Přehled
-          </button>
-          <button type="button" className="secondary-button" onClick={() => setShowQrModal(true)}>
-            QR pozvánka
-          </button>
-          <button type="button" className="secondary-button" onClick={handleShare}>
-            Sdílet pozvánku
-          </button>
-          <button
-            type="button"
-            className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
-            onClick={handleDelete}
-            disabled={isDeleting}
-          >
-            {isDeleting ? 'Mažu akci…' : 'Smazat akci'}
-          </button>
         </>
       }
     >

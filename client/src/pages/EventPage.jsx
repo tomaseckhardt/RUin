@@ -434,7 +434,7 @@ function EventPage() {
         <section className="panel relative order-1 overflow-hidden">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
             <div className="relative">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">Co se chystá</p>
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">Poznámka k akci</p>
               <p className="mt-3 max-w-3xl text-lg leading-8 text-slate-700 dark:text-slate-300">{event.description}</p>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <div className="stat-tile">
