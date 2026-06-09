@@ -436,20 +436,6 @@ function EventPage() {
             <div className="relative">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">Co se chystá</p>
               <p className="mt-3 max-w-3xl text-lg leading-8 text-slate-700 dark:text-slate-300">{event.description}</p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <div className="surface-subtle">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-300">Rychlá odpověď</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Stačí jméno a jeden klik.</p>
-                </div>
-                <div className="surface-subtle">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-300">Všechno přehledně</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Potvrzení i omluvenky jsou na jednom místě.</p>
-                </div>
-                <div className="surface-subtle sm:col-span-2 xl:col-span-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-300">Žádný login</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Lidi nepřemýšlí, jen kliknou a odešlou.</p>
-                </div>
-              </div>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <div className="stat-tile">
                   <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Dorazí</div>
@@ -683,6 +669,12 @@ function EventPage() {
               </div>
 
               <div className="space-y-5 max-h-[60vh] overflow-y-auto">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Poznámka akce</p>
+                  <p className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+                    {event.description || 'Bez poznámky.'}
+                  </p>
+                </div>
                 {['confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
                   const group = attendees.filter((a) => a.status === statusGroup)
                   if (group.length === 0) return null
