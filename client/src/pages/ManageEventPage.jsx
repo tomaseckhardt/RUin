@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import QRCode from 'qrcode'
 import { toast } from 'sonner'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
@@ -51,6 +52,9 @@ function ManageEventPage() {
   const [deleteBusyId, setDeleteBusyId] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showOverviewModal, setShowOverviewModal] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState('')
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false)
   const [showPingComposerModal, setShowPingComposerModal] = useState(false)
   const [pingTargetId, setPingTargetId] = useState(null)
   const [pingMessageInput, setPingMessageInput] = useState('')
@@ -129,6 +133,47 @@ function ManageEventPage() {
       cancelled = true
     }
   }, [activeToken, id, navigate, urlToken])
+
+  useEffect(() => {
+    if (!showQrModal) {
+      return
+    }
+
+    let cancelled = false
+
+    async function generateQrCode() {
+      setIsGeneratingQr(true)
+
+      try {
+        const dataUrl = await QRCode.toDataURL(inviteUrl, {
+          width: 900,
+          margin: 2,
+          color: {
+            dark: '#201219',
+            light: '#FFFFFFFF',
+          },
+        })
+
+        if (!cancelled) {
+          setQrDataUrl(dataUrl)
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error('QR kód se nepodařilo vygenerovat.')
+        }
+      } finally {
+        if (!cancelled) {
+          setIsGeneratingQr(false)
+        }
+      }
+    }
+
+    generateQrCode()
+
+    return () => {
+      cancelled = true
+    }
+  }, [inviteUrl, showQrModal])
 
   useEffect(() => {
     if (!activeToken) {
@@ -333,6 +378,17 @@ function ManageEventPage() {
     toast.success('Veřejná pozvánka je ve schránce.')
   }
 
+  function handleDownloadQr() {
+    if (!qrDataUrl) {
+      return
+    }
+
+    const link = document.createElement('a')
+    link.href = qrDataUrl
+    link.download = `pozvanka-${id}.png`
+    link.click()
+  }
+
   function closeUnlockModal() {
     if (isUnlockingManage) {
       return
@@ -393,6 +449,9 @@ function ManageEventPage() {
           <AddToCalendarButton eventData={event} />
           <button type="button" className="secondary-button" onClick={() => setShowOverviewModal(true)}>
             Přehled
+          </button>
+          <button type="button" className="secondary-button" onClick={() => setShowQrModal(true)}>
+            QR pozvánka
           </button>
           <button type="button" className="secondary-button" onClick={handleShare}>
             Sdílet pozvánku
@@ -459,6 +518,9 @@ function ManageEventPage() {
                 >
                   Přehled
                 </button>
+                <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowQrModal(true)}>
+                  QR pozvánka
+                </button>
                 <button type="button" className="secondary-button w-full justify-center" onClick={handleShare}>
                   Sdílet pozvánku
                 </button>
@@ -514,6 +576,38 @@ function ManageEventPage() {
             canSend={Boolean(organizerName.trim())}
           />
         </div>
+
+        {showQrModal ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">QR pozvánka</p>
+              <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Naskenuj a přidej se</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Sdílej tenhle QR kód ve skupině nebo na místě.</p>
+
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950/40">
+                {isGeneratingQr ? (
+                  <p className="py-20 text-center text-sm text-slate-500 dark:text-slate-300">Generuji QR kód…</p>
+                ) : (
+                  <img src={qrDataUrl} alt="QR kód pozvánky" className="mx-auto w-full max-w-[320px]" />
+                )}
+              </div>
+
+              <p className="mt-3 break-all text-xs text-slate-500 dark:text-slate-400">{inviteUrl}</p>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <button type="button" className="secondary-button justify-center" onClick={() => setShowQrModal(false)}>
+                  Zavřít
+                </button>
+                <button type="button" className="secondary-button justify-center" onClick={handleShare}>
+                  Zkopírovat link
+                </button>
+                <button type="button" className="primary-button justify-center" onClick={handleDownloadQr} disabled={!qrDataUrl}>
+                  Stáhnout PNG
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {showPingComposerModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
