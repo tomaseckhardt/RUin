@@ -126,3 +126,10 @@ export function clearSavedOrganizerToken(eventId) {
   delete map[eventId]
   writeOrganizerTokensMap(map)
 }
+
+export function getSavedOrganizerEventIds() {
+  const map = readOrganizerTokensMap()
+
+  return Object.keys(map)
+    .filter((key) => typeof key === 'string' && key.trim() !== '')
+}

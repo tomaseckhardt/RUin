@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { createEvent } from '../lib/api.js'
+import { createEvent, getEvent } from '../lib/api.js'
+import { formatDateTime } from '../lib/format.js'
+import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
 
 const initialForm = {
   organizerName: '',
@@ -19,6 +21,8 @@ function CreateEventPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [recentEvents, setRecentEvents] = useState([])
+  const [isLoadingRecentEvents, setIsLoadingRecentEvents] = useState(true)
 
   const whyItWorks = [
     'Všichni vidí stejný plán, žádné ztracené zprávy v chatu.',
@@ -50,6 +54,57 @@ function CreateEventPage() {
       }))
     }
   }
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadRecentEvents() {
+      setIsLoadingRecentEvents(true)
+
+      try {
+        const ids = getSavedOrganizerEventIds().slice(-6).reverse()
+
+        if (ids.length === 0) {
+          if (!cancelled) {
+            setRecentEvents([])
+          }
+
+          return
+        }
+
+        const results = await Promise.allSettled(ids.map((eventId) => getEvent(eventId)))
+        const nextEvents = []
+
+        results.forEach((result, index) => {
+          const eventId = ids[index]
+
+          if (result.status === 'fulfilled' && result.value?.event) {
+            nextEvents.push({
+              id: eventId,
+              event: result.value.event,
+            })
+            return
+          }
+
+          clearSavedOrganizerToken(eventId)
+        })
+
+        if (!cancelled) {
+          setRecentEvents(nextEvents)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingRecentEvents(false)
+        }
+      }
+    }
+
+    loadRecentEvents()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <PageShell
@@ -132,6 +187,36 @@ function CreateEventPage() {
         </section>
 
         <aside id="create-form" className="panel h-fit xl:sticky xl:top-6">
+          <div className="mb-6">
+            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Moje poslední akce</p>
+            {isLoadingRecentEvents ? (
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Načítám poslední akce…</p>
+            ) : null}
+
+            {!isLoadingRecentEvents && recentEvents.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Zatím tu nic není. Jakmile založíš akci, objeví se tady rychlý vstup do správy.</p>
+            ) : null}
+
+            {!isLoadingRecentEvents && recentEvents.length > 0 ? (
+              <div className="mt-3 space-y-3">
+                {recentEvents.map(({ id: eventId, event }) => (
+                  <article key={eventId} className="rounded-2xl border border-slate-200 bg-white/65 p-3 dark:border-slate-700 dark:bg-slate-950/35">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.datetime)} · {event.location}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link to={`/event/${eventId}/manage`} className="secondary-button px-3 py-1.5 text-xs">
+                        Otevřít správu
+                      </Link>
+                      <Link to={`/event/${eventId}`} className="secondary-button px-3 py-1.5 text-xs">
+                        Otevřít pozvánku
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <div className="mb-6">
             <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Composer</p>
             <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">
