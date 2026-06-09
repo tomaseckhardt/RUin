@@ -430,8 +430,8 @@ function EventPage() {
         </>
       }
     >
-      <main className="space-y-6">
-        <section className="panel relative overflow-hidden">
+      <main className="grid gap-6">
+        <section className="panel relative order-1 overflow-hidden">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
             <div className="relative">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">Co se chystá</p>
@@ -467,23 +467,7 @@ function EventPage() {
             </div>
         </section>
 
-        <AttendeeList
-          attendees={attendees}
-          summary={summary}
-          showPing
-          onPing={handlePing}
-          pingBusyId={pingBusyId}
-          canPing={Boolean(name.trim())}
-          currentName={sessionName || name}
-        />
-
-        <EventChat
-          eventId={id}
-          currentName={sessionName}
-          canSend={isIdentityLocked && Boolean(sessionName.trim())}
-        />
-
-        <section className="panel">
+        <section className="panel order-2 lg:order-4">
           {!isIdentityLocked ? (
             <>
               <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
@@ -571,9 +555,29 @@ function EventPage() {
           )}
         </section>
 
+        <div className="order-3 lg:order-2">
+          <AttendeeList
+            attendees={attendees}
+            summary={summary}
+            showPing
+            onPing={handlePing}
+            pingBusyId={pingBusyId}
+            canPing={Boolean(name.trim())}
+            currentName={sessionName || name}
+          />
+        </div>
+
+        <div className="order-4 lg:order-3">
+          <EventChat
+            eventId={id}
+            currentName={sessionName}
+            canSend={isIdentityLocked && Boolean(sessionName.trim())}
+          />
+        </div>
+
         {showManageModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
               <div className="mb-5">
                 <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Správa akce</p>
                 <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Zadej PIN</h3>
@@ -612,7 +616,7 @@ function EventPage() {
 
         {showPingModal && incomingPing ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Někdo tě šťouchl</p>
               <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
                 {incomingPing.sourceName}
@@ -629,7 +633,7 @@ function EventPage() {
 
         {showPingComposerModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Šťouchnout účastníka</p>
               <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Přidej zprávu</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.</p>
@@ -663,7 +667,7 @@ function EventPage() {
 
         {showOverviewModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
                   <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Přehled</p>

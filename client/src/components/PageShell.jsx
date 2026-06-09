@@ -26,9 +26,9 @@ function PageShell({ eyebrow, title, subtitle, children, actions }) {
   return (
     <div className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.22),transparent_62%)] dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_58%)]" />
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
         <header
-          className="hero-panel mb-8 flex flex-col gap-6 px-6 py-6 sm:px-8 lg:flex-row lg:items-end lg:justify-between"
+          className="hero-panel mb-6 flex flex-col gap-4 px-4 py-5 sm:mb-8 sm:gap-6 sm:px-8 sm:py-6 lg:flex-row lg:items-end lg:justify-between"
           style={{
             color: 'var(--header-text)',
           }}
@@ -42,14 +42,14 @@ function PageShell({ eyebrow, title, subtitle, children, actions }) {
             <p className="mt-5 text-sm font-medium uppercase tracking-[0.28em]" style={{ color: 'var(--brand-soft)' }}>
               {eyebrow}
             </p>
-            <h1 className="mt-3 text-4xl font-black tracking-[-0.04em] text-balance sm:text-6xl">
+            <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-balance sm:text-6xl">
               {title}
             </h1>
-            <p className="mt-4 max-w-xl text-base leading-7 sm:text-lg" style={{ color: 'var(--text-soft)' }}>
+            <p className="mt-3 max-w-xl text-sm leading-6 sm:mt-4 sm:text-lg sm:leading-7" style={{ color: 'var(--text-soft)' }}>
               {subtitle}
             </p>
           </div>
-          <div className="relative z-10 flex flex-wrap items-center gap-3">
+          <div className="relative z-10 flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               type="button"
               className="secondary-button"
