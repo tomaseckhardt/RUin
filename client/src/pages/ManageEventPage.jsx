@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import AttendeeList from '../components/AttendeeList.jsx'
 import EventChat from '../components/EventChat.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent } from '../lib/api.js'
+import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
+import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
 import { supabase } from '../lib/supabase.js'
 
 const AUTO_REFRESH_MS = 10000
@@ -15,11 +16,33 @@ async function fetchEventPayload(id) {
   return getEvent(id)
 }
 
+function parseOrganizerTokenFromPath(path) {
+  if (typeof path !== 'string' || !path) {
+    return ''
+  }
+
+  try {
+    const parsedUrl = new URL(path, window.location.origin)
+    return parsedUrl.searchParams.get('token') || ''
+  } catch {
+    return ''
+  }
+}
+
+function isInvalidOrganizerTokenError(message) {
+  if (typeof message !== 'string') {
+    return false
+  }
+
+  return message.includes('Neplatný organizátorský odkaz')
+}
+
 function ManageEventPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const token = searchParams.get('token') || ''
+  const urlToken = searchParams.get('token') || ''
+  const [, refreshStoredToken] = useReducer((value) => value + 1, 0)
   const [payload, setPayload] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -31,8 +54,12 @@ function ManageEventPage() {
   const [showPingComposerModal, setShowPingComposerModal] = useState(false)
   const [pingTargetId, setPingTargetId] = useState(null)
   const [pingMessageInput, setPingMessageInput] = useState('')
+  const [showUnlockModal, setShowUnlockModal] = useState(false)
+  const [managePin, setManagePin] = useState('')
+  const [isUnlockingManage, setIsUnlockingManage] = useState(false)
 
   const inviteUrl = useMemo(() => buildAbsoluteUrl(`/event/${id}`), [id])
+  const activeToken = urlToken || getSavedOrganizerToken(id)
 
   const loadEvent = useCallback(async () => {
     try {
@@ -50,9 +77,10 @@ function ManageEventPage() {
     let cancelled = false
 
     async function hydrateEvent() {
-      if (!token) {
+      if (!activeToken) {
         if (!cancelled) {
-          setError('Chybí organizátorský token v odkazu.')
+          setError('Pro vstup do správy zadej PIN.')
+          setShowUnlockModal(true)
           setIsLoading(false)
         }
 
@@ -68,8 +96,22 @@ function ManageEventPage() {
 
         setPayload(nextPayload)
         setError('')
+        setShowUnlockModal(false)
+
+        if (urlToken) {
+          saveOrganizerToken(id, urlToken)
+          navigate(`/event/${id}/manage`, { replace: true })
+        }
       } catch (loadError) {
         if (cancelled) {
+          return
+        }
+
+        if (isInvalidOrganizerTokenError(loadError.message)) {
+          clearSavedOrganizerToken(id)
+          refreshStoredToken()
+          setShowUnlockModal(true)
+          setError('Správa vyžaduje nové odemčení PINem.')
           return
         }
 
@@ -86,10 +128,10 @@ function ManageEventPage() {
     return () => {
       cancelled = true
     }
-  }, [id, token])
+  }, [activeToken, id, navigate, urlToken])
 
   useEffect(() => {
-    if (!token) {
+    if (!activeToken) {
       return undefined
     }
 
@@ -127,10 +169,10 @@ function ManageEventPage() {
       cancelled = true
       clearInterval(intervalId)
     }
-  }, [id, token])
+  }, [activeToken, id])
 
   useEffect(() => {
-    if (!token) {
+    if (!activeToken) {
       return undefined
     }
 
@@ -178,13 +220,13 @@ function ManageEventPage() {
 
       supabase.removeChannel(channel)
     }
-  }, [id, loadEvent, token])
+  }, [activeToken, id, loadEvent])
 
   async function handleModeration(attendeeId, status) {
     setBusyId(attendeeId)
 
     try {
-      await moderateAttendee(id, attendeeId, { token, status })
+      await moderateAttendee(id, attendeeId, { token: activeToken, status })
       toast.success(status === 'excused_accepted' ? 'Omluvenka schválená.' : 'Omluvenka zamítnutá.')
       await loadEvent()
     } catch (actionError) {
@@ -195,8 +237,9 @@ function ManageEventPage() {
   }
 
   async function handleDelete() {
-    if (!token) {
-      toast.error('Chybí organizátorský token v odkazu.')
+    if (!activeToken) {
+      setShowUnlockModal(true)
+      toast.error('Správa vyžaduje odemčení PINem.')
       return
     }
 
@@ -209,7 +252,8 @@ function ManageEventPage() {
     setIsDeleting(true)
 
     try {
-      await removeEvent(id, token)
+      await removeEvent(id, activeToken)
+      clearSavedOrganizerToken(id)
       toast.success('Akce byla smazaná.')
       navigate('/')
     } catch (actionError) {
@@ -220,8 +264,9 @@ function ManageEventPage() {
   }
 
   async function handleDeleteAttendee(attendeeId, attendeeName) {
-    if (!token) {
-      toast.error('Chybí organizátorský token v odkazu.')
+    if (!activeToken) {
+      setShowUnlockModal(true)
+      toast.error('Správa vyžaduje odemčení PINem.')
       return
     }
 
@@ -234,7 +279,7 @@ function ManageEventPage() {
     setDeleteBusyId(attendeeId)
 
     try {
-      await deleteAttendee(id, attendeeId, token)
+      await deleteAttendee(id, attendeeId, activeToken)
       toast.success('Účastník byl smazaný.')
       await loadEvent()
     } catch (deleteError) {
@@ -286,6 +331,41 @@ function ManageEventPage() {
   async function handleShare() {
     await navigator.clipboard.writeText(inviteUrl)
     toast.success('Veřejná pozvánka je ve schránce.')
+  }
+
+  function closeUnlockModal() {
+    if (isUnlockingManage) {
+      return
+    }
+
+    setShowUnlockModal(false)
+    setManagePin('')
+  }
+
+  async function handleUnlockManage(event) {
+    event.preventDefault()
+    setIsUnlockingManage(true)
+
+    try {
+      const response = await unlockManageWithPin(id, managePin)
+      const nextToken = parseOrganizerTokenFromPath(response.organizerPath)
+
+      if (!nextToken) {
+        throw new Error('Nepodařilo se uložit přihlášení organizátora.')
+      }
+
+      saveOrganizerToken(id, nextToken)
+      refreshStoredToken()
+      setShowUnlockModal(false)
+      setManagePin('')
+      setError('')
+      toast.success('Správa odemčená. Přihlášení je uložené pro příště.')
+      await loadEvent()
+    } catch (unlockError) {
+      toast.error(unlockError.message)
+    } finally {
+      setIsUnlockingManage(false)
+    }
   }
 
   if (isLoading) {
@@ -396,7 +476,7 @@ function ManageEventPage() {
             <section className="panel">
               <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Soukromý odkaz</p>
               <p className="mt-3 break-all text-sm leading-6 text-slate-700 dark:text-slate-300">
-                {buildAbsoluteUrl(`/event/${id}/manage?token=${token}`)}
+                {buildAbsoluteUrl(`/event/${id}/manage${activeToken ? `?token=${activeToken}` : ''}`)}
               </p>
               <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
                 Tenhle link si nech pro sebe. Právě on dovoluje schvalovat omluvenky a mazat akci.
@@ -458,6 +538,45 @@ function ManageEventPage() {
                   </button>
                   <button type="submit" className="primary-button flex-1" disabled={pingBusyId !== null}>
                     {pingBusyId !== null ? 'Šťouchám…' : 'Odeslat'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
+        {showUnlockModal ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-5">
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Správa akce</p>
+                <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Zadej PIN</h3>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">PIN zadáš jednou. Přihlášení se uloží na tomto zařízení.</p>
+              </div>
+
+              <form className="space-y-4" onSubmit={handleUnlockManage}>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Správcovský PIN</label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]{4}"
+                    maxLength={4}
+                    className="field"
+                    value={managePin}
+                    onChange={(event) => setManagePin(event.target.value)}
+                    placeholder="1234"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button type="button" className="secondary-button flex-1 justify-center" onClick={closeUnlockModal}>
+                    Zrušit
+                  </button>
+                  <button type="submit" className="primary-button flex-1" disabled={isUnlockingManage}>
+                    {isUnlockingManage ? 'Ověřuji…' : 'Vstoupit'}
                   </button>
                 </div>
               </form>
