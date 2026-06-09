@@ -654,9 +654,8 @@ function ManageEventPage() {
         </>
       }
     >
-      <main className="grid gap-6">
-        <section className="order-1 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-          <article className="panel relative overflow-hidden">
+      <main className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+        <article className="panel relative order-4 overflow-hidden xl:order-1">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
             <div className="relative">
               <p className="accent-copy text-sm uppercase tracking-[0.25em]">Interní poznámka</p>
@@ -690,54 +689,53 @@ function ManageEventPage() {
                 </div>
               </div>
             </div>
-          </article>
+        </article>
 
-          <aside className="space-y-6">
-            <section className="panel">
-              <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-                Controls
-              </p>
-              <div className="mt-4 space-y-3">
-                <button
-                  type="button"
-                  className="secondary-button w-full justify-center"
-                  onClick={() => setShowOverviewModal(true)}
-                >
-                  Přehled
-                </button>
-                <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowQrModal(true)}>
-                  QR pozvánka
-                </button>
-                <button type="button" className="secondary-button w-full justify-center" onClick={handleShare}>
-                  Sdílet pozvánku
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button w-full justify-center border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? 'Mažu akci…' : 'Smazat akci'}
-                </button>
-              </div>
-            </section>
+        <aside className="order-1 space-y-6 xl:order-2">
+          <section className="panel">
+            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
+              Controls
+            </p>
+            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                className="secondary-button w-full justify-center"
+                onClick={() => setShowOverviewModal(true)}
+              >
+                Přehled
+              </button>
+              <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowQrModal(true)}>
+                QR pozvánka
+              </button>
+              <button type="button" className="secondary-button w-full justify-center" onClick={handleShare}>
+                Sdílet pozvánku
+              </button>
+              <button
+                type="button"
+                className="secondary-button w-full justify-center border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Mažu akci…' : 'Smazat akci'}
+              </button>
+            </div>
+          </section>
 
-            <section className="panel">
-              <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Soukromý odkaz</p>
-              <p className="mt-3 break-all text-sm leading-6 text-slate-700 dark:text-slate-300">
-                {buildAbsoluteUrl(`/event/${id}/manage${activeToken ? `?token=${activeToken}` : ''}`)}
-              </p>
-              <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-                Tenhle link si nech pro sebe. Právě on dovoluje schvalovat omluvenky a mazat akci.
-              </p>
-              <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
-                Veřejná pozvánka: <Link className="font-medium text-slate-900 underline dark:text-slate-50" to={`/event/${id}`}>otevřít RSVP stránku</Link>
-              </div>
-            </section>
-          </aside>
-        </section>
+          <section className="panel">
+            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Soukromý odkaz</p>
+            <p className="mt-3 break-all text-sm leading-6 text-slate-700 dark:text-slate-300">
+              {buildAbsoluteUrl(`/event/${id}/manage${activeToken ? `?token=${activeToken}` : ''}`)}
+            </p>
+            <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+              Tenhle link si nech pro sebe. Právě on dovoluje schvalovat omluvenky a mazat akci.
+            </p>
+            <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+              Veřejná pozvánka: <Link className="font-medium text-slate-900 underline dark:text-slate-50" to={`/event/${id}`}>otevřít RSVP stránku</Link>
+            </div>
+          </section>
+        </aside>
 
-        <div className="order-2">
+        <div className="order-2 xl:order-3 xl:col-span-2">
           <AttendeeList
             attendees={attendees}
             summary={summary}
@@ -756,7 +754,7 @@ function ManageEventPage() {
           />
         </div>
 
-        <div className="order-3">
+        <div className="order-3 xl:order-4 xl:col-span-2">
           <EventChat
             eventId={id}
             currentName={organizerName}
