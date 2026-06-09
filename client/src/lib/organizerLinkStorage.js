@@ -1,4 +1,5 @@
 const ORGANIZER_PATH_KEY = 'ruin-organizer-path'
+const ORGANIZER_TOKENS_KEY = 'ruin-organizer-tokens'
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -52,4 +53,76 @@ export function clearSavedOrganizerPath() {
   } catch {
     // Ignore storage failures in restricted browser environments.
   }
+}
+
+function readOrganizerTokensMap() {
+  if (!canUseStorage()) {
+    return {}
+  }
+
+  try {
+    const raw = window.localStorage.getItem(ORGANIZER_TOKENS_KEY)
+
+    if (!raw) {
+      return {}
+    }
+
+    const parsed = JSON.parse(raw)
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {}
+    }
+
+    return parsed
+  } catch {
+    return {}
+  }
+}
+
+function writeOrganizerTokensMap(map) {
+  if (!canUseStorage()) {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(ORGANIZER_TOKENS_KEY, JSON.stringify(map))
+  } catch {
+    // Ignore storage failures in restricted browser environments.
+  }
+}
+
+export function getSavedOrganizerToken(eventId) {
+  if (typeof eventId !== 'string' || eventId.trim() === '') {
+    return ''
+  }
+
+  const map = readOrganizerTokensMap()
+  const token = map[eventId]
+
+  return typeof token === 'string' ? token : ''
+}
+
+export function saveOrganizerToken(eventId, token) {
+  if (typeof eventId !== 'string' || eventId.trim() === '' || typeof token !== 'string' || token.trim() === '') {
+    return
+  }
+
+  const map = readOrganizerTokensMap()
+  map[eventId] = token
+  writeOrganizerTokensMap(map)
+}
+
+export function clearSavedOrganizerToken(eventId) {
+  if (typeof eventId !== 'string' || eventId.trim() === '') {
+    return
+  }
+
+  const map = readOrganizerTokensMap()
+
+  if (!(eventId in map)) {
+    return
+  }
+
+  delete map[eventId]
+  writeOrganizerTokensMap(map)
 }
