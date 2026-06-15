@@ -12,7 +12,7 @@ function pickNotificationData(eventData) {
 
   if (!eventData || typeof eventData !== 'object') {
     return {
-      title: 'R U in?',
+      title: 'RUin?',
       body: 'Máte novou notifikaci.',
       url: '#/',
       icon: scopedIconUrl,
@@ -21,7 +21,7 @@ function pickNotificationData(eventData) {
   }
 
   return {
-    title: eventData.title || 'R U in?',
+    title: eventData.title || 'RUin?',
     body: eventData.body || 'Máte novou notifikaci.',
     url: eventData.url || '#/',
     tag: eventData.tag || 'ruin-notification',
