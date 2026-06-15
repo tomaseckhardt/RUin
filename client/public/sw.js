@@ -7,7 +7,8 @@ self.addEventListener('activate', (event) => {
 })
 
 function pickNotificationData(eventData) {
-  const scopedIconUrl = new URL('icons.svg', self.registration.scope).href
+  const scopedIconUrl = new URL('ruinfavicon/web-app-manifest-192x192.png', self.registration.scope).href
+  const scopedBadgeUrl = new URL('ruinfavicon/favicon-96x96.png', self.registration.scope).href
 
   if (!eventData || typeof eventData !== 'object') {
     return {
@@ -15,7 +16,7 @@ function pickNotificationData(eventData) {
       body: 'Máte novou notifikaci.',
       url: '#/',
       icon: scopedIconUrl,
-      badge: scopedIconUrl,
+      badge: scopedBadgeUrl,
     }
   }
 
@@ -25,7 +26,7 @@ function pickNotificationData(eventData) {
     url: eventData.url || '#/',
     tag: eventData.tag || 'ruin-notification',
     icon: eventData.icon || scopedIconUrl,
-    badge: eventData.badge || scopedIconUrl,
+    badge: eventData.badge || scopedBadgeUrl,
   }
 }
 
