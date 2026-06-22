@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
+    "audit:a11y": "npm run build && node scripts/audit-a11y.mjs",
+    "test": "npm --prefix client run test",
     "install:all": "npm --prefix client install",
     "postinstall": "npm run install:all"
   }
