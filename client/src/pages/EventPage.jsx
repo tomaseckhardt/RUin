@@ -45,6 +45,10 @@ function statusLabel(status) {
   return 'Neznámý stav'
 }
 
+function attendeeStatusToFormStatus(status) {
+  return status === 'confirmed' ? 'confirmed' : 'excused'
+}
+
 async function fetchEventPayload(id) {
   return getEvent(id)
 }
@@ -75,6 +79,7 @@ function EventPage() {
   const [pingMessageInput, setPingMessageInput] = useState('')
   const [managePin, setManagePin] = useState('')
   const [error, setError] = useState('')
+  const [isEditingResponse, setIsEditingResponse] = useState(false)
 
   const maybeShowIncomingPing = useCallback((nextPayload, forcedSessionName = null) => {
     if (typeof window === 'undefined' || !nextPayload) {
@@ -272,6 +277,7 @@ function EventPage() {
       setSessionName(normalizedName)
       setName(normalizedName)
       setIsIdentityLocked(true)
+      setIsEditingResponse(false)
       setExcuseReason('')
       setPhone('')
       await loadEvent(normalizedName)
@@ -332,6 +338,8 @@ function EventPage() {
     setName('')
     setSelectedStatus('confirmed')
     setExcuseReason('')
+    setPhone('')
+    setIsEditingResponse(false)
   }
 
   function closePingModal() {
@@ -396,6 +404,16 @@ function EventPage() {
     ? payload.attendees.find((attendee) => normalizeName(attendee.name) === normalizeName(sessionName))
     : null
 
+  useEffect(() => {
+    if (!sessionAttendee) {
+      return
+    }
+
+    setSelectedStatus(attendeeStatusToFormStatus(sessionAttendee.status))
+    setExcuseReason(sessionAttendee.excuse_reason || '')
+    setPhone(sessionAttendee.phone || '')
+  }, [sessionAttendee])
+
   if (isLoading) {
     return (
       <PageShell eyebrow="Veřejná pozvánka" title="Načítám akci…" subtitle="Chvilka, lovím data z databáze." />
@@ -453,13 +471,20 @@ function EventPage() {
             </div>
         </section>
 
-        <section className="panel order-2 lg:order-4">
-          {!isIdentityLocked ? (
+        <section className="panel order-2 lg:order-2">
+          {!isIdentityLocked || isEditingResponse ? (
             <>
               <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-                Odpověz organizátorovi
+                {isIdentityLocked ? 'Změnit účast' : 'Odpověz organizátorovi'}
               </p>
-              <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Přijdeš, nebo ghostíš?</h2>
+              <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">
+                {isIdentityLocked ? 'Uprav svoji odpověď' : 'Přijdeš, nebo ghostíš?'}
+              </h2>
+              {isIdentityLocked && sessionAttendee ? (
+                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  Aktuálně máš stav: {statusLabel(sessionAttendee.status)}. Po odeslání se tvoje účast přepíše.
+                </p>
+              ) : null}
               <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tvoje jméno</label>
@@ -469,6 +494,7 @@ function EventPage() {
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Třeba Viki"
                     required
+                    disabled={isIdentityLocked}
                   />
                 </div>
 
@@ -522,8 +548,18 @@ function EventPage() {
                 ) : null}
 
                 <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
-                  {isSubmitting ? 'Odesílám odpověď…' : selectedStatus === 'confirmed' ? 'Potvrzuji účast' : 'Poslat omluvenku'}
+                  {isSubmitting
+                    ? 'Odesílám odpověď…'
+                    : selectedStatus === 'confirmed'
+                      ? (isIdentityLocked ? 'Uložit novou účast' : 'Potvrzuji účast')
+                      : (isIdentityLocked ? 'Poslat novou omluvenku' : 'Poslat omluvenku')}
                 </button>
+
+                {isIdentityLocked ? (
+                  <button type="button" className="secondary-button w-full justify-center" onClick={() => setIsEditingResponse(false)}>
+                    Zpět
+                  </button>
+                ) : null}
               </form>
             </>
           ) : (
@@ -534,6 +570,14 @@ function EventPage() {
                 Docházka je navázaná na tvoje jméno v této session.
                 {sessionAttendee ? ` Aktuální stav: ${statusLabel(sessionAttendee.status)}.` : ' Načítám tvůj aktuální stav…'}
               </p>
+              {sessionAttendee?.status === 'excused_rejected' ? (
+                <div className="mt-5 rounded-[1.5rem] border border-amber-200 bg-amber-50/90 p-4 text-sm leading-6 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                  Organizátor omluvenku zamítl. Můžeš odpověď upravit a poslat ji znovu.
+                </div>
+              ) : null}
+              <button type="button" className="primary-button mt-5 w-full justify-center" onClick={() => setIsEditingResponse(true)}>
+                Změnit účast
+              </button>
               <button type="button" className="secondary-button mt-5 w-full" onClick={handleResetIdentity}>
                 Nejsem to já
               </button>
@@ -541,7 +585,7 @@ function EventPage() {
           )}
         </section>
 
-        <div className="order-3 lg:order-2">
+        <div className="order-3 lg:order-3">
           <AttendeeList
             attendees={attendees}
             summary={summary}
@@ -553,7 +597,7 @@ function EventPage() {
           />
         </div>
 
-        <div className="order-4 lg:order-3">
+        <div className="order-4 lg:order-4">
           <EventChat
             eventId={id}
             currentName={sessionName}

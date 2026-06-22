@@ -6,7 +6,7 @@ import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import AttendeeList from '../components/AttendeeList.jsx'
 import EventChat from '../components/EventChat.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin } from '../lib/api.js'
+import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
 import { supabase } from '../lib/supabase.js'
@@ -78,6 +78,22 @@ function shouldShowPastEventBadge(eventDateString) {
   badgeDate.setHours(8, 0, 0, 0)
 
   return Date.now() >= badgeDate.getTime()
+}
+
+function toDateTimeLocalValue(dateString) {
+  const date = parseLocalEventDate(dateString)
+
+  if (!date) {
+    return ''
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
 function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
@@ -220,6 +236,9 @@ function ManageEventPage() {
   const [showPingComposerModal, setShowPingComposerModal] = useState(false)
   const [pingTargetId, setPingTargetId] = useState(null)
   const [pingMessageInput, setPingMessageInput] = useState('')
+  const [showEditEventModal, setShowEditEventModal] = useState(false)
+  const [eventForm, setEventForm] = useState({ name: '', location: '', datetime: '' })
+  const [isSavingEvent, setIsSavingEvent] = useState(false)
   const [showUnlockModal, setShowUnlockModal] = useState(false)
   const [managePin, setManagePin] = useState('')
   const [isUnlockingManage, setIsUnlockingManage] = useState(false)
@@ -468,6 +487,56 @@ function ManageEventPage() {
     }
   }
 
+  function openEditEventModal() {
+    if (!payload?.event) {
+      return
+    }
+
+    setEventForm({
+      name: payload.event.name || '',
+      location: payload.event.location || '',
+      datetime: toDateTimeLocalValue(payload.event.datetime),
+    })
+    setShowEditEventModal(true)
+  }
+
+  function closeEditEventModal() {
+    if (isSavingEvent) {
+      return
+    }
+
+    setShowEditEventModal(false)
+  }
+
+  async function handleSubmitEventEdit(event) {
+    event.preventDefault()
+
+    if (!activeToken) {
+      setShowEditEventModal(false)
+      setShowUnlockModal(true)
+      toast.error('Správa vyžaduje odemčení PINem.')
+      return
+    }
+
+    setIsSavingEvent(true)
+
+    try {
+      await updateEvent(id, {
+        token: activeToken,
+        name: eventForm.name,
+        location: eventForm.location,
+        datetime: eventForm.datetime,
+      })
+      toast.success('Detaily akce jsou upravené.')
+      setShowEditEventModal(false)
+      await loadEvent()
+    } catch (updateError) {
+      toast.error(updateError.message)
+    } finally {
+      setIsSavingEvent(false)
+    }
+  }
+
   async function handleDeleteAttendee(attendeeId, attendeeName) {
     if (!activeToken) {
       setShowUnlockModal(true)
@@ -658,6 +727,13 @@ function ManageEventPage() {
             <button
               type="button"
               className="secondary-button w-full justify-center"
+              onClick={openEditEventModal}
+            >
+              Upravit akci
+            </button>
+            <button
+              type="button"
+              className="secondary-button w-full justify-center"
               onClick={() => setShowOverviewModal(true)}
             >
               Přehled
@@ -685,6 +761,13 @@ function ManageEventPage() {
               Controls
             </p>
             <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                className="secondary-button w-full justify-center"
+                onClick={openEditEventModal}
+              >
+                Upravit akci
+              </button>
               <button
                 type="button"
                 className="secondary-button w-full justify-center"
@@ -817,6 +900,63 @@ function ManageEventPage() {
                   </button>
                   <button type="submit" className="primary-button flex-1" disabled={pingBusyId !== null}>
                     {pingBusyId !== null ? 'Šťouchám…' : 'Odeslat'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
+        {showEditEventModal ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
+              <div className="mb-5">
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Upravit akci</p>
+                <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Změň základní údaje</h3>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Můžeš přepsat název, místo i termín. Změna se hned promítne do pozvánky.</p>
+              </div>
+
+              <form className="space-y-4" onSubmit={handleSubmitEventEdit}>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Název akce</label>
+                  <input
+                    className="field"
+                    value={eventForm.name}
+                    onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Např. Letní gril"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Místo</label>
+                  <input
+                    className="field"
+                    value={eventForm.location}
+                    onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
+                    placeholder="Např. Stromovka"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Datum a čas</label>
+                  <input
+                    type="datetime-local"
+                    className="field"
+                    value={eventForm.datetime}
+                    onChange={(event) => setEventForm((current) => ({ ...current, datetime: event.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button type="button" className="secondary-button flex-1 justify-center" onClick={closeEditEventModal}>
+                    Zrušit
+                  </button>
+                  <button type="submit" className="primary-button flex-1" disabled={isSavingEvent}>
+                    {isSavingEvent ? 'Ukládám…' : 'Uložit změny'}
                   </button>
                 </div>
               </form>
