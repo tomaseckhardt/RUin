@@ -104,6 +104,20 @@ export function removeEvent(eventId, token) {
   )
 }
 
+export function updateEvent(eventId, data) {
+  return callRpc(
+    'update_event',
+    {
+      p_event_id: eventId,
+      p_token: data.token,
+      p_name: data.name,
+      p_location: data.location,
+      p_datetime: data.datetime,
+    },
+    'Akci se nepodařilo upravit.',
+  )
+}
+
 export async function getEventChatMessages(eventId, limit = 120) {
   const { data, error } = await supabase
     .from('event_chat_messages')
