@@ -13,6 +13,7 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
 - [Rychlý start lokálně](#rychly-start-lokalne)
 - [Konfigurace prostředí](#konfigurace-prostredi)
 - [Supabase setup (SQL fáze)](#supabase-setup-sql-faze)
+- [Scénáře nasazení databáze](#scenare-nasazeni-databaze)
 - [NPM skripty](#npm-skripty)
 - [Nasazení na GitHub Pages](#nasazeni-na-github-pages)
 - [Jak funguje routing na Pages](#jak-funguje-routing-na-pages)
@@ -92,11 +93,103 @@ SQL skripty v `supabase/sql` spouštěj postupně podle čísel:
 8. `phase-8-update-event-details.sql`
 9. `phase-9-unique-phone-per-event.sql`
 
+Co dělá každá fáze:
+
+1. `phase-1-schema.sql`
+
+- Vytvoří základní tabulky (`events`, `attendees`, `attendee_pings`, `event_chat_messages`, `organizer_pin_attempts`).
+- Přidá indexy a unikátní omezení (např. jedno RSVP na jméno v rámci eventu, case-insensitive).
+- Připraví trigger pro normalizaci chat zpráv a základní realtime publikaci chatu.
+
+2. `phase-2-rpc.sql`
+
+- Zavede hlavní RPC funkce pro aplikaci (create/get event, submit RSVP, ping, moderation, delete).
+- Přidá pomocné funkce (`_random_token`, `_delete_expired_events`) a granty pro `anon`/`authenticated`.
+- Sjednotí chování backendu do SQL funkcí se stejnými validačními hláškami.
+
+3. `phase-3-rls.sql`
+
+- Zapne a zpřísní RLS pro klíčové tabulky.
+- Zablokuje přímý přístup na tabulky z klienta a nechá flow běžet přes RPC.
+- Nastaví kontrolovaná pravidla pro čtení/vkládání chat zpráv.
+
+4. `phase-4-datetime-local-fix.sql`
+
+- Opraví práci s datem/časem na lokální `timestamp without time zone` (bez timezone posunů).
+- Doplňuje kompatibilní změny pro starší projekty (PIN sloupce, chat/ping struktura, funkce).
+- Reaplikuje navazující funkce/policy tak, aby vše fungovalo po změně typu času.
+
+5. `phase-5-push-notifications.sql`
+
+- Přidá `event_realtime_ticks` a triggery pro realtime refresh payloadu (event/attendee/ping).
+- Připraví realtime tok pro změny účastníků a šťouchnutí.
+- Uklidí starou push job/subscription strukturu (drop legacy objektů).
+
+6. `phase-6-phone-and-overview.sql`
+
+- Přidá volitelný sběr telefonu (`events.require_phone`, `attendees.phone`).
+- Rozšíří `create_event`, `submit_rsvp`, `get_event_payload` a `update_event` o nové atributy.
+- Umožní frontendu zobrazovat přehledy včetně telefonu a requirePhone flagu.
+
+7. `phase-7-realtime-tick-fk-hotfix.sql`
+
+- Hotfix funkce `emit_event_realtime_tick` proti FK chybám při mazání/expiraci eventů.
+- Vkládá realtime tick jen pokud event ještě existuje.
+
+8. `phase-8-update-event-details.sql`
+
+- Rozšiřuje organizátorskou editaci detailů akce (název, místo, datum/čas).
+- Aktualizuje a grantuje `update_event` funkci pro klienta.
+
+9. `phase-9-unique-phone-per-event.sql`
+
+- Zavede normalizaci telefonu (`normalize_phone`) a unikátní index telefonu v rámci eventu.
+- Přidá ochranu proti duplicitě čísla u jiného jména v `submit_rsvp`.
+- Migrace schválně selže, pokud už v datech duplicity existují (aby nevznikl rozbitý index).
+
 Doporučení:
 
 - spouštěj je v Supabase SQL Editoru na stejném projektu, který používáš v `.env.local`
 - po nasazení nové fáze otestuj vytvoření akce, RSVP i detail akce
 - pokud chceš setup jedním během, použij `supabase/sql/all-phases.sql`
+
+## Scénáře nasazení databáze
+
+### A) Nový (čistý) Supabase projekt
+
+Použij jeden soubor:
+
+```sql
+-- spusť celý obsah souboru
+supabase/sql/all-phases.sql
+```
+
+Tohle je nejrychlejší cesta pro clean install.
+
+### B) Existující projekt na starší verzi
+
+Spouštěj fáze postupně od aktuálního stavu nahoru. Pokud si nejsi jistý, kde projekt skončil, je bezpečnější projít SQL fáze ručně v pořadí a sledovat případné chyby v SQL Editoru.
+
+## Kontrola duplicit telefonů před phase-9
+
+`phase-9` schválně selže, pokud už v datech duplicitní telefonní čísla existují. To je ochrana, aby nevznikl rozbitý unique index.
+
+Před spuštěním můžeš ověřit duplicity tímto dotazem:
+
+```sql
+select
+  a.event_id,
+  regexp_replace(trim(coalesce(a.phone, '')), '[^0-9+]', '', 'g') as normalized_phone,
+  count(*) as phone_count,
+  array_agg(a.name order by a.name) as attendee_names
+from public.attendees a
+where regexp_replace(trim(coalesce(a.phone, '')), '[^0-9+]', '', 'g') <> ''
+group by a.event_id, regexp_replace(trim(coalesce(a.phone, '')), '[^0-9+]', '', 'g')
+having count(*) > 1
+order by a.event_id, normalized_phone;
+```
+
+Pokud dotaz vrátí řádky, oprav data (ponech jednoho účastníka na číslo v rámci eventu), a teprve pak spusť phase-9.
 
 ## NPM skripty
 
