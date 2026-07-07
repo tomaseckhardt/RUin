@@ -170,26 +170,6 @@ Tohle je nejrychlejší cesta pro clean install.
 
 Spouštěj fáze postupně od aktuálního stavu nahoru. Pokud si nejsi jistý, kde projekt skončil, je bezpečnější projít SQL fáze ručně v pořadí a sledovat případné chyby v SQL Editoru.
 
-## Kontrola duplicit telefonů před phase-9
-
-`phase-9` schválně selže, pokud už v datech duplicitní telefonní čísla existují. To je ochrana, aby nevznikl rozbitý unique index.
-
-Před spuštěním můžeš ověřit duplicity tímto dotazem:
-
-```sql
-select
-  a.event_id,
-  regexp_replace(trim(coalesce(a.phone, '')), '[^0-9+]', '', 'g') as normalized_phone,
-  count(*) as phone_count,
-  array_agg(a.name order by a.name) as attendee_names
-from public.attendees a
-where regexp_replace(trim(coalesce(a.phone, '')), '[^0-9+]', '', 'g') <> ''
-group by a.event_id, regexp_replace(trim(coalesce(a.phone, '')), '[^0-9+]', '', 'g')
-having count(*) > 1
-order by a.event_id, normalized_phone;
-```
-
-Pokud dotaz vrátí řádky, oprav data (ponech jednoho účastníka na číslo v rámci eventu), a teprve pak spusť phase-9.
 
 ## NPM skripty
 
