@@ -18,6 +18,8 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
 - [Nasazení na GitHub Pages](#nasazeni-na-github-pages)
 - [Jak funguje routing na Pages](#jak-funguje-routing-na-pages)
 - [Push notifikace a service worker](#push-notifikace-a-service-worker)
+- [Pravidla pro contributory](#pravidla-pro-contributory)
+- [Community standards](#community-standards)
 - [Troubleshooting](#troubleshooting)
 
 ## Co aplikace umí
@@ -170,7 +172,6 @@ Tohle je nejrychlejší cesta pro clean install.
 
 Spouštěj fáze postupně od aktuálního stavu nahoru. Pokud si nejsi jistý, kde projekt skončil, je bezpečnější projít SQL fáze ručně v pořadí a sledovat případné chyby v SQL Editoru.
 
-
 ## NPM skripty
 
 Kořen repozitáře (`package.json`):
@@ -232,6 +233,25 @@ Aplikace používá `HashRouter` (`/#/`), což je správně pro GitHub Pages bez
 - dispatch logika je v Supabase Edge Functions (`supabase/functions/`)
 
 Pokud push notifikace nechodí, nejčastěji chybí správná konfigurace v Supabase nebo oprávnění notifikací v prohlížeči.
+
+## Pravidla pro contributory
+
+Pro externí contributory platí jednoduché pravidlo:
+
+- nepushovat přímo do `main`
+- vždy vytvořit vlastní branch
+- změny posílat přes Pull Request do `main`
+
+Detaily workflow jsou v [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Community standards
+
+- [Kodex chování](CODE_OF_CONDUCT.md)
+- [Příspěvky do projektu](CONTRIBUTING.md)
+- [Bezpečnostní politika](SECURITY.md)
+- [Licence (MIT)](LICENSE)
+- [Issue templates](.github/ISSUE_TEMPLATE)
+- [Pull request template](.github/pull_request_template.md)
 
 ## Troubleshooting
 
