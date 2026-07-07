@@ -1,0 +1,62 @@
+name: Bug report
+description: Nahlasit chybu, ktera se da reprodukovat
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Dekujeme za report. Cim presneji problem popises, tim rychleji ho opravime.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Strucny popis chyby
+      description: Co je rozbite a co jsi cekal(a), ze se stane.
+      placeholder: Po odeslani RSVP se nezobrazi seznam ucastniku...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Kroky k reprodukci
+      description: Napis postup krok za krokem.
+      placeholder: |
+        1. Otevru detail akce
+        2. Vyplnim formular
+        3. Kliknu na "Potvrdit"
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ocekavane chovani
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Aktualni chovani
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Prohlizec / verze
+      placeholder: Chrome 137, Firefox 131, Safari...
+
+  - type: input
+    id: environment
+    attributes:
+      label: Prostredi
+      description: Lokal, GitHub Pages, jina instance...
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logy / screenshoty
+      description: Vloz stack trace, konzoli nebo obrazek.
