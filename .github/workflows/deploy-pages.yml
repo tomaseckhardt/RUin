@@ -34,7 +34,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: client
-        run: npm ci
+        run: npm i --legacy-peer-deps
 
       - name: Build frontend
         working-directory: client
