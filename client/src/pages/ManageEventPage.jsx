@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
-import QRCode from 'qrcode'
 import { toast } from 'sonner'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import AttendeeList from '../components/AttendeeList.jsx'
 import EventChat from '../components/EventChat.jsx'
+import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import PageShell from '../components/PageShell.jsx'
+import ShareInviteModal from '../components/ShareInviteModal.jsx'
 import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
-import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
+import { buildAbsoluteUrl, formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
 import { supabase } from '../lib/supabase.js'
 
@@ -38,184 +39,6 @@ function isInvalidOrganizerTokenError(message) {
   return message.includes('Neplatný organizátorský odkaz')
 }
 
-function parseLocalEventDate(dateString) {
-  if (typeof dateString !== 'string') {
-    return null
-  }
-
-  const match = dateString.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})[T ]([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?$/)
-
-  if (!match) {
-    return null
-  }
-
-  const [, year, month, day, hour, minute, second = '0'] = match
-  const date = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second),
-  )
-
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-
-  return date
-}
-
-function shouldShowPastEventBadge(eventDateString) {
-  const eventDate = parseLocalEventDate(eventDateString)
-
-  if (!eventDate) {
-    return false
-  }
-
-  const badgeDate = new Date(eventDate)
-  badgeDate.setDate(badgeDate.getDate() + 1)
-  badgeDate.setHours(8, 0, 0, 0)
-
-  return Date.now() >= badgeDate.getTime()
-}
-
-function toDateTimeLocalValue(dateString) {
-  const date = parseLocalEventDate(dateString)
-
-  if (!date) {
-    return ''
-  }
-
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`
-}
-
-function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
-  const words = String(text || '').split(/\s+/).filter(Boolean)
-
-  if (words.length === 0) {
-    return y
-  }
-
-  let line = ''
-  let lineCount = 0
-
-  for (let i = 0; i < words.length; i += 1) {
-    const testLine = line ? `${line} ${words[i]}` : words[i]
-    const testWidth = ctx.measureText(testLine).width
-
-    if (testWidth <= maxWidth || !line) {
-      line = testLine
-      continue
-    }
-
-    ctx.fillText(line, x, y + lineCount * lineHeight)
-    lineCount += 1
-
-    if (lineCount >= maxLines - 1) {
-      const remaining = words.slice(i).join(' ')
-      let tail = remaining
-
-      while (ctx.measureText(`${tail}…`).width > maxWidth && tail.length > 0) {
-        tail = tail.slice(0, -1)
-      }
-
-      ctx.fillText(`${tail}…`, x, y + lineCount * lineHeight)
-      return y + (lineCount + 1) * lineHeight
-    }
-
-    line = words[i]
-  }
-
-  if (line) {
-    ctx.fillText(line, x, y + lineCount * lineHeight)
-    lineCount += 1
-  }
-
-  return y + lineCount * lineHeight
-}
-
-async function createQrPosterDataUrl({ inviteUrl, eventName, eventDateLabel, isPastEvent }) {
-  const qrCanvas = document.createElement('canvas')
-
-  await QRCode.toCanvas(qrCanvas, inviteUrl, {
-    width: 900,
-    margin: 2,
-    color: {
-      dark: '#201219',
-      light: '#FFFFFFFF',
-    },
-  })
-
-  const width = 1080
-  const height = 1440
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-
-  const ctx = canvas.getContext('2d')
-
-  if (!ctx) {
-    throw new Error('Canvas context unavailable')
-  }
-
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, width, height)
-
-  ctx.fillStyle = '#7a1c3f'
-  ctx.font = '700 40px "Avenir Next", "Segoe UI", sans-serif'
-  ctx.fillText('R U in? · QR pozvánka', 90, 120)
-
-  ctx.fillStyle = '#201219'
-  ctx.font = '900 66px "Avenir Next", "Segoe UI", sans-serif'
-  const nextY = wrapCanvasText(ctx, eventName || 'Pozvánka', 90, 220, width - 180, 78, 3)
-
-  ctx.fillStyle = '#4f3c49'
-  ctx.font = '500 34px "Avenir Next", "Segoe UI", sans-serif'
-  ctx.fillText(eventDateLabel || '', 90, nextY + 40)
-
-  if (isPastEvent) {
-    ctx.fillStyle = '#fee2e2'
-    ctx.fillRect(90, nextY + 80, 290, 64)
-    ctx.fillStyle = '#9f1239'
-    ctx.font = '700 32px "Avenir Next", "Segoe UI", sans-serif'
-    ctx.fillText('Akce proběhla', 112, nextY + 124)
-  }
-
-  const qrSize = 760
-  const qrX = (width - qrSize) / 2
-  const qrY = 520
-
-  ctx.fillStyle = '#f8f4f7'
-  ctx.fillRect(qrX - 20, qrY - 20, qrSize + 40, qrSize + 40)
-  ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize)
-
-  ctx.fillStyle = '#6f4cff'
-  ctx.font = '600 26px "Avenir Next", "Segoe UI", sans-serif'
-  ctx.fillText('Naskenuj pro otevření pozvánky', 320, 1320)
-
-  return canvas.toDataURL('image/png')
-}
-
-function dataUrlToFile(dataUrl, fileName) {
-  const [meta, base64] = dataUrl.split(',')
-  const mime = meta.match(/data:(.*);base64/)?.[1] || 'image/png'
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-
-  return new File([bytes], fileName, { type: mime })
-}
-
 function ManageEventPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -230,9 +53,7 @@ function ManageEventPage() {
   const [deleteBusyId, setDeleteBusyId] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showOverviewModal, setShowOverviewModal] = useState(false)
-  const [showQrModal, setShowQrModal] = useState(false)
-  const [qrDataUrl, setQrDataUrl] = useState('')
-  const [isGeneratingQr, setIsGeneratingQr] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   const [showPingComposerModal, setShowPingComposerModal] = useState(false)
   const [pingTargetId, setPingTargetId] = useState(null)
   const [pingMessageInput, setPingMessageInput] = useState('')
@@ -314,45 +135,6 @@ function ManageEventPage() {
       cancelled = true
     }
   }, [activeToken, id, navigate, urlToken])
-
-  useEffect(() => {
-    if (!showQrModal) {
-      return
-    }
-
-    let cancelled = false
-
-    async function generateQrCode() {
-      setIsGeneratingQr(true)
-
-      try {
-        const dataUrl = await createQrPosterDataUrl({
-          inviteUrl,
-          eventName: payload?.event?.name,
-          eventDateLabel: payload?.event ? formatDateTime(payload.event.datetime) : '',
-          isPastEvent: payload?.event ? shouldShowPastEventBadge(payload.event.datetime) : false,
-        })
-
-        if (!cancelled) {
-          setQrDataUrl(dataUrl)
-        }
-      } catch {
-        if (!cancelled) {
-          toast.error('QR kód se nepodařilo vygenerovat.')
-        }
-      } finally {
-        if (!cancelled) {
-          setIsGeneratingQr(false)
-        }
-      }
-    }
-
-    generateQrCode()
-
-    return () => {
-      cancelled = true
-    }
-  }, [inviteUrl, payload?.event, showQrModal])
 
   useEffect(() => {
     if (!activeToken) {
@@ -492,10 +274,12 @@ function ManageEventPage() {
       return
     }
 
+    const parsedDatetime = parseLocalDateTime(payload.event.datetime)
+
     setEventForm({
       name: payload.event.name || '',
       location: payload.event.location || '',
-      datetime: toDateTimeLocalValue(payload.event.datetime),
+      datetime: parsedDatetime ? toDateTimeLocalValue(parsedDatetime) : '',
     })
     setShowEditEventModal(true)
   }
@@ -515,6 +299,11 @@ function ManageEventPage() {
       setShowEditEventModal(false)
       setShowUnlockModal(true)
       toast.error('Správa vyžaduje odemčení PINem.')
+      return
+    }
+
+    if (!eventForm.datetime) {
+      toast.error('Vyber datum a čas akce.')
       return
     }
 
@@ -602,48 +391,6 @@ function ManageEventPage() {
     }
   }
 
-  async function handleShare() {
-    await navigator.clipboard.writeText(inviteUrl)
-    toast.success('Veřejná pozvánka je ve schránce.')
-  }
-
-  async function handleShareQrPng() {
-    if (!qrDataUrl) {
-      return
-    }
-
-    const file = dataUrlToFile(qrDataUrl, `pozvanka-${id}.png`)
-
-    if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({
-          title: `Pozvánka: ${event.name}`,
-          text: `Pozvánka na akci ${event.name}`,
-          files: [file],
-        })
-        return
-      } catch (shareError) {
-        if (shareError?.name === 'AbortError') {
-          return
-        }
-      }
-    }
-
-    handleDownloadQr()
-    toast.success('PNG bylo staženo. Sdílej ho z galerie/souborů.')
-  }
-
-  function handleDownloadQr() {
-    if (!qrDataUrl) {
-      return
-    }
-
-    const link = document.createElement('a')
-    link.href = qrDataUrl
-    link.download = `pozvanka-${id}.png`
-    link.click()
-  }
-
   function closeUnlockModal() {
     if (isUnlockingManage) {
       return
@@ -693,7 +440,6 @@ function ManageEventPage() {
 
   const { event, attendees, summary } = payload
   const organizerName = attendees[0]?.name || ''
-  const isPastEvent = shouldShowPastEventBadge(event.datetime)
 
   return (
     <PageShell
@@ -738,11 +484,8 @@ function ManageEventPage() {
             >
               Přehled
             </button>
-            <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowQrModal(true)}>
-              QR pozvánka
-            </button>
-            <button type="button" className="secondary-button w-full justify-center" onClick={handleShare}>
-              Sdílet pozvánku
+            <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowShareModal(true)}>
+              Pozvánka
             </button>
             <button
               type="button"
@@ -775,11 +518,8 @@ function ManageEventPage() {
               >
                 Přehled
               </button>
-              <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowQrModal(true)}>
-                QR pozvánka
-              </button>
-              <button type="button" className="secondary-button w-full justify-center" onClick={handleShare}>
-                Sdílet pozvánku
+              <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowShareModal(true)}>
+                Pozvánka
               </button>
               <button
                 type="button"
@@ -833,49 +573,18 @@ function ManageEventPage() {
           </div>
         </section>
 
-        {showQrModal ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">QR pozvánka</p>
-              <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Naskenuj a přidej se</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Sdílej tenhle QR kód ve skupině nebo na místě.</p>
-              {isPastEvent ? (
-                <p className="mt-2 inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700 dark:bg-rose-950/40 dark:text-rose-200">
-                  Akce proběhla
-                </p>
-              ) : null}
-
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950/40">
-                {isGeneratingQr ? (
-                  <p className="py-20 text-center text-sm text-slate-500 dark:text-slate-300">Generuji QR kód…</p>
-                ) : (
-                  <img src={qrDataUrl} alt="QR kód pozvánky" className="mx-auto w-full max-w-[320px]" />
-                )}
-              </div>
-
-              <p className="mt-3 break-all text-xs text-slate-500 dark:text-slate-400">{inviteUrl}</p>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <button type="button" className="secondary-button justify-center" onClick={() => setShowQrModal(false)}>
-                  Zavřít
-                </button>
-                <button type="button" className="secondary-button justify-center" onClick={handleShareQrPng}>
-                  Sdílet PNG
-                </button>
-                <button type="button" className="primary-button justify-center" onClick={handleDownloadQr} disabled={!qrDataUrl}>
-                  Stáhnout PNG
-                </button>
-                <button type="button" className="secondary-button justify-center" onClick={handleShare}>
-                  Zkopírovat link
-                </button>
-              </div>
-            </div>
-          </section>
-        ) : null}
+        <ShareInviteModal
+          open={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          inviteUrl={inviteUrl}
+          eventId={id}
+          eventName={event.name}
+          datetime={event.datetime}
+        />
 
         {showPingComposerModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Šťouchnout účastníka</p>
               <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Přidej zprávu</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.</p>
@@ -909,7 +618,7 @@ function ManageEventPage() {
 
         {showEditEventModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
+            <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
               <div className="mb-5">
                 <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Upravit akci</p>
                 <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Změň základní údaje</h3>
@@ -942,12 +651,9 @@ function ManageEventPage() {
 
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Datum a čas</label>
-                  <input
-                    type="datetime-local"
-                    className="field"
+                  <EventDateTimePicker
                     value={eventForm.datetime}
-                    onChange={(event) => setEventForm((current) => ({ ...current, datetime: event.target.value }))}
-                    required
+                    onChange={(nextValue) => setEventForm((current) => ({ ...current, datetime: nextValue }))}
                   />
                 </div>
 
@@ -966,7 +672,7 @@ function ManageEventPage() {
 
         {showUnlockModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
               <div className="mb-5">
                 <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Správa akce</p>
                 <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Zadej PIN</h3>
@@ -1005,7 +711,7 @@ function ManageEventPage() {
 
         {showOverviewModal ? (
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
+            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
                   <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Přehled</p>
