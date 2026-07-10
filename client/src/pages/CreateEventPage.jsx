@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
+import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import PageShell from '../components/PageShell.jsx'
 import { createEvent, getEvent } from '../lib/api.js'
 import { formatDateTime } from '../lib/format.js'
@@ -32,6 +33,12 @@ function CreateEventPage() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+
+    if (!form.datetime) {
+      toast.error('Vyber datum a čas akce.')
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -265,27 +272,22 @@ function CreateEventPage() {
                 required
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Místo</label>
-                <input
-                  className="field"
-                  value={form.location}
-                  onChange={updateField('location')}
-                  placeholder="Praha 7, dvorek za kavárnou"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Datum a čas</label>
-                <input
-                  type="datetime-local"
-                  className="field"
-                  value={form.datetime}
-                  onChange={updateField('datetime')}
-                  required
-                />
-              </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Místo</label>
+              <input
+                className="field"
+                value={form.location}
+                onChange={updateField('location')}
+                placeholder="Praha 7, dvorek za kavárnou"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Datum a čas</label>
+              <EventDateTimePicker
+                value={form.datetime}
+                onChange={(nextValue) => setForm((current) => ({ ...current, datetime: nextValue }))}
+              />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Popis</label>
