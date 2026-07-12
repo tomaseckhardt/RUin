@@ -133,6 +133,27 @@ export async function getEventChatMessages(eventId, limit = 120) {
   return data ?? []
 }
 
+export function registerPushSubscription(eventId, subscription) {
+  return callRpc(
+    'register_push_subscription',
+    {
+      p_event_id: eventId,
+      p_endpoint: subscription.endpoint,
+      p_p256dh: subscription.p256dh,
+      p_auth: subscription.auth,
+    },
+    'Připomínku se nepodařilo zapnout.',
+  )
+}
+
+export function unregisterPushSubscription(endpoint) {
+  return callRpc(
+    'unregister_push_subscription',
+    { p_endpoint: endpoint },
+    'Připomínku se nepodařilo vypnout.',
+  )
+}
+
 export async function sendEventChatMessage(eventId, senderName, message) {
   const cleanSenderName = (senderName || '').trim()
   const cleanMessage = (message || '').trim()

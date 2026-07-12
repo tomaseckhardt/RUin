@@ -7,6 +7,7 @@ import EventChat from '../components/EventChat.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import PageShell from '../components/PageShell.jsx'
 import ShareInviteModal from '../components/ShareInviteModal.jsx'
+import WeatherWidget from '../components/WeatherWidget.jsx'
 import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
@@ -448,6 +449,7 @@ function ManageEventPage() {
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
         <>
+          <WeatherWidget location={event.location} datetime={event.datetime} compact />
           <AddToCalendarButton eventData={event} />
         </>
       }
