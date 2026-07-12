@@ -94,6 +94,7 @@ SQL skripty v `supabase/sql` spouštěj postupně podle čísel:
 7. `phase-7-realtime-tick-fk-hotfix.sql`
 8. `phase-8-update-event-details.sql`
 9. `phase-9-unique-phone-per-event.sql`
+10. `phase-10-push-reminders.sql`
 
 Co dělá každá fáze:
 
@@ -148,6 +149,12 @@ Co dělá každá fáze:
 - Zavede normalizaci telefonu (`normalize_phone`) a unikátní index telefonu v rámci eventu.
 - Přidá ochranu proti duplicitě čísla u jiného jména v `submit_rsvp`.
 - Migrace schválně selže, pokud už v datech duplicity existují (aby nevznikl rozbitý index).
+
+10. `phase-10-push-reminders.sql`
+
+- Přidá `push_subscriptions` (přihlášení k odběru Web Push notifikací) a `event_reminders_sent` (aby se stejná připomínka neposlala dvakrát).
+- Zavede RPC `register_push_subscription`/`unregister_push_subscription` pro klienta a `get_pending_event_reminders`/`get_push_subscriptions_for_event`/`mark_event_reminder_sent`/`delete_push_subscription_by_endpoint` pro Edge Function (grant jen pro `service_role`).
+- Vyžaduje ještě nasazení Edge Function a scheduled joby — viz [Push notifikace a service worker](#push-notifikace-a-service-worker).
 
 Doporučení:
 
@@ -233,6 +240,54 @@ Aplikace používá `HashRouter` (`/#/`), což je správně pro GitHub Pages bez
 - dispatch logika je v Supabase Edge Functions (`supabase/functions/`)
 
 Pokud push notifikace nechodí, nejčastěji chybí správná konfigurace v Supabase nebo oprávnění notifikací v prohlížeči.
+
+### Automatické připomínky před akcí (den předem / hodinu předem)
+
+Účastník si po RSVP může v appce zapnout tlačítko "🔔 Připomenout den a hodinu předem" — to zaregistruje Web Push subscription k dané akci. Skutečné odeslání notifikace zajišťuje scheduled Edge Function `send-event-reminders`, kterou je potřeba jednorázově nastavit:
+
+**1. Vygeneruj VAPID klíče** (jen jednou za projekt):
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+**2. Nastav `client/.env.local`** (veřejný klíč, bezpečné mít na frontendu):
+
+```env
+VITE_VAPID_PUBLIC_KEY=tvuj-vygenerovany-public-key
+```
+
+Stejnou hodnotu přidej i jako repository variable `VITE_VAPID_PUBLIC_KEY` pro GitHub Pages build (viz [Nasazení na GitHub Pages](#nasazeni-na-github-pages)).
+
+**3. Spusť `supabase/sql/SQL-phases/phase-10-push-reminders.sql`** v Supabase SQL Editoru.
+
+**4. Nastav secrets a nasaď Edge Function:**
+
+```bash
+supabase secrets set VAPID_PUBLIC_KEY=tvuj-public-key
+supabase secrets set VAPID_PRIVATE_KEY=tvuj-privatni-key
+supabase secrets set VAPID_SUBJECT=mailto:tvuj@email.cz
+supabase functions deploy send-event-reminders --no-verify-jwt
+```
+
+**5. Naplánuj pravidelné spouštění** (např. každých 15-30 minut), ať se stihne poslat "den předem" i "hodinu předem" upozornění včas. Nejjednodušší cesta je Supabase dashboard: `Edge Functions -> send-event-reminders -> Cron Jobs` a nastavit schedule (např. `*/15 * * * *`).
+
+Alternativa přes SQL (pokud má projekt zapnuté `pg_cron` + `pg_net` rozšíření v `Database -> Extensions`):
+
+```sql
+select cron.schedule(
+  'send-event-reminders',
+  '*/15 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/send-event-reminders',
+    headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>')
+  );
+  $$
+);
+```
+
+Bez kroků 3-5 se tlačítko připomínky v appce zobrazí a subscription se uloží, ale žádná notifikace nikdy nepřijde — dokud Edge Function neběží na scheduleru, nemá kdo `get_pending_event_reminders()` vyzvednout a poslat.
 
 ## Pravidla pro contributory
 

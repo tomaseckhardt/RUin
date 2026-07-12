@@ -10,13 +10,21 @@ import {
   DeclineCelebration,
 } from "../components/RsvpCelebration.jsx";
 import ShareInviteModal from "../components/ShareInviteModal.jsx";
+import WeatherWidget from "../components/WeatherWidget.jsx";
 import {
   getEvent,
   pingAttendee,
+  registerPushSubscription,
   submitRsvp,
   unlockManageWithPin,
+  unregisterPushSubscription,
 } from "../lib/api.js";
 import { buildAbsoluteUrl, formatDateTime } from "../lib/format.js";
+import {
+  isReminderSupported,
+  subscribeToEventReminders,
+  unsubscribeFromEventReminders,
+} from "../lib/push.js";
 import { supabase } from "../lib/supabase.js";
 
 const AUTO_REFRESH_MS = 10000;
@@ -96,6 +104,45 @@ function EventPage() {
   const [showConfirmCelebration, setShowConfirmCelebration] = useState(false);
   const [showDeclineCelebration, setShowDeclineCelebration] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isReminderOn, setIsReminderOn] = useState(false);
+  const [isTogglingReminder, setIsTogglingReminder] = useState(false);
+
+  useEffect(() => {
+    if (!isReminderSupported() || typeof navigator === "undefined") {
+      return;
+    }
+
+    navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then((subscription) => setIsReminderOn(Boolean(subscription)))
+      .catch(() => {});
+  }, []);
+
+  async function toggleReminder() {
+    setIsTogglingReminder(true);
+
+    try {
+      if (isReminderOn) {
+        const endpoint = await unsubscribeFromEventReminders();
+
+        if (endpoint) {
+          await unregisterPushSubscription(endpoint);
+        }
+
+        setIsReminderOn(false);
+        toast.success("Připomínku jsme vypnuli.");
+      } else {
+        const subscription = await subscribeToEventReminders();
+        await registerPushSubscription(id, subscription);
+        setIsReminderOn(true);
+        toast.success("Připomeneme ti to den i hodinu předem.");
+      }
+    } catch (reminderError) {
+      toast.error(reminderError.message);
+    } finally {
+      setIsTogglingReminder(false);
+    }
+  }
 
   const maybeShowIncomingPing = useCallback(
     (nextPayload, forcedSessionName = null) => {
@@ -459,6 +506,7 @@ function EventPage() {
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
         <>
+          <WeatherWidget location={event.location} datetime={event.datetime} compact />
           <AddToCalendarButton eventData={event} />
           <button
             type="button"
@@ -668,9 +716,22 @@ function EventPage() {
                   onClick={() => setIsEditingResponse(true)}>
                   Změnit účast
                 </button>
+                {isReminderSupported() ? (
+                  <button
+                    type="button"
+                    className="secondary-button mt-3 w-full"
+                    onClick={toggleReminder}
+                    disabled={isTogglingReminder}>
+                    {isTogglingReminder
+                      ? "Chvilku…"
+                      : isReminderOn
+                        ? "🔔 Připomínka zapnutá (klikni pro vypnutí)"
+                        : "🔔 Připomenout den a hodinu předem"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  className="secondary-button mt-5 w-full"
+                  className="secondary-button mt-3 w-full"
                   onClick={handleResetIdentity}>
                   Nejsem to já
                 </button>
