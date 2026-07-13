@@ -91,6 +91,11 @@ function AttendeeList({
                       {config.icon} {attendee.name}
                     </span>
                     <span className={`status-chip ${config.tone}`}>{config.label}</span>
+                    {attendee.checked_in_at ? (
+                      <span className="status-chip bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950/60 dark:text-fuchsia-300">
+                        📍 Dorazil/a
+                      </span>
+                    ) : null}
                   </div>
                   {attendee.excuse_reason ? (
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
