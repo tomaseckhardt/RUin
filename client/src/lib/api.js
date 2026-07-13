@@ -154,6 +154,217 @@ export function unregisterPushSubscription(endpoint) {
   )
 }
 
+export function checkInAttendee(eventId, attendeeName) {
+  return callRpc(
+    'check_in_attendee',
+    { p_event_id: eventId, p_attendee_name: attendeeName },
+    'Check-in se nepodařil.',
+  )
+}
+
+export function toggleChatReaction(messageId, senderName, emoji) {
+  return callRpc(
+    'toggle_chat_reaction',
+    { p_message_id: messageId, p_sender_name: senderName, p_emoji: emoji },
+    'Reakci se nepodařilo uložit.',
+  )
+}
+
+export async function getChatReactions(messageIds) {
+  if (!messageIds.length) {
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from('event_chat_message_reactions')
+    .select('id, message_id, sender_name, emoji')
+    .in('message_id', messageIds)
+
+  if (error) {
+    throw new Error(error.message || 'Reakce se nepodařilo načíst.')
+  }
+
+  return data ?? []
+}
+
+export function addSignupItem(eventId, data) {
+  return callRpc(
+    'add_signup_item',
+    {
+      p_event_id: eventId,
+      p_category: data.category,
+      p_label: data.label,
+      p_capacity: data.capacity ?? 1,
+      p_note: data.note ?? null,
+      p_created_by: data.createdBy,
+    },
+    'Položku se nepodařilo přidat.',
+  )
+}
+
+export function claimSignupItem(itemId, attendeeName, seats = 1) {
+  return callRpc(
+    'claim_signup_item',
+    { p_item_id: itemId, p_attendee_name: attendeeName, p_seats: seats },
+    'Přihlášení se nepodařilo uložit.',
+  )
+}
+
+export function unclaimSignupItem(itemId, attendeeName) {
+  return callRpc(
+    'unclaim_signup_item',
+    { p_item_id: itemId, p_attendee_name: attendeeName },
+    'Odhlášení se nepodařilo uložit.',
+  )
+}
+
+export function deleteSignupItem(eventId, itemId, token) {
+  return callRpc(
+    'delete_signup_item',
+    { p_event_id: eventId, p_item_id: itemId, p_token: token },
+    'Položku se nepodařilo smazat.',
+  )
+}
+
+export async function getSignupItems(eventId) {
+  const { data, error } = await supabase
+    .from('event_signup_items')
+    .select('id, event_id, category, label, capacity, note, created_by, created_at, event_signup_claims(id, attendee_name, seats)')
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw new Error(error.message || 'Seznam se nepodařilo načíst.')
+  }
+
+  return data ?? []
+}
+
+export function addEventStop(eventId, token, data) {
+  return callRpc(
+    'add_event_stop',
+    {
+      p_event_id: eventId,
+      p_token: token,
+      p_name: data.name,
+      p_location: data.location ?? null,
+      p_starts_at_label: data.startsAtLabel ?? null,
+    },
+    'Zastávku se nepodařilo přidat.',
+  )
+}
+
+export function deleteEventStop(eventId, token, stopId) {
+  return callRpc(
+    'delete_event_stop',
+    { p_event_id: eventId, p_token: token, p_stop_id: stopId },
+    'Zastávku se nepodařilo smazat.',
+  )
+}
+
+export async function getEventStops(eventId) {
+  const { data, error } = await supabase
+    .from('event_stops')
+    .select('id, event_id, position, name, location, starts_at_label')
+    .eq('event_id', eventId)
+    .order('position', { ascending: true })
+
+  if (error) {
+    throw new Error(error.message || 'Itinerář se nepodařilo načíst.')
+  }
+
+  return data ?? []
+}
+
+export function createEventPoll(data) {
+  return callRpc(
+    'create_event_poll',
+    {
+      p_creator_name: data.creatorName,
+      p_name: data.name,
+      p_description: data.description ?? null,
+      p_options: data.options,
+    },
+    'Anketu se nepodařilo vytvořit.',
+  )
+}
+
+export function getPollPayload(pollId, token = null) {
+  return callRpc(
+    'get_poll_payload',
+    { p_poll_id: pollId, p_token: token },
+    'Anketu se nepodařilo načíst.',
+  )
+}
+
+export function votePoll(pollId, optionId, voterName) {
+  return callRpc(
+    'vote_event_poll',
+    { p_poll_id: pollId, p_option_id: optionId, p_voter_name: voterName },
+    'Hlas se nepodařilo uložit.',
+  )
+}
+
+export function finalizePoll(pollId, token, optionId, organizerPin, description) {
+  return callRpc(
+    'finalize_event_poll',
+    {
+      p_poll_id: pollId,
+      p_token: token,
+      p_option_id: optionId,
+      p_organizer_pin: organizerPin,
+      p_description: description ?? null,
+    },
+    'Anketu se nepodařilo vyhodnotit.',
+  )
+}
+
+export function recordEventPhoto(eventId, storagePath, uploadedBy) {
+  return callRpc(
+    'record_event_photo',
+    { p_event_id: eventId, p_storage_path: storagePath, p_uploaded_by: uploadedBy },
+    'Fotku se nepodařilo uložit.',
+  )
+}
+
+export async function getEventPhotos(eventId) {
+  const { data, error } = await supabase.rpc('get_event_photos', { p_event_id: eventId })
+
+  if (error) {
+    throw new Error(error.message || 'Fotky se nepodařilo načíst.')
+  }
+
+  return data ?? []
+}
+
+export function deleteEventPhoto(eventId, token, photoId) {
+  return callRpc(
+    'delete_event_photo',
+    { p_event_id: eventId, p_token: token, p_photo_id: photoId },
+    'Fotku se nepodařilo smazat.',
+  )
+}
+
+export async function uploadEventPhoto(eventId, file) {
+  const fileExt = file.name.split('.').pop()
+  const storagePath = `${eventId}/${crypto.randomUUID()}.${fileExt}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('event-photos')
+    .upload(storagePath, file)
+
+  if (uploadError) {
+    throw new Error(uploadError.message || 'Nahrání fotky selhalo.')
+  }
+
+  return storagePath
+}
+
+export function getEventPhotoUrl(storagePath) {
+  const { data } = supabase.storage.from('event-photos').getPublicUrl(storagePath)
+  return data.publicUrl
+}
+
 export async function sendEventChatMessage(eventId, senderName, message) {
   const cleanSenderName = (senderName || '').trim()
   const cleanMessage = (message || '').trim()

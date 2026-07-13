@@ -138,6 +138,9 @@ function CreateEventPage() {
                   <a href="#create-form" className="primary-button">
                     Začít tvořit
                   </a>
+                  <Link to="/poll/new" className="secondary-button">
+                    Nejdřív hlasování o termínu
+                  </Link>
                   <span className="hero-badge inline-flex items-center rounded-full border border-slate-200 bg-white/70 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
                     Bez přihlašování, bez zdržování
                   </span>
