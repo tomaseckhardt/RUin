@@ -2,11 +2,20 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
+import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { createEvent, getEvent } from '../lib/api.js'
+import { addEventStop, createEvent, getEvent } from '../lib/api.js'
 import { formatDateTime } from '../lib/format.js'
 import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
+
+function parseTokenFromPath(path) {
+  try {
+    return new URL(path, window.location.origin).searchParams.get('token') || ''
+  } catch {
+    return ''
+  }
+}
 
 const initialForm = {
   organizerName: '',
@@ -24,6 +33,11 @@ function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [recentEvents, setRecentEvents] = useState([])
   const [isLoadingRecentEvents, setIsLoadingRecentEvents] = useState(true)
+  const [showAfterparty, setShowAfterparty] = useState(false)
+  const [afterpartyLocation, setAfterpartyLocation] = useState('')
+  const [afterpartyTime, setAfterpartyTime] = useState('')
+  const [confettiOrigin, setConfettiOrigin] = useState(null)
+  const [burstKey, setBurstKey] = useState(0)
 
   const whyItWorks = [
     'Všichni vidí stejný plán, žádné ztracené zprávy v chatu.',
@@ -43,14 +57,44 @@ function CreateEventPage() {
 
     try {
       const payload = await createEvent(form)
+
+      if (showAfterparty && afterpartyLocation.trim() && afterpartyTime) {
+        const token = parseTokenFromPath(payload.organizerPath)
+
+        if (token) {
+          try {
+            await addEventStop(payload.event.id, token, {
+              name: 'Afterparty',
+              location: afterpartyLocation,
+              startsAtLabel: afterpartyTime,
+            })
+          } catch (afterpartyError) {
+            toast.error(`Akce je založená, ale afterparty se nepodařilo uložit: ${afterpartyError.message}`)
+          }
+        }
+      }
+
       toast.success('Akce je připravená. Odkazy můžeš rovnou sdílet.')
       setForm(initialForm)
+      setShowAfterparty(false)
+      setAfterpartyLocation('')
+      setAfterpartyTime('')
       navigate(payload.organizerPath)
     } catch (error) {
       toast.error(error.message)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  function handleAfterpartyClick(event) {
+    if (!showAfterparty) {
+      const rect = event.currentTarget.getBoundingClientRect()
+      setConfettiOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+      setBurstKey((current) => current + 1)
+    }
+
+    setShowAfterparty((current) => !current)
   }
 
   function updateField(field) {
@@ -302,6 +346,42 @@ function CreateEventPage() {
                 required
               />
             </div>
+            <div>
+              <button
+                type="button"
+                onClick={handleAfterpartyClick}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-black tracking-[-0.01em] text-white shadow-lg"
+                style={{
+                  background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
+                  animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
+                }}
+              >
+                🎉 {showAfterparty ? 'Zavřít afterparty' : 'Afterparty?!'} 🎉
+              </button>
+
+              {showAfterparty ? (
+                <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Kam se jde potom</label>
+                    <input
+                      className="field"
+                      value={afterpartyLocation}
+                      onChange={(event) => setAfterpartyLocation(event.target.value)}
+                      placeholder="Klub Afterparty, Praha 7"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Čas</label>
+                    <input
+                      type="time"
+                      className="field"
+                      value={afterpartyTime}
+                      onChange={(event) => setAfterpartyTime(event.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
               <input
                 type="checkbox"
@@ -325,6 +405,8 @@ function CreateEventPage() {
           </form>
         </aside>
       </main>
+
+      <ConfettiBurst origin={confettiOrigin} burstKey={burstKey} />
     </PageShell>
   )
 }
