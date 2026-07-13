@@ -95,6 +95,7 @@ SQL skripty v `supabase/sql` spouštěj postupně podle čísel:
 8. `phase-8-update-event-details.sql`
 9. `phase-9-unique-phone-per-event.sql`
 10. `phase-10-push-reminders.sql`
+11. `phase-11-community-features.sql`
 
 Co dělá každá fáze:
 
@@ -155,6 +156,15 @@ Co dělá každá fáze:
 - Přidá `push_subscriptions` (přihlášení k odběru Web Push notifikací) a `event_reminders_sent` (aby se stejná připomínka neposlala dvakrát).
 - Zavede RPC `register_push_subscription`/`unregister_push_subscription` pro klienta a `get_pending_event_reminders`/`get_push_subscriptions_for_event`/`mark_event_reminder_sent`/`delete_push_subscription_by_endpoint` pro Edge Function (grant jen pro `service_role`).
 - Vyžaduje ještě nasazení Edge Function a scheduled joby — viz [Push notifikace a service worker](#push-notifikace-a-service-worker).
+
+11. `phase-11-community-features.sql`
+
+- Check-in (`checked_in_at` na `attendees`, RPC `check_in_attendee`).
+- Emoji reakce na chatové zprávy (`event_chat_message_reactions`, RPC `toggle_chat_reaction`).
+- Seznamy "kdo co nese" / spolujízda (`event_signup_items` + `event_signup_claims`, kategorie `bring`/`ride`).
+- Vícero zastávek za večer (`event_stops`).
+- Ankety na termín/místo před založením akce (`event_polls`, `event_poll_options`, `event_poll_votes`) — hlasování má veřejný a tvůrčí (token) odkaz stejně jako akce, `finalize_event_poll` z vítězné možnosti rovnou zavolá `create_event`.
+- Fotky z akce (`event_photos` + Storage bucket `event-photos`, veřejný pro čtení).
 
 Doporučení:
 

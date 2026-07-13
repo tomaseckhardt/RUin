@@ -11,7 +11,11 @@ import {
 } from "../components/RsvpCelebration.jsx";
 import ShareInviteModal from "../components/ShareInviteModal.jsx";
 import WeatherWidget from "../components/WeatherWidget.jsx";
+import EventStops from "../components/EventStops.jsx";
+import SignupBoard from "../components/SignupBoard.jsx";
+import PhotoGallery from "../components/PhotoGallery.jsx";
 import {
+  checkInAttendee,
   getEvent,
   pingAttendee,
   registerPushSubscription,
@@ -106,6 +110,7 @@ function EventPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [isReminderOn, setIsReminderOn] = useState(false);
   const [isTogglingReminder, setIsTogglingReminder] = useState(false);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
 
   useEffect(() => {
     if (!isReminderSupported() || typeof navigator === "undefined") {
@@ -141,6 +146,20 @@ function EventPage() {
       toast.error(reminderError.message);
     } finally {
       setIsTogglingReminder(false);
+    }
+  }
+
+  async function handleCheckIn() {
+    setIsCheckingIn(true);
+
+    try {
+      await checkInAttendee(id, sessionName);
+      toast.success("Odbaveno, ať ostatní vidí, že jsi na místě!");
+      await loadEvent();
+    } catch (checkInError) {
+      toast.error(checkInError.message);
+    } finally {
+      setIsCheckingIn(false);
     }
   }
 
@@ -710,6 +729,19 @@ function EventPage() {
                     ji znovu.
                   </div>
                 ) : null}
+                {sessionAttendee?.status === "confirmed" ? (
+                  <button
+                    type="button"
+                    className="primary-button mt-5 w-full justify-center"
+                    onClick={handleCheckIn}
+                    disabled={isCheckingIn || Boolean(sessionAttendee?.checked_in_at)}>
+                    {sessionAttendee?.checked_in_at
+                      ? "📍 Odbaveno, dorazil/a jsi"
+                      : isCheckingIn
+                        ? "Odbavuju…"
+                        : "📍 Dorazil/a jsem"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="primary-button mt-5 w-full justify-center"
@@ -753,6 +785,22 @@ function EventPage() {
         </div>
 
         <div className="order-4 lg:order-4">
+          <EventStops eventId={id} />
+        </div>
+
+        <div className="order-5 lg:order-5">
+          <SignupBoard eventId={id} category="bring" currentName={sessionName} canInteract={isIdentityLocked} />
+        </div>
+
+        <div className="order-6 lg:order-6">
+          <SignupBoard eventId={id} category="ride" currentName={sessionName} canInteract={isIdentityLocked} />
+        </div>
+
+        <div className="order-7 lg:order-7">
+          <PhotoGallery eventId={id} currentName={sessionName} />
+        </div>
+
+        <div className="order-8 lg:order-8">
           <EventChat
             eventId={id}
             currentName={sessionName}

@@ -8,6 +8,9 @@ import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import PageShell from '../components/PageShell.jsx'
 import ShareInviteModal from '../components/ShareInviteModal.jsx'
 import WeatherWidget from '../components/WeatherWidget.jsx'
+import EventStops from '../components/EventStops.jsx'
+import SignupBoard from '../components/SignupBoard.jsx'
+import PhotoGallery from '../components/PhotoGallery.jsx'
 import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
@@ -560,6 +563,22 @@ function ManageEventPage() {
             currentName={organizerName}
             canSend={Boolean(organizerName.trim())}
           />
+        </div>
+
+        <div className="order-9 xl:order-5 xl:col-span-2">
+          <EventStops eventId={id} isOrganizer organizerToken={activeToken} />
+        </div>
+
+        <div className="order-10 xl:order-6 xl:col-span-2">
+          <SignupBoard eventId={id} category="bring" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
+        </div>
+
+        <div className="order-11 xl:order-7 xl:col-span-2">
+          <SignupBoard eventId={id} category="ride" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
+        </div>
+
+        <div className="order-12 xl:order-8 xl:col-span-2">
+          <PhotoGallery eventId={id} currentName={organizerName} isOrganizer organizerToken={activeToken} />
         </div>
 
         <section className="panel order-5 xl:order-2 xl:col-start-2">

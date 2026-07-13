@@ -1,23 +1,23 @@
 {
   "name": "RUin?",
   "short_name": "RUin?",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#130914",
-  "theme_color": "#7a1c3f",
+  "background_color": "#1c1c1e",
+  "theme_color": "#6f4cff",
   "icons": [
     {
-      "src": "./web-app-manifest-192x192.png",
+      "src": "/ruinfavicon/web-app-manifest-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     },
     {
-      "src": "./web-app-manifest-512x512.png",
+      "src": "/ruinfavicon/web-app-manifest-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }
