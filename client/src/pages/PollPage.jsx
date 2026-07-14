@@ -5,6 +5,16 @@ import PageShell from '../components/PageShell.jsx'
 import { finalizePoll, getPollPayload, votePoll } from '../lib/api.js'
 import { formatDateTime } from '../lib/format.js'
 
+const VOTER_STORAGE_PREFIX = 'ruin-poll-voter'
+
+function normalizeName(value) {
+  return value.trim().toLocaleLowerCase('cs-CZ')
+}
+
+function voterStorageKey(pollId) {
+  return `${VOTER_STORAGE_PREFIX}:${pollId}`
+}
+
 function PollPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -13,8 +23,10 @@ function PollPage() {
   const [payload, setPayload] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [voterName, setVoterName] = useState('')
+  const [voterName, setVoterName] = useState(() => (typeof window === 'undefined' ? '' : window.localStorage.getItem(voterStorageKey(id)) || ''))
   const [selectedOptionId, setSelectedOptionId] = useState(null)
+  const [hasSelectedManually, setHasSelectedManually] = useState(false)
+  const [lastAutoSelectedId, setLastAutoSelectedId] = useState(null)
   const [isVoting, setIsVoting] = useState(false)
   const [finalizingOptionId, setFinalizingOptionId] = useState(null)
   const [organizerPin, setOrganizerPin] = useState('')
@@ -37,6 +49,16 @@ function PollPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, token])
 
+  const normalizedVoterName = voterName.trim() ? normalizeName(voterName) : ''
+  const myExistingVoteOption = payload && normalizedVoterName
+    ? payload.options.find((option) => option.votes.some((voterEntry) => normalizeName(voterEntry) === normalizedVoterName))
+    : null
+
+  if (!hasSelectedManually && myExistingVoteOption && myExistingVoteOption.id !== lastAutoSelectedId) {
+    setLastAutoSelectedId(myExistingVoteOption.id)
+    setSelectedOptionId(myExistingVoteOption.id)
+  }
+
   async function handleVote(event) {
     event.preventDefault()
 
@@ -49,6 +71,7 @@ function PollPage() {
 
     try {
       await votePoll(id, selectedOptionId, voterName)
+      window.localStorage.setItem(voterStorageKey(id), voterName.trim())
       toast.success('Hlas uložen.')
       await loadPoll()
     } catch (voteError) {
@@ -87,6 +110,7 @@ function PollPage() {
   }
 
   const { poll, options, isCreator } = payload
+  const chosenOption = finalizingOptionId ? options.find((option) => option.id === finalizingOptionId) : null
 
   if (poll.finalizedEventId) {
     return (
@@ -111,10 +135,13 @@ function PollPage() {
         <section className="panel">
           <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Možnosti</p>
           <div className="mt-4 space-y-3">
-            {options.map((option) => (
+            {options.map((option) => {
+              const isHighlighted = isCreator ? finalizingOptionId === option.id : selectedOptionId === option.id
+
+              return (
               <label
                 key={option.id}
-                className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-4 transition sm:flex-row sm:items-center sm:justify-between ${selectedOptionId === option.id ? 'border-fuchsia-300 bg-fuchsia-50/60 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/20' : 'border-slate-200 dark:border-slate-700'}`}
+                className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-4 transition sm:flex-row sm:items-center sm:justify-between ${isHighlighted ? 'border-fuchsia-300 bg-fuchsia-50/60 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/20' : 'border-slate-200 dark:border-slate-700'}`}
               >
                 <div className="flex items-center gap-3">
                   {!isCreator ? (
@@ -123,7 +150,10 @@ function PollPage() {
                       name="poll-option"
                       className="h-4 w-4 accent-fuchsia-600"
                       checked={selectedOptionId === option.id}
-                      onChange={() => setSelectedOptionId(option.id)}
+                      onChange={() => {
+                        setHasSelectedManually(true)
+                        setSelectedOptionId(option.id)
+                      }}
                     />
                   ) : null}
                   <div>
@@ -149,7 +179,8 @@ function PollPage() {
                   ) : null}
                 </div>
               </label>
-            ))}
+              )
+            })}
           </div>
         </section>
 
@@ -159,15 +190,30 @@ function PollPage() {
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tvoje jméno</label>
               <input className="field" value={voterName} onChange={(event) => setVoterName(event.target.value)} placeholder="Třeba Viki" required />
             </div>
+            {myExistingVoteOption ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Aktuálně máš hlas pro <strong>{formatDateTime(myExistingVoteOption.datetime)} · {myExistingVoteOption.location}</strong>. Klidně vyber jinou možnost a hlasuj znovu.
+              </p>
+            ) : null}
             <button type="submit" className="primary-button w-full" disabled={isVoting}>
-              {isVoting ? 'Ukládám hlas…' : 'Hlasovat'}
+              {isVoting ? 'Ukládám hlas…' : myExistingVoteOption ? 'Změnit hlas' : 'Hlasovat'}
             </button>
           </form>
         ) : null}
 
         {isCreator && finalizingOptionId ? (
           <form className="panel space-y-4" onSubmit={handleFinalize}>
-            <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Vyhodnotit anketu</p>
+            <div className="flex items-start justify-between gap-4">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Vyhodnotit anketu</p>
+              <button type="button" className="text-xs text-slate-500 hover:underline dark:text-slate-400" onClick={() => setFinalizingOptionId(null)}>
+                Zrušit výběr
+              </button>
+            </div>
+            {chosenOption ? (
+              <div className="rounded-2xl border border-fuchsia-200 bg-fuchsia-50/60 p-3 text-sm dark:border-fuchsia-500/50 dark:bg-fuchsia-950/20">
+                Zakládáš akci na <strong>{formatDateTime(chosenOption.datetime)} · {chosenOption.location}</strong>
+              </div>
+            ) : null}
             <p className="text-sm text-slate-600 dark:text-slate-300">
               Tohle vytvoří ostrou akci z vybrané možnosti a anketu uzavře. Nastav správcovský PIN pro tu novou akci.
             </p>
