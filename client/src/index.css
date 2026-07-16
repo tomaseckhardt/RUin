@@ -96,6 +96,10 @@
   0%, 100% { box-shadow: 0 0 0 0 rgba(111, 76, 255, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(111, 76, 255, 0); }
 }
+@keyframes party-pulse {
+  0%, 100% { transform: scale(1) rotate(0deg); box-shadow: 0 0 0 0 rgba(111, 76, 255, 0.45), 0 4px 18px rgba(244, 114, 182, 0.25); }
+  50% { transform: scale(1.05) rotate(-1.5deg); box-shadow: 0 0 0 10px rgba(111, 76, 255, 0.12), 0 8px 26px rgba(244, 114, 182, 0.4); }
+}
 @keyframes avatar-pop {
   0% { transform: scale(0) rotate(-20deg); opacity: 0; }
   60% { transform: scale(1.2) rotate(5deg); opacity: 1; }
@@ -132,6 +136,12 @@
 @keyframes sad-particles {
   0% { transform: translateY(0) scale(1); opacity: 0.8; }
   100% { transform: translateY(40px) scale(0); opacity: 0; }
+}
+@keyframes confetti-burst {
+  0% { transform: translate(-50%, -50%) translate(0, 0) rotate(0deg); opacity: 0; }
+  12% { opacity: 1; }
+  45% { transform: translate(-50%, -50%) translate(var(--drift-x), calc(-1 * var(--rise))) rotate(calc(var(--rotate) * 0.5)); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translate(var(--drift-x), var(--fall)) rotate(var(--rotate)); opacity: 0.85; }
 }
 
 html {

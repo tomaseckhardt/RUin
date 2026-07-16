@@ -3,28 +3,37 @@ import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '../components/PageShell.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
+import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import { createEventPoll } from '../lib/api.js'
 
-const EMPTY_OPTION = { datetime: '', location: '', note: '' }
+function createEmptyOption() {
+  return { key: crypto.randomUUID(), datetime: '', location: '', note: '' }
+}
 
 function CreatePollPage() {
   const navigate = useNavigate()
   const [creatorName, setCreatorName] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [options, setOptions] = useState([{ ...EMPTY_OPTION }, { ...EMPTY_OPTION }])
+  const [options, setOptions] = useState(() => [createEmptyOption()])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [confettiOrigin, setConfettiOrigin] = useState(null)
+  const [burstKey, setBurstKey] = useState(0)
 
   function updateOption(index, patch) {
     setOptions((current) => current.map((option, i) => (i === index ? { ...option, ...patch } : option)))
   }
 
-  function addOption() {
+  function addOption(event) {
     if (options.length >= 5) {
       return
     }
 
-    setOptions((current) => [...current, { ...EMPTY_OPTION }])
+    const rect = event.currentTarget.getBoundingClientRect()
+    setConfettiOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+    setBurstKey((current) => current + 1)
+
+    setOptions((current) => [...current, createEmptyOption()])
   }
 
   function removeOption(index) {
@@ -34,10 +43,15 @@ function CreatePollPage() {
   async function handleSubmit(event) {
     event.preventDefault()
 
-    const validOptions = options.filter((option) => option.datetime && option.location.trim())
+    const incompleteIndex = options.findIndex((option) => !option.datetime || !option.location.trim())
 
-    if (validOptions.length < 2) {
-      toast.error('Vyplň aspoň dvě možnosti (datum i místo).')
+    if (incompleteIndex !== -1) {
+      toast.error(`Možnost ${incompleteIndex + 1} nemá vyplněné datum nebo místo — doplň ji, nebo ji odeber.`)
+      return
+    }
+
+    if (options.length < 2) {
+      toast.error('Přidej aspoň dvě možnosti.')
       return
     }
 
@@ -48,7 +62,7 @@ function CreatePollPage() {
         creatorName,
         name,
         description,
-        options: validOptions,
+        options,
       })
       toast.success('Anketa je připravená. Sdílej odkaz na hlasování.')
       navigate(result.creatorPath)
@@ -85,10 +99,10 @@ function CreatePollPage() {
           <div className="space-y-4">
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Možnosti</p>
             {options.map((option, index) => (
-              <div key={index} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+              <div key={option.key} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Možnost {index + 1}</p>
-                  {options.length > 2 ? (
+                  {options.length > 1 ? (
                     <button type="button" className="text-xs text-rose-600 hover:underline dark:text-rose-300" onClick={() => removeOption(index)}>
                       Odebrat
                     </button>
@@ -112,8 +126,16 @@ function CreatePollPage() {
             ))}
 
             {options.length < 5 ? (
-              <button type="button" className="secondary-button" onClick={addOption}>
-                + Přidat možnost
+              <button
+                type="button"
+                onClick={addOption}
+                className="inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-black tracking-[-0.01em] text-white shadow-lg"
+                style={{
+                  background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
+                  animation: 'party-pulse 1.8s ease-in-out infinite',
+                }}
+              >
+                🎉 Afterparty?! 🎉
               </button>
             ) : null}
           </div>
@@ -123,6 +145,8 @@ function CreatePollPage() {
           </button>
         </form>
       </main>
+
+      <ConfettiBurst origin={confettiOrigin} burstKey={burstKey} />
     </PageShell>
   )
 }

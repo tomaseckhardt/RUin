@@ -96,6 +96,7 @@ SQL skripty v `supabase/sql` spouštěj postupně podle čísel:
 9. `phase-9-unique-phone-per-event.sql`
 10. `phase-10-push-reminders.sql`
 11. `phase-11-community-features.sql`
+12. `phase-12-poll-vote-fixes.sql`
 
 Co dělá každá fáze:
 
@@ -165,6 +166,11 @@ Co dělá každá fáze:
 - Vícero zastávek za večer (`event_stops`).
 - Ankety na termín/místo před založením akce (`event_polls`, `event_poll_options`, `event_poll_votes`) — hlasování má veřejný a tvůrčí (token) odkaz stejně jako akce, `finalize_event_poll` z vítězné možnosti rovnou zavolá `create_event`.
 - Fotky z akce (`event_photos` + Storage bucket `event-photos`, veřejný pro čtení).
+
+12. `phase-12-poll-vote-fixes.sql`
+
+- Opravuje `vote_event_poll`, aby porovnávalo jméno hlasujícího case-insensitive (`"Tomáš"` a `"tomáš"` teď počítá jako stejný hlas, ne dva různé).
+- Přidává unique index `event_poll_votes_poll_voter_lower_uidx` místo původního case-sensitive omezení.
 
 Doporučení:
 
