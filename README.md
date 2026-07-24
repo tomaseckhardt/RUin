@@ -24,28 +24,39 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
 
 ## Co aplikace umí
 
-- vytvořit akci (název, místo, termín, popis)
-- sbírat odpovědi RSVP (dorazím / nedorazím + omluvenka)
-- moderovat účastníky v režimu organizátora
-- chat k dané akci
-- pings/šťouchnutí účastníků
-- volitelně pracovat s telefonním číslem (dle nastavení akce)
+- vytvořit akci (název, místo, termín, popis), nebo ji nejdřív vydiskutovat přes anketu na termín/místo — anketa má vlastní veřejný i tvůrčí odkaz a po vyhodnocení rovnou založí ostrou akci
+- sbírat odpovědi RSVP (dorazím / omluvenka), volitelně s telefonním číslem (dle nastavení akce)
+- check-in na místě ("📍 Dorazil/a jsem")
+- moderovat účastníky a omluvenky v režimu organizátora
+- chat k dané akci s emoji reakcemi na zprávy
+- pings/šťouchnutí účastníků (stejnou osobu lze šťouchnout znovu vždy až po 10 minutách)
+- seznamy "kdo co nese" a spolujízda
+- itinerář večera (vícero zastávek, včetně afterparty)
+- album fotek z akce s rozklikávacím náhledem (šipky mezi fotkami) a hromadným stažením fotek ostatních (jedním klikem jako ZIP, bez těch, které nahrál přihlášený uživatel sám)
+- předpověď počasí pro místo a čas akce
+- přidání do kalendáře (.ics soubor) a na plochu telefonu (PWA)
+- sdílení pozvánky (odkaz, QR kód, QR plakátek ke stažení)
+- push připomínky den a hodinu předem akcí
 
 ## Technologický stack
 
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router
 - Backend: Supabase Postgres + RPC funkce + RLS + Realtime
+- Klientské balení fotek do ZIP pro hromadné stažení: `jszip`
+- Testy: Jest + Testing Library (`client/src/**/*.test.js`), `jest-axe` pro a11y assertions v testech, Puppeteer + `axe-puppeteer` pro `npm run audit:a11y` proti buildu
 - Deploy: GitHub Actions -> GitHub Pages
 
 ## Struktura repozitáře
 
 - `client/` - frontend aplikace ve Vite
-  - `src/pages/` - hlavní obrazovky (vytvoření, detail, správa akce)
+  - `src/pages/` - hlavní obrazovky (vytvoření akce, RSVP detail, správa akce, vytvoření/detail ankety)
   - `src/components/` - znovupoužitelné UI komponenty
   - `src/lib/` - API vrstva, Supabase klient, helpery
+  - `src/test/` - sdílené testovací helpery a Jest setup
   - `public/sw.js` - service worker (PWA/push)
 - `supabase/sql/` - SQL skripty po jednotlivých fázích
 - `supabase/functions/` - Edge Functions pro push dispatch
+- `scripts/audit-a11y.mjs` - a11y audit postaveného buildu (Puppeteer + axe-core)
 - `.github/workflows/deploy-pages.yml` - CI/CD workflow pro GitHub Pages
 
 ## Požadavky
@@ -97,6 +108,9 @@ SQL skripty v `supabase/sql` spouštěj postupně podle čísel:
 10. `phase-10-push-reminders.sql`
 11. `phase-11-community-features.sql`
 12. `phase-12-poll-vote-fixes.sql`
+13. `phase-13-ping-cooldown.sql`
+14. `phase-14-security-hardening.sql`
+15. `phase-15-storage-and-poll-cleanup.sql`
 
 Co dělá každá fáze:
 
@@ -172,6 +186,29 @@ Co dělá každá fáze:
 - Opravuje `vote_event_poll`, aby porovnávalo jméno hlasujícího case-insensitive (`"Tomáš"` a `"tomáš"` teď počítá jako stejný hlas, ne dva různé).
 - Přidává unique index `event_poll_votes_poll_voter_lower_uidx` místo původního case-sensitive omezení.
 
+13. `phase-13-ping-cooldown.sql`
+
+- Mění `ping_attendee` z "jedno šťouchnutí od stejné osoby na daného účastníka navždy" na opakovatelný cooldown - stejnou osobu lze šťouchnout znovu, jakmile uplyne 10 minut od posledního šťouchnutí (atomický `on conflict ... do update ... where`, bez samostatného race-prone kontrolního selectu).
+- Zapíná RLS na `attendee_pings` a přidává deny-by-default policy (tabulka dřív vůbec neměla RLS, takže šlo číst/zapisovat/mazat pingy přímo přes anon klíč, mimo `ping_attendee` a jeho validace).
+
+14. `phase-14-security-hardening.sql`
+
+- Opravuje `_random_token`, aby místo nekryptografického `random()` používal `pgcrypto`/`gen_random_bytes()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`, tak by měl vznikat z bezpečného zdroje náhodnosti).
+- Mění `get_event_payload` tak, aby telefonní čísla účastníků vracelo jen s platným `p_organizer_token` - dřív je viděl v network response kdokoli s veřejným odkazem na akci, i když je UI hostům nikdy nezobrazovalo.
+- Opravuje race podmínku v `moderate_attendee` (kontrola stavu teď je součástí `UPDATE ... WHERE`, ne samostatný předchozí SELECT).
+- `submit_rsvp` teď při souběžném konfliktu na telefonním čísle vrátí srozumitelnou českou hlášku místo syrové Postgres chyby o porušení unique indexu.
+- Maže nepoužívanou tabulku `organizer_pin_attempts` (vytvořená, ale nikdy nezapisovaná ani nečtená, a bez RLS).
+- Záměrně neřeší: `organizer_token` zůstává uložený v čitelné podobě (ne jako hash) - appka totiž umí přes PIN "obnovit" zapomenutý manage odkaz (`get_organizer_path_with_pin` ho musí umět vrátit zpátky), což s jednosměrným hashem nejde bez přestavby celého recovery flow. Je to vědomý kompromis, ne přehlédnutí.
+
+**Důležité:** od fáze 14 posílá klient do `get_event_payload` navíc parametr `p_organizer_token` (viz `client/src/lib/api.js`). Pokud fáze 14 neběží na stejném Supabase projektu, jako na který ukazuje `.env.local`, appka přestane fungovat s chybou `Could not find the function public.get_event_payload(...) in the schema cache` (PostgREST nenajde odpovídající signaturu funkce) - klient a databázové schéma musí být vždycky na stejné verzi.
+
+15. `phase-15-storage-and-poll-cleanup.sql`
+
+- Mazání akce (organizátorem, nebo automaticky 7 dní po termínu) dřív smazalo jen `event_photos` řádky přes FK cascade - samotné soubory ve Storage bucketu `event-photos` zůstávaly navždy ležet, bez jakékoli reference, přes kterou by šly znovu najít. Teď se při obou cestách mazání smažou i odpovídající `storage.objects`.
+- Ankety (`event_polls`) dostávají vlastní životní cyklus - dřív neměly žádnou expiraci, protože nejsou `events` řádek, dokud se nefinalizují:
+  - nefinalizovaná anketa se smaže 14 dní od vytvoření, pokud ji nikdo nedotáhne do konce
+  - finalizovaná anketa zaniká automaticky spolu s akcí, která z ní vznikla (`finalized_event_id` teď má `on delete cascade` - dřív neměla FK žádnou `on delete` akci vůbec, takže mazání/expirace finalizované akce spadlo na porušení cizího klíče a akce (včetně fotek) se nikdy nesmazala)
+
 Doporučení:
 
 - spouštěj je v Supabase SQL Editoru na stejném projektu, který používáš v `.env.local`
@@ -201,7 +238,9 @@ Kořen repozitáře (`package.json`):
 
 - `npm run dev` - vývojový server klienta
 - `npm run build` - produkční build klienta
+- `npm run test` - spustí testy klienta (`npm --prefix client run test`)
 - `npm run audit:a11y` - build + a11y audit skript
+- `npm run install:all` / `npm run postinstall` - doinstaluje závislosti v `client/` (spouští se automaticky po `npm install` v kořeni)
 
 Klient (`client/package.json`):
 
@@ -209,6 +248,8 @@ Klient (`client/package.json`):
 - `npm --prefix client run build`
 - `npm --prefix client run preview`
 - `npm --prefix client run lint`
+- `npm --prefix client run test` - Jest (jednotkové + a11y testy, `*.test.js`)
+- `npm --prefix client run test:a11y` - jen testy odpovídající vzoru `a11y`
 
 ## Nasazení na GitHub Pages
 
@@ -344,3 +385,7 @@ Zpravidla chybí nebo neodpovídá RLS/policy vrstva. Ověř, že byly spuštěn
 ### Nejde otevřít režim organizátora
 
 Správa akce je vázaná na token v manage URL. Bez správného tokenu není možné provádět organizátorské akce.
+
+### Chyba "Could not find the function ... in the schema cache"
+
+Klientský kód posílá RPC volání s parametry, které aktuální databázové schéma nezná (typicky po `git pull`, když ještě neběžela nejnovější SQL fáze). Zkontroluj `supabase/sql/SQL-phases/`, najdi fáze novější než ta poslední, kterou jsi spustil/a na svém projektu, a doplň je (nebo spusť celý `all-phases.sql` znovu - je idempotentní). Frontend a databázové schéma musí být vždy na stejné verzi.

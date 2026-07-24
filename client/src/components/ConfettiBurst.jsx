@@ -23,6 +23,10 @@ function ConfettiBurst({ origin, burstKey }) {
       return
     }
 
+    // burstKey is an imperative trigger from the parent ("fire a burst now"),
+    // not external data to sync from - there's nothing to move into a
+    // callback here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setParticles(createParticles(30))
     const timeout = setTimeout(() => setParticles([]), 2200)
 

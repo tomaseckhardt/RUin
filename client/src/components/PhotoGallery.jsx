@@ -19,6 +19,9 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   }
 
   useEffect(() => {
+    // Fetch-on-mount-and-eventId-change; there's no external system to
+    // "subscribe" to here, just an initial load.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPhotos()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
