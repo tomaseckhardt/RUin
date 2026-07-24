@@ -34,6 +34,8 @@ import { supabase } from "../lib/supabase.js";
 const AUTO_REFRESH_MS = 10000;
 const IDENTITY_STORAGE_PREFIX = "ruin-event-identity";
 const PING_SEEN_STORAGE_PREFIX = "ruin-event-last-seen-ping";
+const PING_COOLDOWN_STORAGE_PREFIX = "ruin-event-ping-cooldown";
+const PING_COOLDOWN_MS = 10 * 60 * 1000;
 
 function normalizeName(value) {
   return value.trim().toLocaleLowerCase("cs-CZ");
@@ -45,6 +47,33 @@ function identityStorageKey(eventId) {
 
 function pingSeenStorageKey(eventId, attendeeName) {
   return `${PING_SEEN_STORAGE_PREFIX}:${eventId}:${normalizeName(attendeeName)}`;
+}
+
+function pingCooldownStorageKey(eventId, targetAttendeeId) {
+  return `${PING_COOLDOWN_STORAGE_PREFIX}:${eventId}:${targetAttendeeId}`;
+}
+
+function readPingCooldownUntil(eventId, targetAttendeeId) {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+
+  const raw = window.localStorage.getItem(
+    pingCooldownStorageKey(eventId, targetAttendeeId),
+  );
+  const parsed = raw ? Number(raw) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function writePingCooldownUntil(eventId, targetAttendeeId, until) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    pingCooldownStorageKey(eventId, targetAttendeeId),
+    String(until),
+  );
 }
 
 function statusLabel(status) {
@@ -111,6 +140,12 @@ function EventPage() {
   const [isReminderOn, setIsReminderOn] = useState(false);
   const [isTogglingReminder, setIsTogglingReminder] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [pingCooldownTick, setPingCooldownTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setPingCooldownTick(Date.now()), 1000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     if (!isReminderSupported() || typeof navigator === "undefined") {
@@ -383,6 +418,10 @@ function EventPage() {
     }
   }
 
+  function getPingCooldownRemainingMs(targetAttendeeId) {
+    return Math.max(0, readPingCooldownUntil(id, targetAttendeeId) - pingCooldownTick);
+  }
+
   function handlePing(attendeeId) {
     setPingTargetId(attendeeId);
     setPingMessageInput("");
@@ -415,12 +454,17 @@ function EventPage() {
         sessionName || name,
         pingMessageInput,
       );
+      writePingCooldownUntil(id, pingTargetId, Date.now() + PING_COOLDOWN_MS);
       toast.success("Šťouchnutí odeslané.");
       setShowPingComposerModal(false);
       setPingTargetId(null);
       setPingMessageInput("");
       await loadEvent();
     } catch (pingError) {
+      if (pingError.message.includes("10 minut")) {
+        writePingCooldownUntil(id, pingTargetId, Date.now() + PING_COOLDOWN_MS);
+      }
+
       toast.error(pingError.message);
     } finally {
       setPingBusyId(null);
@@ -800,6 +844,7 @@ function EventPage() {
             pingBusyId={pingBusyId}
             canPing={Boolean(name.trim())}
             currentName={sessionName || name}
+            getPingCooldownRemainingMs={getPingCooldownRemainingMs}
           />
         </div>
 
