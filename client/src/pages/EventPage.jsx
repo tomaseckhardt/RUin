@@ -491,10 +491,29 @@ function EventPage() {
       return;
     }
 
+    // This effect exists specifically to reset the local draft fields from the
+    // server record when it changes (and only when not mid-edit) - there's no
+    // way to do that from render, since these fields must stay mutable for the
+    // user to type into afterward.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedStatus(attendeeStatusToFormStatus(sessionAttendee.status));
     setExcuseReason(sessionAttendee.excuse_reason || "");
     setPhone(sessionAttendee.phone || "");
-  }, [sessionAttendee, isEditingResponse]);
+    // isEditingResponse is deliberately excluded: it must not retrigger this effect
+    // (that would resync from a stale sessionAttendee mid-submit), only gate a run
+    // that already fired because sessionAttendee changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionAttendee]);
+
+  function handleCancelEdit() {
+    if (sessionAttendee) {
+      setSelectedStatus(attendeeStatusToFormStatus(sessionAttendee.status));
+      setExcuseReason(sessionAttendee.excuse_reason || "");
+      setPhone(sessionAttendee.phone || "");
+    }
+
+    setIsEditingResponse(false);
+  }
 
   if (isLoading) {
     return (
@@ -703,7 +722,7 @@ function EventPage() {
                     <button
                       type="button"
                       className="secondary-button w-full justify-center"
-                      onClick={() => setIsEditingResponse(false)}>
+                      onClick={handleCancelEdit}>
                       Zpět
                     </button>
                   ) : null}
