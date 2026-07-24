@@ -487,14 +487,14 @@ function EventPage() {
       : null;
 
   useEffect(() => {
-    if (!sessionAttendee) {
+    if (!sessionAttendee || isEditingResponse) {
       return;
     }
 
     setSelectedStatus(attendeeStatusToFormStatus(sessionAttendee.status));
     setExcuseReason(sessionAttendee.excuse_reason || "");
     setPhone(sessionAttendee.phone || "");
-  }, [sessionAttendee]);
+  }, [sessionAttendee, isEditingResponse]);
 
   if (isLoading) {
     return (
