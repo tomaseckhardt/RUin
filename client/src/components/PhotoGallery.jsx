@@ -150,7 +150,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         <div className="flex flex-wrap gap-2">
           {photos.length > 0 ? (
             <button type="button" className="secondary-button" disabled={isDownloading} onClick={handleDownloadAll}>
-              {isDownloading ? 'Stahuju…' : '⬇️ Stáhnout fotky ostatních'}
+              {isDownloading ? 'Stahuju…' : 'Stáhnout fotky'}
             </button>
           ) : null}
           <button type="button" className="secondary-button" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
