@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import CollapsibleCard from './CollapsibleCard.jsx'
 import { addEventStop, deleteEventStop, getEventStops } from '../lib/api.js'
 import { supabase } from '../lib/supabase.js'
 
@@ -77,19 +78,17 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
   }
 
   return (
-    <section className="panel">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.24em]">Program večera</p>
-          <h3 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Zastávky</h3>
-        </div>
-        {isOrganizer ? (
+    <CollapsibleCard
+      eyebrow="Program večera"
+      title="Zastávky"
+      headerActions={
+        isOrganizer ? (
           <button type="button" className="secondary-button" onClick={() => setShowAddForm((current) => !current)}>
             {showAddForm ? 'Zavřít' : 'Přidat zastávku'}
           </button>
-        ) : null}
-      </div>
-
+        ) : null
+      }
+    >
       {showAddForm ? (
         <form className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-3" onSubmit={handleAdd}>
           <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Např. Hospoda U Fleků" required />
@@ -128,7 +127,7 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
           ))}
         </ol>
       )}
-    </section>
+    </CollapsibleCard>
   )
 }
 
