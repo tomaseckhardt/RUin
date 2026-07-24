@@ -55,7 +55,7 @@ describe('Form Components - Accessibility', () => {
 
   it('form inputs should be keyboard accessible', async () => {
     const user = userEvent.setup()
-    const { container } = render(
+    render(
       <form>
         <label htmlFor="name">Name</label>
         <input id="name" type="text" required />
@@ -72,7 +72,7 @@ describe('Form Components - Accessibility', () => {
     // This is a semantic check - critical status information 
     // should not rely on color alone (e.g., red = error)
     // Should use icons, text, or aria attributes
-    const { container } = render(
+    render(
       <div>
         <div className="bg-red-100 text-red-800">Error message text</div>
         <div className="bg-green-100 text-green-800">Success message text</div>

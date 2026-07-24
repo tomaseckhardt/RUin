@@ -45,6 +45,9 @@ function PollPage() {
   }
 
   useEffect(() => {
+    // Fetch-on-mount-and-id/token-change; there's no external system to
+    // "subscribe" to here, just an initial load.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPoll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, token])
