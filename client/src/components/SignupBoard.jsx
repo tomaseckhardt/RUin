@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import CollapsibleCard from './CollapsibleCard.jsx'
 import { addSignupItem, claimSignupItem, deleteSignupItem, getSignupItems, unclaimSignupItem } from '../lib/api.js'
 import { supabase } from '../lib/supabase.js'
 
@@ -172,17 +173,15 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
   }
 
   return (
-    <section className="panel">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.24em]">{config.eyebrow}</p>
-          <h3 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{config.title}</h3>
-        </div>
+    <CollapsibleCard
+      eyebrow={config.eyebrow}
+      title={config.title}
+      headerActions={
         <button type="button" className="secondary-button" onClick={() => setShowAddForm((current) => !current)}>
           {showAddForm ? 'Zavřít' : config.addLabel}
         </button>
-      </div>
-
+      }
+    >
       {showAddForm ? (
         <form className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30" onSubmit={handleAdd}>
           <input
@@ -276,7 +275,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
           })}
         </div>
       )}
-    </section>
+    </CollapsibleCard>
   )
 }
 
