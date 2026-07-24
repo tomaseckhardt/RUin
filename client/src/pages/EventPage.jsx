@@ -37,6 +37,7 @@ const IDENTITY_STORAGE_PREFIX = "ruin-event-identity";
 const PING_SEEN_STORAGE_PREFIX = "ruin-event-last-seen-ping";
 const PING_COOLDOWN_STORAGE_PREFIX = "ruin-event-ping-cooldown";
 const PING_COOLDOWN_MS = 10 * 60 * 1000;
+const REFRESH_ERROR_TOAST_ID = "event-refresh-error";
 
 function normalizeName(value) {
   return value.trim().toLocaleLowerCase("cs-CZ");
