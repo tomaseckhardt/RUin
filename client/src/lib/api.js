@@ -37,8 +37,12 @@ export function unlockManageWithPin(eventId, pin) {
   )
 }
 
-export function getEvent(id) {
-  return callRpc('get_event_payload', { p_event_id: id }, 'Akci se nepodařilo načíst.')
+export function getEvent(id, organizerToken = null) {
+  return callRpc(
+    'get_event_payload',
+    { p_event_id: id, p_organizer_token: organizerToken },
+    'Akci se nepodařilo načíst.',
+  )
 }
 
 export function submitRsvp(id, data) {
@@ -123,14 +127,14 @@ export async function getEventChatMessages(eventId, limit = 120) {
     .from('event_chat_messages')
     .select('id, event_id, sender_name, message, created_at')
     .eq('event_id', eventId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(limit)
 
   if (error) {
     throw new Error(error.message || 'Chat se nepodařilo načíst.')
   }
 
-  return data ?? []
+  return (data ?? []).reverse()
 }
 
 export function registerPushSubscription(eventId, subscription) {

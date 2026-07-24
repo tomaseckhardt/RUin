@@ -16,16 +16,25 @@ export function parseLocalDateTime(dateString) {
   }
 
   const [, year, month, day, hour, minute, second = '0'] = match
-  const date = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second),
-  )
+  const monthNum = Number(month)
+  const dayNum = Number(day)
+  const hourNum = Number(hour)
+  const minuteNum = Number(minute)
+  const secondNum = Number(second)
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    monthNum < 1 || monthNum > 12
+    || dayNum < 1 || dayNum > 31
+    || hourNum > 23
+    || minuteNum > 59
+    || secondNum > 59
+  ) {
+    return null
+  }
+
+  const date = new Date(Number(year), monthNum - 1, dayNum, hourNum, minuteNum, secondNum)
+
+  if (Number.isNaN(date.getTime()) || date.getMonth() !== monthNum - 1) {
     return null
   }
 

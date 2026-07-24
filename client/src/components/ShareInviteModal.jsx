@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import ModalOverlay from './ModalOverlay.jsx'
 import { createQrPosterDataUrl, dataUrlToFile } from '../lib/qrPoster.js'
 import { formatDateTime, shouldShowPastEventBadge } from '../lib/format.js'
 
@@ -46,15 +47,15 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
     }
   }, [open, inviteUrl, eventName, datetime])
 
-  if (!open) {
-    return null
-  }
-
   const isPastEvent = datetime ? shouldShowPastEventBadge(datetime) : false
 
   async function handleCopyLink() {
-    await navigator.clipboard.writeText(inviteUrl)
-    toast.success('Pozvánka zkopírovaná do schránky.')
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      toast.success('Pozvánka zkopírovaná do schránky.')
+    } catch {
+      toast.error('Odkaz se nepodařilo zkopírovat.')
+    }
   }
 
   async function handleShareLink() {
@@ -84,7 +85,9 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
     const link = document.createElement('a')
     link.href = qrDataUrl
     link.download = `pozvanka-${eventId || 'ruin'}.png`
+    document.body.appendChild(link)
     link.click()
+    document.body.removeChild(link)
   }
 
   async function handleShareQrPng() {
@@ -114,7 +117,7 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
   }
 
   return (
-    <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+    <ModalOverlay open={open} onClose={onClose} labelledBy="share-invite-title">
       <div
         className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-8"
         style={{ animation: 'scale-in 0.3s ease both' }}
@@ -122,7 +125,12 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
         <div className="mb-3 flex items-start justify-between gap-4 sm:mb-5" style={{ animation: 'fade-up 0.3s ease both' }}>
           <div>
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em] sm:text-base">Pozvánka</p>
-            <h3 className="mt-1 text-xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50 sm:mt-2 sm:text-3xl">Sdílej nebo naskenuj</h3>
+            <h3
+              id="share-invite-title"
+              className="mt-1 text-xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50 sm:mt-2 sm:text-3xl"
+            >
+              Sdílej nebo naskenuj
+            </h3>
           </div>
           <button type="button" className="secondary-button shrink-0 sm:text-base" onClick={onClose}>
             Zavřít
@@ -163,7 +171,7 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
           </button>
         </div>
       </div>
-    </section>
+    </ModalOverlay>
   )
 }
 

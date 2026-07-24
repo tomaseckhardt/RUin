@@ -29,6 +29,24 @@ export function isReminderSupported() {
   return isPushSupported() && Boolean(VAPID_PUBLIC_KEY)
 }
 
+function subscriptionKeyMatches(subscription, applicationServerKey) {
+  const existingKey = subscription.options?.applicationServerKey
+
+  if (!existingKey) {
+    // Browser doesn't expose the key it subscribed with - assume it still
+    // matches rather than force everyone through an unnecessary resubscribe.
+    return true
+  }
+
+  const existingBytes = new Uint8Array(existingKey)
+
+  if (existingBytes.length !== applicationServerKey.length) {
+    return false
+  }
+
+  return existingBytes.every((byte, index) => byte === applicationServerKey[index])
+}
+
 export async function subscribeToEventReminders() {
   if (!isReminderSupported()) {
     throw new Error('Tenhle prohlížeč nepodporuje připomínky, nebo appka nemá nastavený VAPID klíč.')
@@ -46,12 +64,20 @@ export async function subscribeToEventReminders() {
     throw new Error('Service worker se nepodařilo zaregistrovat.')
   }
 
-  const existing = await registration.pushManager.getSubscription()
+  const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+  let subscription = await registration.pushManager.getSubscription()
 
-  const subscription = existing || (await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-  }))
+  if (subscription && !subscriptionKeyMatches(subscription, applicationServerKey)) {
+    await subscription.unsubscribe()
+    subscription = null
+  }
+
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    })
+  }
 
   const json = subscription.toJSON()
 

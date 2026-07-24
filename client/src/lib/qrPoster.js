@@ -24,6 +24,12 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
 
     if (lineCount >= maxLines - 1) {
       const remaining = words.slice(i).join(' ')
+
+      if (ctx.measureText(remaining).width <= maxWidth) {
+        ctx.fillText(remaining, x, y + lineCount * lineHeight)
+        return y + (lineCount + 1) * lineHeight
+      }
+
       let tail = remaining
 
       while (ctx.measureText(`${tail}…`).width > maxWidth && tail.length > 0) {
