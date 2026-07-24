@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { addSignupItem, claimSignupItem, deleteSignupItem, getSignupItems, unclaimSignupItem } from '../lib/api.js'
 import { supabase } from '../lib/supabase.js'
@@ -32,25 +32,56 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
   const [capacity, setCapacity] = useState(1)
   const [note, setNote] = useState('')
   const [busyItemId, setBusyItemId] = useState(null)
+  const latestRequestIdRef = useRef(0)
+  const itemIdsRef = useRef(new Set())
+
+  useEffect(() => {
+    itemIdsRef.current = new Set(items.map((item) => item.id))
+  }, [items])
 
   async function loadItems() {
+    const requestId = ++latestRequestIdRef.current
+
     try {
       const allItems = await getSignupItems(eventId)
+
+      if (requestId !== latestRequestIdRef.current) {
+        return
+      }
+
       setItems(allItems.filter((item) => item.category === category))
     } catch (error) {
-      toast.error(error.message)
+      if (requestId === latestRequestIdRef.current) {
+        toast.error(error.message)
+      }
     } finally {
-      setIsLoading(false)
+      if (requestId === latestRequestIdRef.current) {
+        setIsLoading(false)
+      }
     }
   }
 
   useEffect(() => {
+    // Fetch-on-mount-and-eventId/category-change, refreshed again by the
+    // realtime subscription below - there's no external system to
+    // "subscribe" to for the initial load itself.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadItems()
 
     const channel = supabase
       .channel(`signup-board:${eventId}:${category}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_signup_items', filter: `event_id=eq.${eventId}` }, loadItems)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_signup_claims' }, loadItems)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_signup_claims' }, (payload) => {
+        // event_signup_claims has no event_id column to filter server-side on,
+        // so only reload when the claim actually belongs to an item on this board.
+        const itemId = payload.new?.item_id ?? payload.old?.item_id
+
+        if (itemId !== undefined && !itemIdsRef.current.has(itemId)) {
+          return
+        }
+
+        loadItems()
+      })
       .subscribe()
 
     return () => {

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
 import AttendeeList from "../components/AttendeeList.jsx";
 import AddToCalendarButton from "../components/AddToCalendarButton.jsx";
 import EventChat from "../components/EventChat.jsx";
+import ModalOverlay from "../components/ModalOverlay.jsx";
 import PageShell from "../components/PageShell.jsx";
 import {
   ConfirmCelebration,
@@ -34,6 +35,7 @@ import { supabase } from "../lib/supabase.js";
 const AUTO_REFRESH_MS = 10000;
 const IDENTITY_STORAGE_PREFIX = "ruin-event-identity";
 const PING_SEEN_STORAGE_PREFIX = "ruin-event-last-seen-ping";
+const REFRESH_ERROR_TOAST_ID = "event-refresh-error";
 
 function normalizeName(value) {
   return value.trim().toLocaleLowerCase("cs-CZ");
@@ -112,6 +114,16 @@ function EventPage() {
   const [isTogglingReminder, setIsTogglingReminder] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
 
+  const hasLoadedOnceRef = useRef(false);
+  const latestRequestIdRef = useRef(0);
+  const sessionNameRef = useRef(sessionName);
+  const isIdentityLockedRef = useRef(isIdentityLocked);
+
+  useEffect(() => {
+    sessionNameRef.current = sessionName;
+    isIdentityLockedRef.current = isIdentityLocked;
+  }, [sessionName, isIdentityLocked]);
+
   useEffect(() => {
     if (!isReminderSupported() || typeof navigator === "undefined") {
       return;
@@ -129,12 +141,19 @@ function EventPage() {
     try {
       if (isReminderOn) {
         const endpoint = await unsubscribeFromEventReminders();
+        setIsReminderOn(false);
 
         if (endpoint) {
-          await unregisterPushSubscription(endpoint);
+          try {
+            await unregisterPushSubscription(endpoint);
+          } catch {
+            toast.warning(
+              "Připomínku jsme vypnuli jen v tomhle prohlížeči, server o tom neví. Zkus to prosím znovu.",
+            );
+            return;
+          }
         }
 
-        setIsReminderOn(false);
         toast.success("Připomínku jsme vypnuli.");
       } else {
         const subscription = await subscribeToEventReminders();
@@ -170,7 +189,8 @@ function EventPage() {
       }
 
       const activeName =
-        forcedSessionName || (isIdentityLocked ? sessionName : "");
+        forcedSessionName ||
+        (isIdentityLockedRef.current ? sessionNameRef.current : "");
 
       if (!activeName) {
         return;
@@ -208,18 +228,34 @@ function EventPage() {
       setShowPingModal(true);
       window.localStorage.setItem(key, lastPingAt);
     },
-    [id, isIdentityLocked, sessionName],
+    [id],
   );
 
   const loadEvent = useCallback(
     async (forcedSessionName = null) => {
+      const requestId = ++latestRequestIdRef.current;
+
       try {
         const nextPayload = await fetchEventPayload(id);
+
+        if (requestId !== latestRequestIdRef.current) {
+          return;
+        }
+
         setPayload(nextPayload);
+        hasLoadedOnceRef.current = true;
         maybeShowIncomingPing(nextPayload, forcedSessionName);
         setError("");
       } catch (loadError) {
-        setError(loadError.message);
+        if (requestId !== latestRequestIdRef.current) {
+          return;
+        }
+
+        if (hasLoadedOnceRef.current) {
+          toast.error(loadError.message, { id: REFRESH_ERROR_TOAST_ID });
+        } else {
+          setError(loadError.message);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -231,22 +267,29 @@ function EventPage() {
     let cancelled = false;
 
     async function hydrateEvent() {
+      const requestId = ++latestRequestIdRef.current;
+
       try {
         const nextPayload = await fetchEventPayload(id);
 
-        if (cancelled) {
+        if (cancelled || requestId !== latestRequestIdRef.current) {
           return;
         }
 
         setPayload(nextPayload);
+        hasLoadedOnceRef.current = true;
         maybeShowIncomingPing(nextPayload);
         setError("");
       } catch (loadError) {
-        if (cancelled) {
+        if (cancelled || requestId !== latestRequestIdRef.current) {
           return;
         }
 
-        setError(loadError.message);
+        if (hasLoadedOnceRef.current) {
+          toast.error(loadError.message, { id: REFRESH_ERROR_TOAST_ID });
+        } else {
+          setError(loadError.message);
+        }
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -318,20 +361,26 @@ function EventPage() {
       }
 
       inFlight = true;
+      const requestId = ++latestRequestIdRef.current;
 
       try {
         const nextPayload = await fetchEventPayload(id);
 
-        if (cancelled) {
+        if (cancelled || requestId !== latestRequestIdRef.current) {
           return;
         }
 
         setPayload(nextPayload);
+        hasLoadedOnceRef.current = true;
         maybeShowIncomingPing(nextPayload);
         setError("");
       } catch (refreshError) {
-        if (!cancelled) {
-          setError(refreshError.message);
+        if (!cancelled && requestId === latestRequestIdRef.current) {
+          if (hasLoadedOnceRef.current) {
+            toast.error(refreshError.message, { id: REFRESH_ERROR_TOAST_ID });
+          } else {
+            setError(refreshError.message);
+          }
         }
       } finally {
         inFlight = false;
@@ -614,10 +663,13 @@ function EventPage() {
                 ) : null}
                 <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <label
+                      htmlFor="attendee-name"
+                      className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                       Tvoje jméno
                     </label>
                     <input
+                      id="attendee-name"
                       className="field"
                       value={name}
                       onChange={(event) => setName(event.target.value)}
@@ -629,10 +681,13 @@ function EventPage() {
 
                   {event.requirePhone ? (
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      <label
+                        htmlFor="attendee-phone"
+                        className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                         Telefonní číslo
                       </label>
                       <input
+                        id="attendee-phone"
                         type="tel"
                         className="field"
                         value={phone}
@@ -643,9 +698,14 @@ function EventPage() {
                     </div>
                   ) : null}
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div
+                    className="grid gap-3 sm:grid-cols-2"
+                    role="radiogroup"
+                    aria-label="Stav účasti">
                     <button
                       type="button"
+                      role="radio"
+                      aria-checked={selectedStatus === "confirmed"}
                       className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === "confirmed" ? "border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50" : "border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300"}`}
                       onClick={() => setSelectedStatus("confirmed")}>
                       <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
@@ -657,6 +717,8 @@ function EventPage() {
                     </button>
                     <button
                       type="button"
+                      role="radio"
+                      aria-checked={selectedStatus === "excused"}
                       className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === "excused" ? "border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50" : "border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300"}`}
                       onClick={() => setSelectedStatus("excused")}>
                       <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
@@ -670,10 +732,13 @@ function EventPage() {
 
                   {selectedStatus === "excused" ? (
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      <label
+                        htmlFor="excuse-reason"
+                        className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                         Důvod omluvy
                       </label>
                       <textarea
+                        id="excuse-reason"
                         className="field min-h-28"
                         value={excuseReason}
                         onChange={(event) =>
@@ -808,66 +873,78 @@ function EventPage() {
           />
         </div>
 
-        {showManageModal ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
-              <div className="mb-5">
-                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
-                  Správa akce
-                </p>
-                <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-                  Zadej PIN
-                </h3>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                  Pro vstup do správy akce zadej 4místný správcovský PIN.
-                </p>
+        <ModalOverlay
+          open={showManageModal}
+          onClose={closeManageModal}
+          labelledBy="manage-modal-title">
+          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+            <div className="mb-5">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
+                Správa akce
+              </p>
+              <h3
+                id="manage-modal-title"
+                className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+                Zadej PIN
+              </h3>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                Pro vstup do správy akce zadej 4místný správcovský PIN.
+              </p>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleUnlockManage}>
+              <div>
+                <label
+                  htmlFor="manage-pin"
+                  className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Správcovský PIN
+                </label>
+                <input
+                  id="manage-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]{4}"
+                  maxLength={4}
+                  className="field"
+                  value={managePin}
+                  onChange={(event) => setManagePin(event.target.value)}
+                  placeholder="1234"
+                  required
+                  autoFocus
+                />
               </div>
 
-              <form className="space-y-4" onSubmit={handleUnlockManage}>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Správcovský PIN
-                  </label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    pattern="[0-9]{4}"
-                    maxLength={4}
-                    className="field"
-                    value={managePin}
-                    onChange={(event) => setManagePin(event.target.value)}
-                    placeholder="1234"
-                    required
-                    autoFocus
-                  />
-                </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="secondary-button flex-1 justify-center"
+                  disabled={isUnlockingManage}
+                  onClick={closeManageModal}>
+                  Zrušit
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button flex-1"
+                  disabled={isUnlockingManage}>
+                  {isUnlockingManage ? "Ověřuji…" : "Vstoupit"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalOverlay>
 
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    className="secondary-button flex-1 justify-center"
-                    onClick={closeManageModal}>
-                    Zrušit
-                  </button>
-                  <button
-                    type="submit"
-                    className="primary-button flex-1"
-                    disabled={isUnlockingManage}>
-                    {isUnlockingManage ? "Ověřuji…" : "Vstoupit"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </section>
-        ) : null}
-
-        {showPingModal && incomingPing ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <ModalOverlay
+          open={showPingModal && Boolean(incomingPing)}
+          onClose={closePingModal}
+          labelledBy="incoming-ping-title">
+          {incomingPing ? (
             <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
                 Někdo tě šťouchl
               </p>
-              <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+              <h3
+                id="incoming-ping-title"
+                className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
                 {incomingPing.sourceName}
               </h3>
               <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
@@ -882,60 +959,67 @@ function EventPage() {
                 Rozumím
               </button>
             </div>
-          </section>
-        ) : null}
+          ) : null}
+        </ModalOverlay>
 
-        {showPingComposerModal ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
-                Šťouchnout účastníka
-              </p>
-              <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-                Přidej zprávu
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.
-              </p>
+        <ModalOverlay
+          open={showPingComposerModal}
+          onClose={closePingComposerModal}
+          labelledBy="ping-composer-title">
+          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+            <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
+              Šťouchnout účastníka
+            </p>
+            <h3
+              id="ping-composer-title"
+              className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+              Přidej zprávu
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.
+            </p>
 
-              <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Zpráva
-                  </label>
-                  <textarea
-                    className="field min-h-24"
-                    value={pingMessageInput}
-                    onChange={(event) =>
-                      setPingMessageInput(event.target.value.slice(0, 280))
-                    }
-                    placeholder="Hej, pojď s náma!"
-                    disabled={pingBusyId !== null}
-                    autoFocus
-                  />
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Zbývá {280 - pingMessageInput.length} znaků
-                  </p>
-                </div>
+            <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
+              <div>
+                <label
+                  htmlFor="ping-message"
+                  className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Zpráva
+                </label>
+                <textarea
+                  id="ping-message"
+                  className="field min-h-24"
+                  value={pingMessageInput}
+                  onChange={(event) =>
+                    setPingMessageInput(event.target.value.slice(0, 280))
+                  }
+                  placeholder="Hej, pojď s náma!"
+                  disabled={pingBusyId !== null}
+                  autoFocus
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  Zbývá {280 - pingMessageInput.length} znaků
+                </p>
+              </div>
 
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    className="secondary-button flex-1 justify-center"
-                    onClick={closePingComposerModal}>
-                    Zrušit
-                  </button>
-                  <button
-                    type="submit"
-                    className="primary-button flex-1"
-                    disabled={pingBusyId !== null}>
-                    {pingBusyId !== null ? "Šťouchám…" : "Odeslat"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </section>
-        ) : null}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="secondary-button flex-1 justify-center"
+                  disabled={pingBusyId !== null}
+                  onClick={closePingComposerModal}>
+                  Zrušit
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button flex-1"
+                  disabled={pingBusyId !== null}>
+                  {pingBusyId !== null ? "Šťouchám…" : "Odeslat"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalOverlay>
 
         <ShareInviteModal
           open={showShareModal}
@@ -946,74 +1030,77 @@ function EventPage() {
           datetime={event.datetime}
         />
 
-        {showOverviewModal ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
-              <div className="mb-5 flex items-start justify-between gap-4">
-                <div>
-                  <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
-                    Přehled
-                  </p>
-                  <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-                    {event.name}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  className="secondary-button shrink-0"
-                  onClick={() => setShowOverviewModal(false)}>
-                  Zavřít
-                </button>
+        <ModalOverlay
+          open={showOverviewModal}
+          onClose={() => setShowOverviewModal(false)}
+          labelledBy="overview-modal-title">
+          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
+                  Přehled
+                </p>
+                <h3
+                  id="overview-modal-title"
+                  className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+                  {event.name}
+                </h3>
               </div>
-
-              <div className="space-y-5 max-h-[60vh] overflow-y-auto">
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    Poznámka akce
-                  </p>
-                  <p className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
-                    {event.description || "Bez poznámky."}
-                  </p>
-                </div>
-                {[
-                  "confirmed",
-                  "excused",
-                  "excused_accepted",
-                  "excused_rejected",
-                ].map((statusGroup) => {
-                  const group = attendees.filter(
-                    (a) => a.status === statusGroup,
-                  );
-                  if (group.length === 0) return null;
-                  const labels = {
-                    confirmed: "✅ Přijdou",
-                    excused: "⏳ Omluvenky (čeká)",
-                    excused_accepted: "❌ Omluvenka přijatá",
-                    excused_rejected: "⚪ Omluvenka zamítnutá",
-                  };
-                  return (
-                    <div key={statusGroup}>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                        {labels[statusGroup]} ({group.length})
-                      </p>
-                      <ul className="space-y-2">
-                        {group.map((a) => (
-                          <li
-                            key={a.id}
-                            className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60">
-                            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
-                              {a.name}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
+              <button
+                type="button"
+                className="secondary-button shrink-0"
+                onClick={() => setShowOverviewModal(false)}>
+                Zavřít
+              </button>
             </div>
-          </section>
-        ) : null}
+
+            <div className="space-y-5 max-h-[60vh] overflow-y-auto">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                  Poznámka akce
+                </p>
+                <p className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+                  {event.description || "Bez poznámky."}
+                </p>
+              </div>
+              {[
+                "confirmed",
+                "excused",
+                "excused_accepted",
+                "excused_rejected",
+              ].map((statusGroup) => {
+                const group = attendees.filter(
+                  (a) => a.status === statusGroup,
+                );
+                if (group.length === 0) return null;
+                const labels = {
+                  confirmed: "✅ Přijdou",
+                  excused: "⏳ Omluvenky (čeká)",
+                  excused_accepted: "❌ Omluvenka přijatá",
+                  excused_rejected: "⚪ Omluvenka zamítnutá",
+                };
+                return (
+                  <div key={statusGroup}>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                      {labels[statusGroup]} ({group.length})
+                    </p>
+                    <ul className="space-y-2">
+                      {group.map((a) => (
+                        <li
+                          key={a.id}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60">
+                          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {a.name}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </ModalOverlay>
       </main>
     </PageShell>
   );
