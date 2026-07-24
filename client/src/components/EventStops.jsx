@@ -23,6 +23,10 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
   }
 
   useEffect(() => {
+    // Fetch-on-mount-and-eventId-change, refreshed again by the realtime
+    // subscription below - there's no external system to "subscribe" to for
+    // the initial load itself, so this has to call loadStops directly.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadStops()
 
     const channel = supabase
@@ -100,7 +104,7 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
       ) : null}
 
       {stops.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Zatím jedna zastávka. Klidně přidej itinerář na celý večer.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Zatím žádná zastávka. Klidně přidej itinerář na celý večer.</p>
       ) : (
         <ol className="space-y-3">
           {stops.map((stop, index) => (

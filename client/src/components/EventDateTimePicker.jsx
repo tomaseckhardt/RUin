@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 
 const WEEKDAY_LABELS = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne']
@@ -10,6 +10,10 @@ const DEFAULT_TIME = '18:00'
 
 function startOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth(), 1)
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
 function getMonthMatrix(year, month) {
@@ -69,18 +73,22 @@ function buildPresets() {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0, 0)
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 18, 0, 0, 0)
 
-  return [
+  const presets = [
     { key: 'today', label: 'Dnes 18:00', date: today },
     { key: 'tomorrow', label: 'Zítra 18:00', date: tomorrow },
     { key: 'friday', label: 'Pátek 19:00', date: nextOccurrence(5, 19, 0) },
     { key: 'saturday', label: 'Sobota 14:00', date: nextOccurrence(6, 14, 0) },
   ]
+
+  return presets.filter((preset) => preset.date.getTime() > now.getTime())
 }
 
 function EventDateTimePicker({ value, onChange }) {
   const selectedDate = parseLocalDateTime(value)
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selectedDate || new Date()))
   const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef(null)
+  const triggerRef = useRef(null)
 
   const presets = buildPresets()
   const timeValue = selectedDate
@@ -88,12 +96,37 @@ function EventDateTimePicker({ value, onChange }) {
     : DEFAULT_TIME
   const weeks = getMonthMatrix(viewMonth.getFullYear(), viewMonth.getMonth())
   const today = new Date()
+  const todayStart = startOfDay(today)
 
-  function openPanel() {
-    if (selectedDate) {
-      setViewMonth(startOfMonth(selectedDate))
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined
     }
 
+    function handlePointerDown(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen])
+
+  function openPanel() {
+    setViewMonth(startOfMonth(selectedDate || new Date()))
     setIsOpen(true)
   }
 
@@ -104,6 +137,10 @@ function EventDateTimePicker({ value, onChange }) {
   }
 
   function handleDayClick(date) {
+    if (startOfDay(date) < todayStart) {
+      return
+    }
+
     onChange(combineDateAndTime(date, timeValue))
   }
 
@@ -116,10 +153,14 @@ function EventDateTimePicker({ value, onChange }) {
   }
 
   return (
-    <div>
+    <div ref={containerRef}>
       <button
+        ref={triggerRef}
         type="button"
+        id="event-datetime-trigger"
         className="field inline-block w-auto text-left"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
         onClick={() => (isOpen ? setIsOpen(false) : openPanel())}
       >
         {value ? formatDateTime(value) : 'Vyber datum'}
@@ -127,6 +168,8 @@ function EventDateTimePicker({ value, onChange }) {
 
       {isOpen ? (
         <div
+          role="dialog"
+          aria-labelledby="event-datetime-trigger"
           className="mt-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30"
           style={{ animation: 'scale-in 0.25s ease both' }}
         >
@@ -156,6 +199,7 @@ function EventDateTimePicker({ value, onChange }) {
             <div className="flex items-center justify-between">
               <button
                 type="button"
+                aria-label="Předchozí měsíc"
                 className="flex h-8 w-8 items-center justify-center text-base text-slate-500 dark:text-slate-300"
                 onClick={() => goToMonth(-1)}
               >
@@ -166,6 +210,7 @@ function EventDateTimePicker({ value, onChange }) {
               </p>
               <button
                 type="button"
+                aria-label="Následující měsíc"
                 className="flex h-8 w-8 items-center justify-center text-base text-slate-500 dark:text-slate-300"
                 onClick={() => goToMonth(1)}
               >
@@ -190,18 +235,24 @@ function EventDateTimePicker({ value, onChange }) {
 
                 const isSelected = isSameDay(date, selectedDate)
                 const isToday = isSameDay(date, today)
+                const isPast = startOfDay(date) < todayStart
 
                 return (
                   <button
                     key={date.toISOString()}
                     type="button"
+                    disabled={isPast}
+                    aria-current={isToday ? 'date' : undefined}
+                    aria-pressed={isSelected}
                     onClick={() => handleDayClick(date)}
                     className={`flex items-center justify-center rounded text-[10px] font-medium transition ${
-                      isSelected
-                        ? 'primary-button'
-                        : isToday
-                          ? 'border border-[--accent-text] text-slate-800 dark:text-slate-100'
-                          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
+                      isPast
+                        ? 'cursor-not-allowed text-slate-300 dark:text-slate-700'
+                        : isSelected
+                          ? 'primary-button'
+                          : isToday
+                            ? 'border border-[--accent-text] text-slate-800 dark:text-slate-100'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
                     }`}
                   >
                     {date.getDate()}
@@ -212,14 +263,25 @@ function EventDateTimePicker({ value, onChange }) {
           </div>
 
           <div className="mt-3" style={{ animation: 'fade-up 0.3s ease 0.1s both' }}>
-            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Čas</label>
-            <input type="time" className="field" value={timeValue} onChange={handleTimeChange} />
+            <label htmlFor="event-datetime-time" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Čas
+            </label>
+            <input
+              id="event-datetime-time"
+              type="time"
+              className="field"
+              value={timeValue}
+              onChange={handleTimeChange}
+            />
           </div>
 
           <button
             type="button"
             className="primary-button mt-3 w-full justify-center"
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              setIsOpen(false)
+              triggerRef.current?.focus()
+            }}
             style={{ animation: 'fade-up 0.3s ease 0.15s both' }}
           >
             Hotovo

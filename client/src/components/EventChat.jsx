@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getChatReactions, getEventChatMessages, sendEventChatMessage, toggleChatReaction } from '../lib/api.js'
 import { supabase } from '../lib/supabase.js'
@@ -35,18 +35,8 @@ function toTimeLabel(value) {
   })
 }
 
-function upsertMessage(messages, incomingMessage) {
-  if (!incomingMessage?.id) {
-    return messages
-  }
-
-  const exists = messages.some((message) => message.id === incomingMessage.id)
-
-  if (exists) {
-    return messages
-  }
-
-  return [...messages, incomingMessage].sort((a, b) => {
+function sortMessages(messages) {
+  return [...messages].sort((a, b) => {
     const dateA = new Date(a.created_at).getTime()
     const dateB = new Date(b.created_at).getTime()
 
@@ -58,6 +48,34 @@ function upsertMessage(messages, incomingMessage) {
   })
 }
 
+function upsertMessage(messages, incomingMessage) {
+  if (!incomingMessage?.id) {
+    return messages
+  }
+
+  const exists = messages.some((message) => message.id === incomingMessage.id)
+
+  if (exists) {
+    return messages
+  }
+
+  return sortMessages([...messages, incomingMessage])
+}
+
+function mergeMessages(previousMessages, fetchedMessages) {
+  const merged = new Map()
+
+  for (const message of previousMessages) {
+    merged.set(message.id, message)
+  }
+
+  for (const message of fetchedMessages) {
+    merged.set(message.id, message)
+  }
+
+  return sortMessages([...merged.values()])
+}
+
 function EventChat({ eventId, currentName, canSend }) {
   const [messages, setMessages] = useState([])
   const [reactionsByMessage, setReactionsByMessage] = useState({})
@@ -65,6 +83,12 @@ function EventChat({ eventId, currentName, canSend }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [openPickerFor, setOpenPickerFor] = useState(null)
+  const [pendingReactions, setPendingReactions] = useState(() => new Set())
+  const messageIdsRef = useRef(new Set())
+
+  useEffect(() => {
+    messageIdsRef.current = new Set(messages.map((message) => message.id))
+  }, [messages])
 
   useEffect(() => {
     let cancelled = false
@@ -77,7 +101,7 @@ function EventChat({ eventId, currentName, canSend }) {
           return
         }
 
-        setMessages(nextMessages)
+        setMessages((previousMessages) => mergeMessages(previousMessages, nextMessages))
 
         const reactions = await getChatReactions(nextMessages.map((message) => message.id))
 
@@ -145,6 +169,10 @@ function EventChat({ eventId, currentName, canSend }) {
         (payload) => {
           const reaction = payload.new
 
+          if (!messageIdsRef.current.has(reaction.message_id)) {
+            return
+          }
+
           setReactionsByMessage((current) => {
             const existing = current[reaction.message_id] || []
 
@@ -186,12 +214,25 @@ function EventChat({ eventId, currentName, canSend }) {
       return
     }
 
+    const pendingKey = `${messageId}:${emoji}`
+
+    if (pendingReactions.has(pendingKey)) {
+      return
+    }
+
     setOpenPickerFor(null)
+    setPendingReactions((current) => new Set(current).add(pendingKey))
 
     try {
       await toggleChatReaction(messageId, currentName, emoji)
     } catch (error) {
       toast.error(error.message)
+    } finally {
+      setPendingReactions((current) => {
+        const next = new Set(current)
+        next.delete(pendingKey)
+        return next
+      })
     }
   }
 
@@ -276,6 +317,7 @@ function EventChat({ eventId, currentName, canSend }) {
                       key={group.emoji}
                       type="button"
                       onClick={() => handleToggleReaction(message.id, group.emoji)}
+                      disabled={pendingReactions.has(`${message.id}:${group.emoji}`)}
                       title={group.senderNames.join(', ')}
                       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${reactedByMe ? 'border-fuchsia-300 bg-fuchsia-100 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/50' : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'}`}
                     >
@@ -300,6 +342,7 @@ function EventChat({ eventId, currentName, canSend }) {
                         key={emoji}
                         type="button"
                         onClick={() => handleToggleReaction(message.id, emoji)}
+                        disabled={pendingReactions.has(`${message.id}:${emoji}`)}
                         className="rounded-full px-1.5 py-0.5 text-base hover:bg-slate-100 dark:hover:bg-slate-800"
                       >
                         {emoji}

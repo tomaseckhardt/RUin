@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
@@ -17,9 +17,10 @@ import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } 
 import { supabase } from '../lib/supabase.js'
 
 const AUTO_REFRESH_MS = 10000
+const REFRESH_ERROR_TOAST_ID = 'manage-event-refresh-error'
 
-async function fetchEventPayload(id) {
-  return getEvent(id)
+async function fetchEventPayload(id, organizerToken) {
+  return getEvent(id, organizerToken)
 }
 
 function parseOrganizerTokenFromPath(path) {
@@ -65,23 +66,43 @@ function ManageEventPage() {
   const [eventForm, setEventForm] = useState({ name: '', location: '', datetime: '' })
   const [isSavingEvent, setIsSavingEvent] = useState(false)
   const [showUnlockModal, setShowUnlockModal] = useState(false)
+  const [unlockHint, setUnlockHint] = useState('')
   const [managePin, setManagePin] = useState('')
   const [isUnlockingManage, setIsUnlockingManage] = useState(false)
 
   const inviteUrl = useMemo(() => buildAbsoluteUrl(`/event/${id}`), [id])
   const activeToken = urlToken || getSavedOrganizerToken(id)
 
+  const hasLoadedOnceRef = useRef(false)
+  const latestRequestIdRef = useRef(0)
+
   const loadEvent = useCallback(async () => {
+    const requestId = ++latestRequestIdRef.current
+
     try {
-      const nextPayload = await fetchEventPayload(id)
+      const nextPayload = await fetchEventPayload(id, activeToken)
+
+      if (requestId !== latestRequestIdRef.current) {
+        return
+      }
+
       setPayload(nextPayload)
+      hasLoadedOnceRef.current = true
       setError('')
     } catch (loadError) {
-      setError(loadError.message)
+      if (requestId !== latestRequestIdRef.current) {
+        return
+      }
+
+      if (hasLoadedOnceRef.current) {
+        toast.error(loadError.message, { id: REFRESH_ERROR_TOAST_ID })
+      } else {
+        setError(loadError.message)
+      }
     } finally {
       setIsLoading(false)
     }
-  }, [id])
+  }, [id, activeToken])
 
   useEffect(() => {
     let cancelled = false
@@ -89,7 +110,7 @@ function ManageEventPage() {
     async function hydrateEvent() {
       if (!activeToken) {
         if (!cancelled) {
-          setError('Pro vstup do správy zadej PIN.')
+          setUnlockHint('Pro vstup do správy akce zadej 4místný správcovský PIN.')
           setShowUnlockModal(true)
           setIsLoading(false)
         }
@@ -97,14 +118,17 @@ function ManageEventPage() {
         return
       }
 
-      try {
-        const nextPayload = await fetchEventPayload(id)
+      const requestId = ++latestRequestIdRef.current
 
-        if (cancelled) {
+      try {
+        const nextPayload = await fetchEventPayload(id, activeToken)
+
+        if (cancelled || requestId !== latestRequestIdRef.current) {
           return
         }
 
         setPayload(nextPayload)
+        hasLoadedOnceRef.current = true
         setError('')
         setShowUnlockModal(false)
 
@@ -113,7 +137,7 @@ function ManageEventPage() {
           navigate(`/event/${id}/manage`, { replace: true })
         }
       } catch (loadError) {
-        if (cancelled) {
+        if (cancelled || requestId !== latestRequestIdRef.current) {
           return
         }
 
@@ -121,11 +145,15 @@ function ManageEventPage() {
           clearSavedOrganizerToken(id)
           refreshStoredToken()
           setShowUnlockModal(true)
-          setError('Správa vyžaduje nové odemčení PINem.')
+          setUnlockHint('Správa vyžaduje nové odemčení PINem.')
           return
         }
 
-        setError(loadError.message)
+        if (hasLoadedOnceRef.current) {
+          toast.error(loadError.message, { id: REFRESH_ERROR_TOAST_ID })
+        } else {
+          setError(loadError.message)
+        }
       } finally {
         if (!cancelled) {
           setIsLoading(false)
@@ -154,19 +182,25 @@ function ManageEventPage() {
       }
 
       inFlight = true
+      const requestId = ++latestRequestIdRef.current
 
       try {
-        const nextPayload = await fetchEventPayload(id)
+        const nextPayload = await fetchEventPayload(id, activeToken)
 
-        if (cancelled) {
+        if (cancelled || requestId !== latestRequestIdRef.current) {
           return
         }
 
         setPayload(nextPayload)
+        hasLoadedOnceRef.current = true
         setError('')
       } catch (refreshError) {
-        if (!cancelled) {
-          setError(refreshError.message)
+        if (!cancelled && requestId === latestRequestIdRef.current) {
+          if (hasLoadedOnceRef.current) {
+            toast.error(refreshError.message, { id: REFRESH_ERROR_TOAST_ID })
+          } else {
+            setError(refreshError.message)
+          }
         }
       } finally {
         inFlight = false
@@ -233,6 +267,12 @@ function ManageEventPage() {
   }, [activeToken, id, loadEvent])
 
   async function handleModeration(attendeeId, status) {
+    if (!activeToken) {
+      setShowUnlockModal(true)
+      toast.error('Správa vyžaduje odemčení PINem.')
+      return
+    }
+
     setBusyId(attendeeId)
 
     try {
@@ -421,6 +461,7 @@ function ManageEventPage() {
       setShowUnlockModal(false)
       setManagePin('')
       setError('')
+      setUnlockHint('')
       toast.success('Správa odemčená. Přihlášení je uložené pro příště.')
       await loadEvent()
     } catch (unlockError) {
@@ -433,6 +474,47 @@ function ManageEventPage() {
   if (isLoading) {
     return (
       <PageShell eyebrow="Organizátor" title="Načítám přehled akce…" subtitle="Chvilka, sbírám všechna RSVP na jedno místo." />
+    )
+  }
+
+  if (showUnlockModal && !payload) {
+    return (
+      <PageShell
+        eyebrow="Organizátor"
+        title="Zadej PIN pro správu akce"
+        subtitle={unlockHint || 'Pro vstup do správy akce zadej 4místný správcovský PIN.'}
+      >
+        <main className="grid gap-6">
+          <section className="panel mx-auto w-full max-w-md">
+            <form className="space-y-4" onSubmit={handleUnlockManage}>
+              <div>
+                <label
+                  htmlFor="manage-pin-standalone"
+                  className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300"
+                >
+                  Správcovský PIN
+                </label>
+                <input
+                  id="manage-pin-standalone"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]{4}"
+                  maxLength={4}
+                  className="field"
+                  value={managePin}
+                  onChange={(event) => setManagePin(event.target.value)}
+                  placeholder="1234"
+                  required
+                  autoFocus
+                />
+              </div>
+              <button type="submit" className="primary-button w-full" disabled={isUnlockingManage}>
+                {isUnlockingManage ? 'Ověřuji…' : 'Vstoupit'}
+              </button>
+            </form>
+          </section>
+        </main>
+      </PageShell>
     )
   }
 

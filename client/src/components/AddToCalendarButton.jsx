@@ -32,6 +32,44 @@ function escapeIcsText(value) {
     .replace(/;/g, '\\;')
 }
 
+const icsTextEncoder = new TextEncoder()
+
+// RFC 5545 requires content lines to be folded at 75 octets, with each
+// continuation line prefixed by a single space. Iterating by Unicode code
+// point (not raw string index) keeps multi-byte characters (accents, emoji)
+// intact instead of splitting them across a fold boundary.
+function foldIcsLine(line) {
+  if (icsTextEncoder.encode(line).length <= 75) {
+    return line
+  }
+
+  const segments = []
+  let current = ''
+  let currentBytes = 0
+
+  for (const char of line) {
+    const charBytes = icsTextEncoder.encode(char).length
+    const limit = segments.length === 0 ? 75 : 74
+
+    if (currentBytes + charBytes > limit) {
+      segments.push(current)
+      current = ''
+      currentBytes = 0
+    }
+
+    current += char
+    currentBytes += charBytes
+  }
+
+  segments.push(current)
+
+  return segments.join('\r\n ')
+}
+
+function addHours(date, hours) {
+  return new Date(date.getTime() + hours * 60 * 60 * 1000)
+}
+
 function slugify(value) {
   return String(value || 'udalost')
     .normalize('NFD')
@@ -56,7 +94,9 @@ function downloadIcs(content, fileName) {
 
 function buildIcs(eventData) {
   const nowUtc = toUtcIcsDateTime(new Date())
-  const startUtc = toUtcIcsDateTime(eventData.datetime)
+  const startDate = new Date(eventData.datetime)
+  const startUtc = toUtcIcsDateTime(startDate)
+  const endUtc = toUtcIcsDateTime(addHours(startDate, 3))
   const summary = escapeIcsText(eventData.name)
   const location = escapeIcsText(eventData.location)
   const description = escapeIcsText(eventData.description)
@@ -73,6 +113,7 @@ function buildIcs(eventData) {
     `UID:${uid}`,
     `DTSTAMP:${nowUtc}`,
     `DTSTART:${startUtc}`,
+    `DTEND:${endUtc}`,
     `SUMMARY:${summary}`,
     `LOCATION:${location}`,
     `DESCRIPTION:${description}`,
@@ -84,7 +125,7 @@ function buildIcs(eventData) {
     'END:VEVENT',
     'END:VCALENDAR',
     '',
-  ].join('\r\n')
+  ].map(foldIcsLine).join('\r\n')
 }
 
 function AddToCalendarButton({ eventData }) {

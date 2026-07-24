@@ -6,7 +6,7 @@ import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import PageShell from '../components/PageShell.jsx'
 import { addEventStop, createEvent, getEvent } from '../lib/api.js'
-import { formatDateTime } from '../lib/format.js'
+import { formatDateTime, parseLocalDateTime } from '../lib/format.js'
 import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
 
 function parseTokenFromPath(path) {
@@ -50,6 +50,13 @@ function CreateEventPage() {
 
     if (!form.datetime) {
       toast.error('Vyber datum a čas akce.')
+      return
+    }
+
+    const parsedDatetime = parseLocalDateTime(form.datetime)
+
+    if (!parsedDatetime || parsedDatetime.getTime() <= Date.now()) {
+      toast.error('Datum a čas akce musí být v budoucnosti.')
       return
     }
 
