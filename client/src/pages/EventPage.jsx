@@ -35,7 +35,8 @@ import { supabase } from "../lib/supabase.js";
 const AUTO_REFRESH_MS = 10000;
 const IDENTITY_STORAGE_PREFIX = "ruin-event-identity";
 const PING_SEEN_STORAGE_PREFIX = "ruin-event-last-seen-ping";
-const REFRESH_ERROR_TOAST_ID = "event-refresh-error";
+const PING_COOLDOWN_STORAGE_PREFIX = "ruin-event-ping-cooldown";
+const PING_COOLDOWN_MS = 10 * 60 * 1000;
 
 function normalizeName(value) {
   return value.trim().toLocaleLowerCase("cs-CZ");
@@ -47,6 +48,33 @@ function identityStorageKey(eventId) {
 
 function pingSeenStorageKey(eventId, attendeeName) {
   return `${PING_SEEN_STORAGE_PREFIX}:${eventId}:${normalizeName(attendeeName)}`;
+}
+
+function pingCooldownStorageKey(eventId, targetAttendeeId) {
+  return `${PING_COOLDOWN_STORAGE_PREFIX}:${eventId}:${targetAttendeeId}`;
+}
+
+function readPingCooldownUntil(eventId, targetAttendeeId) {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+
+  const raw = window.localStorage.getItem(
+    pingCooldownStorageKey(eventId, targetAttendeeId),
+  );
+  const parsed = raw ? Number(raw) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function writePingCooldownUntil(eventId, targetAttendeeId, until) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    pingCooldownStorageKey(eventId, targetAttendeeId),
+    String(until),
+  );
 }
 
 function statusLabel(status) {
@@ -113,6 +141,12 @@ function EventPage() {
   const [isReminderOn, setIsReminderOn] = useState(false);
   const [isTogglingReminder, setIsTogglingReminder] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [pingCooldownTick, setPingCooldownTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setPingCooldownTick(Date.now()), 1000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   const hasLoadedOnceRef = useRef(false);
   const latestRequestIdRef = useRef(0);
@@ -432,6 +466,10 @@ function EventPage() {
     }
   }
 
+  function getPingCooldownRemainingMs(targetAttendeeId) {
+    return Math.max(0, readPingCooldownUntil(id, targetAttendeeId) - pingCooldownTick);
+  }
+
   function handlePing(attendeeId) {
     setPingTargetId(attendeeId);
     setPingMessageInput("");
@@ -464,12 +502,17 @@ function EventPage() {
         sessionName || name,
         pingMessageInput,
       );
+      writePingCooldownUntil(id, pingTargetId, Date.now() + PING_COOLDOWN_MS);
       toast.success("Šťouchnutí odeslané.");
       setShowPingComposerModal(false);
       setPingTargetId(null);
       setPingMessageInput("");
       await loadEvent();
     } catch (pingError) {
+      if (pingError.message.includes("10 minut")) {
+        writePingCooldownUntil(id, pingTargetId, Date.now() + PING_COOLDOWN_MS);
+      }
+
       toast.error(pingError.message);
     } finally {
       setPingBusyId(null);
@@ -540,10 +583,29 @@ function EventPage() {
       return;
     }
 
+    // This effect exists specifically to reset the local draft fields from the
+    // server record when it changes (and only when not mid-edit) - there's no
+    // way to do that from render, since these fields must stay mutable for the
+    // user to type into afterward.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedStatus(attendeeStatusToFormStatus(sessionAttendee.status));
     setExcuseReason(sessionAttendee.excuse_reason || "");
     setPhone(sessionAttendee.phone || "");
-  }, [sessionAttendee, isEditingResponse]);
+    // isEditingResponse is deliberately excluded: it must not retrigger this effect
+    // (that would resync from a stale sessionAttendee mid-submit), only gate a run
+    // that already fired because sessionAttendee changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionAttendee]);
+
+  function handleCancelEdit() {
+    if (sessionAttendee) {
+      setSelectedStatus(attendeeStatusToFormStatus(sessionAttendee.status));
+      setExcuseReason(sessionAttendee.excuse_reason || "");
+      setPhone(sessionAttendee.phone || "");
+    }
+
+    setIsEditingResponse(false);
+  }
 
   if (isLoading) {
     return (
@@ -768,7 +830,7 @@ function EventPage() {
                     <button
                       type="button"
                       className="secondary-button w-full justify-center"
-                      onClick={() => setIsEditingResponse(false)}>
+                      onClick={handleCancelEdit}>
                       Zpět
                     </button>
                   ) : null}
@@ -846,6 +908,7 @@ function EventPage() {
             pingBusyId={pingBusyId}
             canPing={Boolean(name.trim())}
             currentName={sessionName || name}
+            getPingCooldownRemainingMs={getPingCooldownRemainingMs}
           />
         </div>
 
