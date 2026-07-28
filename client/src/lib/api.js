@@ -222,6 +222,14 @@ export function unclaimSignupItem(itemId, attendeeName) {
   )
 }
 
+export function removeSignupClaim(itemId, claimAttendeeName, requesterName) {
+  return callRpc(
+    'remove_signup_claim',
+    { p_item_id: itemId, p_claim_attendee_name: claimAttendeeName, p_requester_name: requesterName },
+    'Odebrání se nepodařilo uložit.',
+  )
+}
+
 export function deleteSignupItem(eventId, itemId, token) {
   return callRpc(
     'delete_signup_item',
