@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import CollapsibleCard from './CollapsibleCard.jsx'
-import { addSignupItem, claimSignupItem, deleteSignupItem, getSignupItems, unclaimSignupItem } from '../lib/api.js'
+import { addSignupItem, claimSignupItem, deleteSignupItem, getSignupItems, removeSignupClaim, unclaimSignupItem } from '../lib/api.js'
 import { supabase } from '../lib/supabase.js'
+
+function normalizeName(value) {
+  return (value || '').trim().toLocaleLowerCase('cs-CZ')
+}
 
 const CATEGORY_CONFIG = {
   bring: {
@@ -151,6 +155,19 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
     }
   }
 
+  async function handleRemoveClaim(item, claim) {
+    setBusyItemId(item.id)
+
+    try {
+      await removeSignupClaim(item.id, claim.attendee_name, currentName)
+      await loadItems()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusyItemId(null)
+    }
+  }
+
   async function handleDelete(item) {
     if (!organizerToken) {
       return
@@ -223,6 +240,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
             const claimedSeats = claims.reduce((sum, claim) => sum + claim.seats, 0)
             const isFull = claimedSeats >= item.capacity
             const myClaim = currentName ? claims.find((claim) => claim.attendee_name.toLocaleLowerCase('cs-CZ') === currentName.trim().toLocaleLowerCase('cs-CZ')) : null
+            const isOwnRide = category === 'ride' && currentName?.trim() && normalizeName(item.created_by) === normalizeName(currentName)
 
             return (
               <div key={item.id} className="rounded-2xl border border-slate-200 p-3 dark:border-slate-700">
@@ -231,15 +249,39 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.label}</p>
                     {item.note ? <p className="text-xs text-slate-500 dark:text-slate-400">{item.note}</p> : null}
                     {claims.length > 0 ? (
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {claims.map((claim) => claim.attendee_name).join(', ')} ({claimedSeats}/{item.capacity})
-                      </p>
+                      isOwnRide ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {claims.map((claim) => (
+                            <span
+                              key={claim.id}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/60 py-1 pl-2.5 pr-1.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
+                            >
+                              {claim.attendee_name}
+                              <button
+                                type="button"
+                                className="rounded-full px-1.5 py-0.5 text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                                disabled={busyItemId === item.id}
+                                onClick={() => handleRemoveClaim(item, claim)}
+                              >
+                                Nabídnout výměnu
+                              </button>
+                            </span>
+                          ))}
+                          <span className="text-xs text-slate-400 dark:text-slate-500">({claimedSeats}/{item.capacity})</span>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {claims.map((claim) => claim.attendee_name).join(', ')} ({claimedSeats}/{item.capacity})
+                        </p>
+                      )
                     ) : (
                       <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Zatím nikdo ({item.capacity} volných)</p>
                     )}
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    {myClaim ? (
+                    {isOwnRide ? (
+                      <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">Tvoje nabídka</span>
+                    ) : myClaim ? (
                       <button
                         type="button"
                         className="secondary-button px-3 py-1.5 text-xs"

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function CollapsibleCard({ eyebrow, title, headerActions, defaultOpen = true, children }) {
+function CollapsibleCard({ eyebrow, title, headerActions, defaultOpen = false, children }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
