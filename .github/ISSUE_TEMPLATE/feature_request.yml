@@ -1,0 +1,36 @@
+name: Feature request
+description: Navrh na vylepseni funkcionality
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Mas napad, jak RUin zlepsit? Super, sem s nim.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Jaky problem to resi?
+      description: Co je dnes neprijemne, pomale nebo nejasne.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Navrzene reseni
+      description: Jak by podle tebe mela fungovat nova funkcionalita.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Zvažene alternativy
+      description: Pokud jsi zvazil(a) jine cesty, popis je.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Dopad na uzivatele
+      description: Komu to pomuze a proc je to dulezite.

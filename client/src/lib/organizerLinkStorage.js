@@ -1,5 +1,6 @@
 const ORGANIZER_PATH_KEY = 'ruin-organizer-path'
 const ORGANIZER_TOKENS_KEY = 'ruin-organizer-tokens'
+const MAX_SAVED_ORGANIZER_TOKENS = 30
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -108,7 +109,17 @@ export function saveOrganizerToken(eventId, token) {
   }
 
   const map = readOrganizerTokensMap()
+  const isNewEntry = !(eventId in map)
   map[eventId] = token
+
+  if (isNewEntry) {
+    const keys = Object.keys(map)
+
+    while (keys.length > MAX_SAVED_ORGANIZER_TOKENS) {
+      delete map[keys.shift()]
+    }
+  }
+
   writeOrganizerTokensMap(map)
 }
 

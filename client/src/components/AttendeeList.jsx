@@ -1,5 +1,12 @@
 import { summaryText } from '../lib/format.js'
 
+function formatCooldownRemaining(ms) {
+  const totalSeconds = Math.ceil(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
 const statusConfig = {
   confirmed: {
     label: 'Potvrzeno',
@@ -42,6 +49,7 @@ function AttendeeList({
   onDelete,
   deleteBusyId,
   showPhone = false,
+  getPingCooldownRemainingMs,
 }) {
   const normalizedCurrentName = currentName.trim().toLocaleLowerCase('cs-CZ')
 
@@ -91,6 +99,11 @@ function AttendeeList({
                       {config.icon} {attendee.name}
                     </span>
                     <span className={`status-chip ${config.tone}`}>{config.label}</span>
+                    {attendee.checked_in_at ? (
+                      <span className="status-chip bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950/60 dark:text-fuchsia-300">
+                        📍 Dorazil/a
+                      </span>
+                    ) : null}
                   </div>
                   {attendee.excuse_reason ? (
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
@@ -168,14 +181,25 @@ function AttendeeList({
 
                 {showPingAction ? (
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="secondary-button border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 hover:bg-fuchsia-100 dark:border-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200"
-                      disabled={!canPing || pingBusyId === attendee.id}
-                      onClick={() => onPing(attendee.id)}
-                    >
-                      {pingBusyId === attendee.id ? 'Šťouchám…' : 'Šťouchnout'}
-                    </button>
+                    {(() => {
+                      const cooldownMs = getPingCooldownRemainingMs?.(attendee.id) ?? 0
+                      const onCooldown = cooldownMs > 0
+
+                      return (
+                        <button
+                          type="button"
+                          className="secondary-button border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 hover:bg-fuchsia-100 dark:border-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200"
+                          disabled={!canPing || pingBusyId === attendee.id || onCooldown}
+                          onClick={() => onPing(attendee.id)}
+                        >
+                          {pingBusyId === attendee.id
+                            ? 'Šťouchám…'
+                            : onCooldown
+                              ? `Znovu za ${formatCooldownRemaining(cooldownMs)}`
+                              : 'Šťouchnout'}
+                        </button>
+                      )
+                    })()}
                   </div>
                 ) : null}
               </div>

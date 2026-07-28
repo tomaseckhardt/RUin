@@ -1,0 +1,23 @@
+{
+  "name": "RUin?",
+  "short_name": "RUin?",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1c1c1e",
+  "theme_color": "#6f4cff",
+  "icons": [
+    {
+      "src": "/ruinfavicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/ruinfavicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
