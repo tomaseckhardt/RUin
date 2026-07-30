@@ -221,9 +221,9 @@ supabase secrets set VAPID_SUBJECT=mailto:tvuj@email.cz
 supabase functions deploy send-event-reminders --no-verify-jwt
 ```
 
-**5. Naplánuj pravidelné spouštění** (např. každých 15-30 minut), ať se stihne poslat "den předem" i "hodinu předem" upozornění včas. Nejjednodušší cesta je Supabase dashboard: `Edge Functions -> send-event-reminders -> Cron Jobs` a nastavit schedule (např. `*/15 * * * *`).
+**5. Naplánuj pravidelné spouštění** (např. každých 15-30 minut), ať se stihne poslat "den předem" i "hodinu předem" upozornění včas. Funkce běží s `--no-verify-jwt`, takže sama vyžaduje hlavičku `Authorization: Bearer <service-role-key>` - bez ní vrátí 401 (viz komentář v `index.ts`). Přes Supabase dashboard (`Edge Functions -> send-event-reminders -> Cron Jobs`) je potřeba při nastavení schedule (např. `*/15 * * * *`) tuhle hlavičku ručně přidat do "HTTP Headers" sekce cron jobu.
 
-Alternativa přes SQL (pokud má projekt zapnuté `pg_cron` + `pg_net` rozšíření v `Database -> Extensions`):
+Alternativa přes SQL (pokud má projekt zapnuté `pg_cron` + `pg_net` rozšíření v `Database -> Extensions`) - hlavičku už obsahuje:
 
 ```sql
 select cron.schedule(
@@ -250,9 +250,9 @@ Akce, kterým je 7+ dní po termínu, se mažou automaticky - ale samotné soubo
 supabase functions deploy cleanup-expired-events --no-verify-jwt
 ```
 
-**2. Naplánuj pravidelné spouštění** (denně bohatě stačí, expirace není časově kritická). Nejjednodušší cesta je Supabase dashboard: `Edge Functions -> cleanup-expired-events -> Cron Jobs`, schedule např. `0 3 * * *` (každý den ve 3:00).
+**2. Naplánuj pravidelné spouštění** (denně bohatě stačí, expirace není časově kritická). Funkce vyžaduje stejnou hlavičku `Authorization: Bearer <service-role-key>` jako `send-event-reminders` výše. Přes Supabase dashboard (`Edge Functions -> cleanup-expired-events -> Cron Jobs`, schedule např. `0 3 * * *`) ji přidej ručně do "HTTP Headers" sekce.
 
-Alternativa přes SQL (`pg_cron` + `pg_net`):
+Alternativa přes SQL (`pg_cron` + `pg_net`) - hlavičku už obsahuje:
 
 ```sql
 select cron.schedule(

@@ -11,6 +11,15 @@
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are provided automatically by the runtime.
 // Trigger this function on a schedule (every 15-30 min) via pg_cron+pg_net or the
 // Supabase dashboard's Cron Jobs feature — see supabase/sql/all-phases.sql.
+//
+// --no-verify-jwt means the Supabase gateway itself performs no auth check on
+// this endpoint - anyone who finds the URL (trivially derivable from the
+// project ref, which is public in the frontend bundle) could otherwise call
+// it directly, on demand, as many times as they like. The handler below
+// requires the caller to send `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`
+// itself - whichever scheduler triggers this (pg_cron+pg_net or the
+// dashboard's Cron Jobs UI) must be configured to send that header. See
+// "Automatické připomínky před akcí" in README.md.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
@@ -107,11 +116,18 @@ async function processReminder(reminder) {
   return { sentCount, failedCount }
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   if (!supabase) {
     return new Response(
       JSON.stringify({ error: 'Server misconfigured: missing secrets.' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  if (req.headers.get('authorization') !== `Bearer ${serviceRoleKey}`) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized.' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
     )
   }
 

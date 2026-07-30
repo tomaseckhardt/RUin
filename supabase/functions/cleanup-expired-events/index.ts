@@ -16,6 +16,12 @@
 // Trigger this function on a schedule (daily is plenty - expiry isn't time-critical)
 // via the Supabase dashboard's Cron Jobs feature, or pg_cron+pg_net - see
 // get_expired_event_ids() in supabase/sql/all-phases.sql.
+//
+// --no-verify-jwt means the Supabase gateway itself performs no auth check on
+// this endpoint - the handler below requires the caller to send
+// `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` itself, so whichever
+// scheduler triggers this must be configured to send that header. See
+// "Automatický úklid expirovaných akcí" in README.md.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -88,11 +94,18 @@ async function removeEventPhotos(eventId) {
   return { removedCount: paths.length, succeeded: true }
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   if (!supabase) {
     return new Response(
       JSON.stringify({ error: 'Server misconfigured: missing secrets.' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  if (req.headers.get('authorization') !== `Bearer ${serviceRoleKey}`) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized.' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
     )
   }
 
