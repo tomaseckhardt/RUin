@@ -149,6 +149,22 @@ function EventPage() {
     return () => clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    // Invite links are #/event/:id (HashRouter) - navigating from one event's
+    // link straight to another's, in the same tab, doesn't remount this
+    // component, so identity state seeded from `initialIdentity` at mount
+    // time would otherwise keep pointing at the previous event forever.
+    const storedIdentity =
+      typeof window === "undefined"
+        ? ""
+        : window.localStorage.getItem(identityStorageKey(id)) || "";
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setName(storedIdentity);
+    setSessionName(storedIdentity);
+    setIsIdentityLocked(Boolean(storedIdentity));
+  }, [id]);
+
   const hasLoadedOnceRef = useRef(false);
   const latestRequestIdRef = useRef(0);
   const sessionNameRef = useRef(sessionName);
