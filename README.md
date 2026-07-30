@@ -12,12 +12,13 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
 - [Požadavky](#pozadavky)
 - [Rychlý start lokálně](#rychly-start-lokalne)
 - [Konfigurace prostředí](#konfigurace-prostredi)
-- [Supabase setup (SQL fáze)](#supabase-setup-sql-faze)
-- [Scénáře nasazení databáze](#scenare-nasazeni-databaze)
+- [Supabase setup (SQL)](#supabase-setup-sql)
 - [NPM skripty](#npm-skripty)
 - [Nasazení na GitHub Pages](#nasazeni-na-github-pages)
 - [Jak funguje routing na Pages](#jak-funguje-routing-na-pages)
 - [Push notifikace a service worker](#push-notifikace-a-service-worker)
+  - [Automatické připomínky před akcí](#automaticke-pripominky-pred-akci-den-predem--hodinu-predem)
+  - [Automatický úklid expirovaných akcí](#automaticky-uklid-expirovanych-akci-fotky-ze-storage)
 - [Pravidla pro contributory](#pravidla-pro-contributory)
 - [Community standards](#community-standards)
 - [Troubleshooting](#troubleshooting)
@@ -54,8 +55,8 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
   - `src/lib/` - API vrstva, Supabase klient, helpery
   - `src/test/` - sdílené testovací helpery a Jest setup
   - `public/sw.js` - service worker (PWA/push)
-- `supabase/sql/` - SQL skripty po jednotlivých fázích
-- `supabase/functions/` - Edge Functions pro push dispatch
+- `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
+- `supabase/functions/` - Edge Functions (push připomínky, úklid expirovaných akcí)
 - `scripts/audit-a11y.mjs` - a11y audit postaveného buildu (Puppeteer + axe-core)
 - `.github/workflows/deploy-pages.yml` - CI/CD workflow pro GitHub Pages
 
@@ -92,145 +93,38 @@ Poznámka:
 - místo `VITE_SUPABASE_ANON_KEY` lze použít i `VITE_SUPABASE_PUBLISHABLE_KEY`
 - bez těchto hodnot aplikace spadne hned při startu (záměrně, kvůli jasné chybě konfigurace)
 
-## Supabase setup (SQL fáze)
+## Supabase setup (SQL)
 
-SQL skripty v `supabase/sql` spouštěj postupně podle čísel:
-
-1. `phase-1-schema.sql`
-2. `phase-2-rpc.sql`
-3. `phase-3-rls.sql`
-4. `phase-4-datetime-local-fix.sql`
-5. `phase-5-push-notifications.sql`
-6. `phase-6-phone-and-overview.sql`
-7. `phase-7-realtime-tick-fk-hotfix.sql`
-8. `phase-8-update-event-details.sql`
-9. `phase-9-unique-phone-per-event.sql`
-10. `phase-10-push-reminders.sql`
-11. `phase-11-community-features.sql`
-12. `phase-12-poll-vote-fixes.sql`
-13. `phase-13-ping-cooldown.sql`
-14. `phase-14-security-hardening.sql`
-15. `phase-15-storage-and-poll-cleanup.sql`
-
-Co dělá každá fáze:
-
-1. `phase-1-schema.sql`
-
-- Vytvoří základní tabulky (`events`, `attendees`, `attendee_pings`, `event_chat_messages`, `organizer_pin_attempts`).
-- Přidá indexy a unikátní omezení (např. jedno RSVP na jméno v rámci eventu, case-insensitive).
-- Připraví trigger pro normalizaci chat zpráv a základní realtime publikaci chatu.
-
-2. `phase-2-rpc.sql`
-
-- Zavede hlavní RPC funkce pro aplikaci (create/get event, submit RSVP, ping, moderation, delete).
-- Přidá pomocné funkce (`_random_token`, `_delete_expired_events`) a granty pro `anon`/`authenticated`.
-- Sjednotí chování backendu do SQL funkcí se stejnými validačními hláškami.
-
-3. `phase-3-rls.sql`
-
-- Zapne a zpřísní RLS pro klíčové tabulky.
-- Zablokuje přímý přístup na tabulky z klienta a nechá flow běžet přes RPC.
-- Nastaví kontrolovaná pravidla pro čtení/vkládání chat zpráv.
-
-4. `phase-4-datetime-local-fix.sql`
-
-- Opraví práci s datem/časem na lokální `timestamp without time zone` (bez timezone posunů).
-- Doplňuje kompatibilní změny pro starší projekty (PIN sloupce, chat/ping struktura, funkce).
-- Reaplikuje navazující funkce/policy tak, aby vše fungovalo po změně typu času.
-
-5. `phase-5-push-notifications.sql`
-
-- Přidá `event_realtime_ticks` a triggery pro realtime refresh payloadu (event/attendee/ping).
-- Připraví realtime tok pro změny účastníků a šťouchnutí.
-- Uklidí starou push job/subscription strukturu (drop legacy objektů).
-
-6. `phase-6-phone-and-overview.sql`
-
-- Přidá volitelný sběr telefonu (`events.require_phone`, `attendees.phone`).
-- Rozšíří `create_event`, `submit_rsvp`, `get_event_payload` a `update_event` o nové atributy.
-- Umožní frontendu zobrazovat přehledy včetně telefonu a requirePhone flagu.
-
-7. `phase-7-realtime-tick-fk-hotfix.sql`
-
-- Hotfix funkce `emit_event_realtime_tick` proti FK chybám při mazání/expiraci eventů.
-- Vkládá realtime tick jen pokud event ještě existuje.
-
-8. `phase-8-update-event-details.sql`
-
-- Rozšiřuje organizátorskou editaci detailů akce (název, místo, datum/čas).
-- Aktualizuje a grantuje `update_event` funkci pro klienta.
-
-9. `phase-9-unique-phone-per-event.sql`
-
-- Zavede normalizaci telefonu (`normalize_phone`) a unikátní index telefonu v rámci eventu.
-- Přidá ochranu proti duplicitě čísla u jiného jména v `submit_rsvp`.
-- Migrace schválně selže, pokud už v datech duplicity existují (aby nevznikl rozbitý index).
-
-10. `phase-10-push-reminders.sql`
-
-- Přidá `push_subscriptions` (přihlášení k odběru Web Push notifikací) a `event_reminders_sent` (aby se stejná připomínka neposlala dvakrát).
-- Zavede RPC `register_push_subscription`/`unregister_push_subscription` pro klienta a `get_pending_event_reminders`/`get_push_subscriptions_for_event`/`mark_event_reminder_sent`/`delete_push_subscription_by_endpoint` pro Edge Function (grant jen pro `service_role`).
-- Vyžaduje ještě nasazení Edge Function a scheduled joby — viz [Push notifikace a service worker](#push-notifikace-a-service-worker).
-
-11. `phase-11-community-features.sql`
-
-- Check-in (`checked_in_at` na `attendees`, RPC `check_in_attendee`).
-- Emoji reakce na chatové zprávy (`event_chat_message_reactions`, RPC `toggle_chat_reaction`).
-- Seznamy "kdo co nese" / spolujízda (`event_signup_items` + `event_signup_claims`, kategorie `bring`/`ride`).
-- Vícero zastávek za večer (`event_stops`).
-- Ankety na termín/místo před založením akce (`event_polls`, `event_poll_options`, `event_poll_votes`) — hlasování má veřejný a tvůrčí (token) odkaz stejně jako akce, `finalize_event_poll` z vítězné možnosti rovnou zavolá `create_event`.
-- Fotky z akce (`event_photos` + Storage bucket `event-photos`, veřejný pro čtení).
-
-12. `phase-12-poll-vote-fixes.sql`
-
-- Opravuje `vote_event_poll`, aby porovnávalo jméno hlasujícího case-insensitive (`"Tomáš"` a `"tomáš"` teď počítá jako stejný hlas, ne dva různé).
-- Přidává unique index `event_poll_votes_poll_voter_lower_uidx` místo původního case-sensitive omezení.
-
-13. `phase-13-ping-cooldown.sql`
-
-- Mění `ping_attendee` z "jedno šťouchnutí od stejné osoby na daného účastníka navždy" na opakovatelný cooldown - stejnou osobu lze šťouchnout znovu, jakmile uplyne 10 minut od posledního šťouchnutí (atomický `on conflict ... do update ... where`, bez samostatného race-prone kontrolního selectu).
-- Zapíná RLS na `attendee_pings` a přidává deny-by-default policy (tabulka dřív vůbec neměla RLS, takže šlo číst/zapisovat/mazat pingy přímo přes anon klíč, mimo `ping_attendee` a jeho validace).
-
-14. `phase-14-security-hardening.sql`
-
-- Opravuje `_random_token`, aby místo nekryptografického `random()` používal `pgcrypto`/`gen_random_bytes()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`, tak by měl vznikat z bezpečného zdroje náhodnosti).
-- Mění `get_event_payload` tak, aby telefonní čísla účastníků vracelo jen s platným `p_organizer_token` - dřív je viděl v network response kdokoli s veřejným odkazem na akci, i když je UI hostům nikdy nezobrazovalo.
-- Opravuje race podmínku v `moderate_attendee` (kontrola stavu teď je součástí `UPDATE ... WHERE`, ne samostatný předchozí SELECT).
-- `submit_rsvp` teď při souběžném konfliktu na telefonním čísle vrátí srozumitelnou českou hlášku místo syrové Postgres chyby o porušení unique indexu.
-- Maže nepoužívanou tabulku `organizer_pin_attempts` (vytvořená, ale nikdy nezapisovaná ani nečtená, a bez RLS).
-- Záměrně neřeší: `organizer_token` zůstává uložený v čitelné podobě (ne jako hash) - appka totiž umí přes PIN "obnovit" zapomenutý manage odkaz (`get_organizer_path_with_pin` ho musí umět vrátit zpátky), což s jednosměrným hashem nejde bez přestavby celého recovery flow. Je to vědomý kompromis, ne přehlédnutí.
-
-**Důležité:** od fáze 14 posílá klient do `get_event_payload` navíc parametr `p_organizer_token` (viz `client/src/lib/api.js`). Pokud fáze 14 neběží na stejném Supabase projektu, jako na který ukazuje `.env.local`, appka přestane fungovat s chybou `Could not find the function public.get_event_payload(...) in the schema cache` (PostgREST nenajde odpovídající signaturu funkce) - klient a databázové schéma musí být vždycky na stejné verzi.
-
-15. `phase-15-storage-and-poll-cleanup.sql`
-
-- Mazání akce (organizátorem, nebo automaticky 7 dní po termínu) dřív smazalo jen `event_photos` řádky přes FK cascade - samotné soubory ve Storage bucketu `event-photos` zůstávaly navždy ležet, bez jakékoli reference, přes kterou by šly znovu najít. Teď se při obou cestách mazání smažou i odpovídající `storage.objects`.
-- Ankety (`event_polls`) dostávají vlastní životní cyklus - dřív neměly žádnou expiraci, protože nejsou `events` řádek, dokud se nefinalizují:
-  - nefinalizovaná anketa se smaže 14 dní od vytvoření, pokud ji nikdo nedotáhne do konce
-  - finalizovaná anketa zaniká automaticky spolu s akcí, která z ní vznikla (`finalized_event_id` teď má `on delete cascade` - dřív neměla FK žádnou `on delete` akci vůbec, takže mazání/expirace finalizované akce spadlo na porušení cizího klíče a akce (včetně fotek) se nikdy nesmazala)
-
-Doporučení:
-
-- spouštěj je v Supabase SQL Editoru na stejném projektu, který používáš v `.env.local`
-- po nasazení nové fáze otestuj vytvoření akce, RSVP i detail akce
-- pokud chceš setup jedním během, použij `supabase/sql/all-phases.sql`
-
-## Scénáře nasazení databáze
-
-### A) Nový (čistý) Supabase projekt
-
-Použij jeden soubor:
+Celé databázové schéma žije v jednom souboru:
 
 ```sql
--- spusť celý obsah souboru
+-- spusť celý obsah souboru v Supabase SQL Editoru
 supabase/sql/all-phases.sql
 ```
 
-Tohle je nejrychlejší cesta pro clean install.
+Žádné samostatné "fáze" k ručnímu skládání - `all-phases.sql` je jediný zdroj pravdy a při každé další změně schématu se upravuje přímo on (ne nový soubor vedle). Je napsaný idempotentně (`create table if not exists`, `create or replace function`, `drop policy/trigger if exists` před každým `create`, `on conflict do nothing` u jediného top-level insertu), takže ho lze bezpečně spustit znovu celý i na projektu, který už část schématu má - Postgres jen přeskočí nebo nahradí to, co už existuje.
 
-### B) Existující projekt na starší verzi
+Co všechno `all-phases.sql` obsahuje:
 
-Spouštěj fáze postupně od aktuálního stavu nahoru. Pokud si nejsi jistý, kde projekt skončil, je bezpečnější projít SQL fáze ručně v pořadí a sledovat případné chyby v SQL Editoru.
+- Základní schéma: `events`, `attendees`, `attendee_pings`, `event_chat_messages`, RLS na klíčových tabulkách, RPC funkce pro create/get event, submit RSVP, ping, moderaci a mazání.
+- Lokální datum/čas bez timezone posunů.
+- Realtime refresh payloadu (`event_realtime_ticks` + triggery) při změně účastníků/šťouchnutí.
+- Volitelný sběr telefonu (`events.require_phone`, `attendees.phone`) s normalizací a unikátním indexem proti duplicitě čísla v rámci akce.
+- Organizátorská editace detailů akce (název, místo, datum/čas).
+- Web Push připomínky (`push_subscriptions`, `event_reminders_sent`, RPC pro klienta i pro Edge Function) - vyžaduje ještě nasazení Edge Function a scheduled joby, viz [Push notifikace a service worker](#push-notifikace-a-service-worker).
+- Komunitní prvky: check-in, emoji reakce na chat, seznamy "kdo co nese" / spolujízda, vícero zastávek za večer, ankety na termín/místo před založením akce (s vlastním veřejným i tvůrčím odkazem), fotky z akce (Storage bucket `event-photos`).
+- Case-insensitive hlasování v anketách.
+- Šťouchnutí s opakovatelným 10minutovým cooldownem místo "jednou navždy" (atomický `on conflict ... do update ... where`), s RLS na `attendee_pings`.
+- Bezpečnostní hardening: `_random_token` přes `pgcrypto`/`gen_random_bytes()` místo nekryptografického `random()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` vrací telefonní čísla jen s platným `p_organizer_token`; opravená race podmínka v `moderate_attendee`; srozumitelná hláška místo syrové Postgres chyby při konfliktu telefonního čísla. Záměrně neřeší: `organizer_token` zůstává čitelný (ne hash), protože appka přes PIN umí "obnovit" zapomenutý manage odkaz a to s jednosměrným hashem nejde bez přestavby celého recovery flow.
+- Mazání fotek ze Storage při zániku akce (dřív zůstávaly navždy ležet bez reference) - ruční mazání jde přes klientské Storage API, automatické po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` (viz [Automatický úklid expirovaných akcí](#automaticky-uklid-expirovanych-akci-fotky-ze-storage)) - a vlastní životní cyklus anket (nefinalizovaná zanikne 14 dní od vytvoření, finalizovaná automaticky spolu s akcí, co z ní vznikla).
+- Blokace přihlášení řidiče na vlastní nabídku odvozu + možnost odebrat konkrétního spolujezdce z vlastní nabídky.
+
+**Důležité:** klient posílá do `get_event_payload` parametr `p_organizer_token` a do `remove_signup_claim`/`claim_signup_item` odpovídající kontroly (viz `client/src/lib/api.js`). Pokud `all-phases.sql` neběží na stejném Supabase projektu, jako na který ukazuje `.env.local`, appka přestane fungovat s chybou `Could not find the function ... in the schema cache` (PostgREST nenajde odpovídající signaturu funkce) - klient a databázové schéma musí být vždycky na stejné verzi.
+
+Doporučení:
+
+- spouštěj v Supabase SQL Editoru na stejném projektu, který používáš v `.env.local`
+- po každém spuštění otestuj vytvoření akce, RSVP i detail akce
 
 ## NPM skripty
 
@@ -316,7 +210,7 @@ VITE_VAPID_PUBLIC_KEY=tvuj-vygenerovany-public-key
 
 Stejnou hodnotu přidej i jako repository variable `VITE_VAPID_PUBLIC_KEY` pro GitHub Pages build (viz [Nasazení na GitHub Pages](#nasazeni-na-github-pages)).
 
-**3. Spusť `supabase/sql/SQL-phases/phase-10-push-reminders.sql`** v Supabase SQL Editoru.
+**3. Ověř, že máš puštěný `supabase/sql/all-phases.sql`** v Supabase SQL Editoru (obsahuje i push reminders schéma).
 
 **4. Nastav secrets a nasaď Edge Function:**
 
@@ -345,6 +239,35 @@ select cron.schedule(
 ```
 
 Bez kroků 3-5 se tlačítko připomínky v appce zobrazí a subscription se uloží, ale žádná notifikace nikdy nepřijde — dokud Edge Function neběží na scheduleru, nemá kdo `get_pending_event_reminders()` vyzvednout a poslat.
+
+### Automatický úklid expirovaných akcí (fotky ze Storage)
+
+Akce, kterým je 7+ dní po termínu, se mažou automaticky - ale samotné soubory v `event-photos` Storage bucketu nejde smazat přímo z SQL (tenhle Supabase projekt to odmítá hláškou `"Direct deletion from storage tables is not allowed. Use the Storage API instead."`). Úklid fotek proto zajišťuje samostatná scheduled Edge Function přes Storage Admin API:
+
+**1. Nasaď Edge Function:**
+
+```bash
+supabase functions deploy cleanup-expired-events --no-verify-jwt
+```
+
+**2. Naplánuj pravidelné spouštění** (denně bohatě stačí, expirace není časově kritická). Nejjednodušší cesta je Supabase dashboard: `Edge Functions -> cleanup-expired-events -> Cron Jobs`, schedule např. `0 3 * * *` (každý den ve 3:00).
+
+Alternativa přes SQL (`pg_cron` + `pg_net`):
+
+```sql
+select cron.schedule(
+  'cleanup-expired-events',
+  '0 3 * * *',
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/cleanup-expired-events',
+    headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>')
+  );
+  $$
+);
+```
+
+Bez tohohle kroku se expirované akce (a jejich DB řádky) po 7 dnech pořád smažou normálně - jen jejich fotky zůstanou ležet ve Storage bez reference. Ruční mazání (organizátor smaže akci/fotku z appky) funguje bez závislosti na téhle Edge Function - to jde přes klientské Storage API rovnou (`client/src/lib/supabase.js`).
 
 ## Pravidla pro contributory
 
@@ -388,4 +311,4 @@ Správa akce je vázaná na token v manage URL. Bez správného tokenu není mo�
 
 ### Chyba "Could not find the function ... in the schema cache"
 
-Klientský kód posílá RPC volání s parametry, které aktuální databázové schéma nezná (typicky po `git pull`, když ještě neběžela nejnovější SQL fáze). Zkontroluj `supabase/sql/SQL-phases/`, najdi fáze novější než ta poslední, kterou jsi spustil/a na svém projektu, a doplň je (nebo spusť celý `all-phases.sql` znovu - je idempotentní). Frontend a databázové schéma musí být vždy na stejné verzi.
+Klientský kód posílá RPC volání s parametry, které aktuální databázové schéma nezná (typicky po `git pull`, když ještě neběžel nejnovější `all-phases.sql`). Spusť celý `supabase/sql/all-phases.sql` znovu - je idempotentní, takže bezpečně doplní jen to, co chybí. Frontend a databázové schéma musí být vždy na stejné verzi.

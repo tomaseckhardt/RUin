@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import JSZip from 'jszip'
 import { deleteEventPhoto, getEventPhotoUrl, getEventPhotos, recordEventPhoto, uploadEventPhoto } from '../lib/api.js'
+import { supabase } from '../lib/supabase.js'
 
 function normalizeName(value) {
   return (value || '').trim().toLocaleLowerCase('cs-CZ')
@@ -82,9 +83,15 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     }
   }
 
-  async function handleDelete(photoId) {
+  async function handleDelete(photo) {
     try {
-      await deleteEventPhoto(eventId, organizerToken, photoId)
+      const { error: storageError } = await supabase.storage.from('event-photos').remove([photo.storage_path])
+
+      if (storageError) {
+        toast.warning('Fotku se nepodařilo smazat z úložiště, záznam ale zmizí.')
+      }
+
+      await deleteEventPhoto(eventId, organizerToken, photo.id)
       await loadPhotos()
     } catch (error) {
       toast.error(error.message)
@@ -181,7 +188,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation()
-                    handleDelete(photo.id)
+                    handleDelete(photo)
                   }}
                   className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
                 >
