@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import CollapsibleCard from './CollapsibleCard.jsx'
 import { addEventStop, deleteEventStop, getEventStops } from '../lib/api.js'
-import { supabase } from '../lib/supabase.js'
+import { subscribeToEventTicks } from '../lib/realtimeTick.js'
 
 function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
   const [stops, setStops] = useState([])
@@ -25,19 +25,15 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
 
   useEffect(() => {
     // Fetch-on-mount-and-eventId-change, refreshed again by the realtime
-    // subscription below - there's no external system to "subscribe" to for
-    // the initial load itself, so this has to call loadStops directly.
+    // tick subscription below - there's no external system to "subscribe" to
+    // for the initial load itself, so this has to call loadStops directly.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadStops()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId])
 
-    const channel = supabase
-      .channel(`event-stops:${eventId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_stops', filter: `event_id=eq.${eventId}` }, loadStops)
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+  useEffect(() => {
+    return subscribeToEventTicks(eventId, ['stop'], loadStops)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
 
