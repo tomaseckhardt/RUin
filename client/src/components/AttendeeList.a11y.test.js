@@ -61,9 +61,9 @@ describe('AttendeeList - Accessibility', () => {
       <AttendeeList attendees={mockAttendees} summary={mockSummary} />
     )
     
-    expect(screen.getByText('Alice')).toBeInTheDocument()
-    expect(screen.getByText('Bob')).toBeInTheDocument()
-    expect(screen.getByText('Charlie')).toBeInTheDocument()
+    expect(screen.getByText(/Alice/)).toBeInTheDocument()
+    expect(screen.getByText(/Bob/)).toBeInTheDocument()
+    expect(screen.getByText(/Charlie/)).toBeInTheDocument()
   })
 
   it('should display attendee status information', () => {
@@ -81,7 +81,7 @@ describe('AttendeeList - Accessibility', () => {
       <AttendeeList attendees={mockAttendees} summary={mockSummary} />
     )
     
-    expect(screen.getByText('1 přijde')).toBeInTheDocument()
+    expect(screen.getByText('1 přijde · 1 se omluvili')).toBeInTheDocument()
     expect(screen.getByText(/omluvenk/)).toBeInTheDocument()
   })
 
