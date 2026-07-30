@@ -4,7 +4,6 @@ export default {
   moduleNameMapper: {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
-  transform: {},
   testMatch: ['<rootDir>/src/**/*.test.js', '<rootDir>/src/**/*.spec.js'],
   collectCoverageFrom: [
     'src/**/*.{js,jsx}',

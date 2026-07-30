@@ -11,7 +11,7 @@ import WeatherWidget from '../components/WeatherWidget.jsx'
 import EventStops from '../components/EventStops.jsx'
 import SignupBoard from '../components/SignupBoard.jsx'
 import PhotoGallery from '../components/PhotoGallery.jsx'
-import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
+import { deleteAttendee, getEvent, getEventPhotos, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
 import { supabase } from '../lib/supabase.js'
@@ -302,6 +302,18 @@ function ManageEventPage() {
     setIsDeleting(true)
 
     try {
+      const photos = await getEventPhotos(id).catch(() => [])
+
+      if (photos.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from('event-photos')
+          .remove(photos.map((photo) => photo.storage_path))
+
+        if (storageError) {
+          toast.warning('Fotky se nepodařilo smazat z úložiště, akce ale zmizí.')
+        }
+      }
+
       await removeEvent(id, activeToken)
       clearSavedOrganizerToken(id)
       toast.success('Akce byla smazaná.')
