@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import JSZip from 'jszip'
+import ModalOverlay from './ModalOverlay.jsx'
 import { deleteEventPhoto, getEventPhotoUrl, getEventPhotos, recordEventPhoto, uploadEventPhoto } from '../lib/api.js'
 import { supabase } from '../lib/supabase.js'
 
@@ -201,10 +202,10 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
       )}
 
       {lightboxIndex !== null && photos[lightboxIndex] ? (
-        <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <ModalOverlay open onClose={() => setLightboxIndex(null)} labelledBy="photo-lightbox-title">
           <div className="flex max-h-[90dvh] w-full max-w-3xl flex-col items-center gap-4 p-4">
             <div className="flex w-full items-center justify-between gap-3 text-slate-100">
-              <p className="text-sm">
+              <p id="photo-lightbox-title" className="text-sm">
                 Fotka od {photos[lightboxIndex].uploaded_by} · {lightboxIndex + 1} / {photos.length}
               </p>
               <button type="button" className="secondary-button" onClick={() => setLightboxIndex(null)}>
@@ -242,7 +243,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
               ) : null}
             </div>
           </div>
-        </section>
+        </ModalOverlay>
       ) : null}
     </section>
   )

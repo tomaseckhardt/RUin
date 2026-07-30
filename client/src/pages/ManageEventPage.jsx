@@ -5,6 +5,7 @@ import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import AttendeeList from '../components/AttendeeList.jsx'
 import EventChat from '../components/EventChat.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
+import ModalOverlay from '../components/ModalOverlay.jsx'
 import PageShell from '../components/PageShell.jsx'
 import ShareInviteModal from '../components/ShareInviteModal.jsx'
 import WeatherWidget from '../components/WeatherWidget.jsx'
@@ -537,7 +538,7 @@ function ManageEventPage() {
   }
 
   const { event, attendees, summary } = payload
-  const organizerName = attendees[0]?.name || ''
+  const organizerName = event.organizerName || ''
 
   return (
     <PageShell
@@ -697,199 +698,191 @@ function ManageEventPage() {
           datetime={event.datetime}
         />
 
-        {showPingComposerModal ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Šťouchnout účastníka</p>
-              <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Přidej zprávu</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.</p>
+        <ModalOverlay open={showPingComposerModal} onClose={closePingComposerModal} labelledBy="manage-ping-composer-title">
+          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+            <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Šťouchnout účastníka</p>
+            <h3 id="manage-ping-composer-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Přidej zprávu</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.</p>
 
-              <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Zpráva</label>
-                  <textarea
-                    className="field min-h-24"
-                    value={pingMessageInput}
-                    onChange={(event) => setPingMessageInput(event.target.value.slice(0, 280))}
-                    placeholder="Hej, pojď s náma!"
-                    disabled={pingBusyId !== null}
-                    autoFocus
-                  />
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Zbývá {280 - pingMessageInput.length} znaků</p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button type="button" className="secondary-button flex-1 justify-center" onClick={closePingComposerModal}>
-                    Zrušit
-                  </button>
-                  <button type="submit" className="primary-button flex-1" disabled={pingBusyId !== null}>
-                    {pingBusyId !== null ? 'Šťouchám…' : 'Odeslat'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </section>
-        ) : null}
-
-        {showEditEventModal ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
-              <div className="mb-5">
-                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Upravit akci</p>
-                <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Změň základní údaje</h3>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Můžeš přepsat název, místo i termín. Změna se hned promítne do pozvánky.</p>
+            <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Zpráva</label>
+                <textarea
+                  className="field min-h-24"
+                  value={pingMessageInput}
+                  onChange={(event) => setPingMessageInput(event.target.value.slice(0, 280))}
+                  placeholder="Hej, pojď s náma!"
+                  disabled={pingBusyId !== null}
+                  autoFocus
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Zbývá {280 - pingMessageInput.length} znaků</p>
               </div>
 
-              <form className="space-y-4" onSubmit={handleSubmitEventEdit}>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Název akce</label>
-                  <input
-                    className="field"
-                    value={eventForm.name}
-                    onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
-                    placeholder="Např. Letní gril"
-                    required
-                    autoFocus
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Místo</label>
-                  <input
-                    className="field"
-                    value={eventForm.location}
-                    onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
-                    placeholder="Např. Stromovka"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Datum a čas</label>
-                  <EventDateTimePicker
-                    value={eventForm.datetime}
-                    onChange={(nextValue) => setEventForm((current) => ({ ...current, datetime: nextValue }))}
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <button type="button" className="secondary-button flex-1 justify-center" onClick={closeEditEventModal}>
-                    Zrušit
-                  </button>
-                  <button type="submit" className="primary-button flex-1" disabled={isSavingEvent}>
-                    {isSavingEvent ? 'Ukládám…' : 'Uložit změny'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </section>
-        ) : null}
-
-        {showUnlockModal ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
-              <div className="mb-5">
-                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Správa akce</p>
-                <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Zadej PIN</h3>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">PIN zadáš jednou. Přihlášení se uloží na tomto zařízení.</p>
-              </div>
-
-              <form className="space-y-4" onSubmit={handleUnlockManage}>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Správcovský PIN</label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    pattern="[0-9]{4}"
-                    maxLength={4}
-                    className="field"
-                    value={managePin}
-                    onChange={(event) => setManagePin(event.target.value)}
-                    placeholder="1234"
-                    required
-                    autoFocus
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <button type="button" className="secondary-button flex-1 justify-center" onClick={closeUnlockModal}>
-                    Zrušit
-                  </button>
-                  <button type="submit" className="primary-button flex-1" disabled={isUnlockingManage}>
-                    {isUnlockingManage ? 'Ověřuji…' : 'Vstoupit'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </section>
-        ) : null}
-
-        {showOverviewModal ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
-              <div className="mb-5 flex items-start justify-between gap-4">
-                <div>
-                  <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Přehled</p>
-                  <h3 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{event.name}</h3>
-                </div>
-                <button
-                  type="button"
-                  className="secondary-button shrink-0"
-                  onClick={() => setShowOverviewModal(false)}
-                >
-                  Zavřít
+              <div className="flex gap-3">
+                <button type="button" className="secondary-button flex-1 justify-center" onClick={closePingComposerModal}>
+                  Zrušit
+                </button>
+                <button type="submit" className="primary-button flex-1" disabled={pingBusyId !== null}>
+                  {pingBusyId !== null ? 'Šťouchám…' : 'Odeslat'}
                 </button>
               </div>
+            </form>
+          </div>
+        </ModalOverlay>
 
-              <div className="max-h-[60vh] space-y-5 overflow-y-auto">
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Poznámka akce</p>
-                  <p className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
-                    {event.description || 'Bez poznámky.'}
-                  </p>
-                </div>
-                {['confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
-                  const group = attendees.filter((a) => a.status === statusGroup)
-                  if (group.length === 0) return null
-                  const labels = {
-                    confirmed: '✅ Přijdou',
-                    excused: '⏳ Omluvenky (čeká)',
-                    excused_accepted: '❌ Omluvenka přijatá',
-                    excused_rejected: '⚪ Omluvenka zamítnutá',
-                  }
-
-                  return (
-                    <div key={statusGroup}>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                        {labels[statusGroup]} ({group.length})
-                      </p>
-                      <ul className="space-y-2">
-                        {group.map((a) => (
-                          <li
-                            key={a.id}
-                            className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{a.name}</span>
-                              {event.requirePhone && a.phone ? (
-                                <a
-                                  href={`tel:${a.phone}`}
-                                  className="text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"
-                                >
-                                  {a.phone}
-                                </a>
-                              ) : null}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )
-                })}
-              </div>
+        <ModalOverlay open={showEditEventModal} onClose={closeEditEventModal} labelledBy="manage-edit-event-title">
+          <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
+            <div className="mb-5">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Upravit akci</p>
+              <h3 id="manage-edit-event-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Změň základní údaje</h3>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Můžeš přepsat název, místo i termín. Změna se hned promítne do pozvánky.</p>
             </div>
-          </section>
-        ) : null}
+
+            <form className="space-y-4" onSubmit={handleSubmitEventEdit}>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Název akce</label>
+                <input
+                  className="field"
+                  value={eventForm.name}
+                  onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Např. Letní gril"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Místo</label>
+                <input
+                  className="field"
+                  value={eventForm.location}
+                  onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
+                  placeholder="Např. Stromovka"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Datum a čas</label>
+                <EventDateTimePicker
+                  value={eventForm.datetime}
+                  onChange={(nextValue) => setEventForm((current) => ({ ...current, datetime: nextValue }))}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button type="button" className="secondary-button flex-1 justify-center" onClick={closeEditEventModal}>
+                  Zrušit
+                </button>
+                <button type="submit" className="primary-button flex-1" disabled={isSavingEvent}>
+                  {isSavingEvent ? 'Ukládám…' : 'Uložit změny'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalOverlay>
+
+        <ModalOverlay open={showUnlockModal} onClose={closeUnlockModal} labelledBy="manage-unlock-title">
+          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+            <div className="mb-5">
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Správa akce</p>
+              <h3 id="manage-unlock-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Zadej PIN</h3>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">PIN zadáš jednou. Přihlášení se uloží na tomto zařízení.</p>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleUnlockManage}>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Správcovský PIN</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]{4}"
+                  maxLength={4}
+                  className="field"
+                  value={managePin}
+                  onChange={(event) => setManagePin(event.target.value)}
+                  placeholder="1234"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button type="button" className="secondary-button flex-1 justify-center" onClick={closeUnlockModal}>
+                  Zrušit
+                </button>
+                <button type="submit" className="primary-button flex-1" disabled={isUnlockingManage}>
+                  {isUnlockingManage ? 'Ověřuji…' : 'Vstoupit'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalOverlay>
+
+        <ModalOverlay open={showOverviewModal} onClose={() => setShowOverviewModal(false)} labelledBy="manage-overview-title">
+          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Přehled</p>
+                <h3 id="manage-overview-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{event.name}</h3>
+              </div>
+              <button
+                type="button"
+                className="secondary-button shrink-0"
+                onClick={() => setShowOverviewModal(false)}
+              >
+                Zavřít
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] space-y-5 overflow-y-auto">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Poznámka akce</p>
+                <p className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+                  {event.description || 'Bez poznámky.'}
+                </p>
+              </div>
+              {['confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
+                const group = attendees.filter((a) => a.status === statusGroup)
+                if (group.length === 0) return null
+                const labels = {
+                  confirmed: '✅ Přijdou',
+                  excused: '⏳ Omluvenky (čeká)',
+                  excused_accepted: '❌ Omluvenka přijatá',
+                  excused_rejected: '⚪ Omluvenka zamítnutá',
+                }
+
+                return (
+                  <div key={statusGroup}>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                      {labels[statusGroup]} ({group.length})
+                    </p>
+                    <ul className="space-y-2">
+                      {group.map((a) => (
+                        <li
+                          key={a.id}
+                          className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{a.name}</span>
+                            {event.requirePhone && a.phone ? (
+                              <a
+                                href={`tel:${a.phone}`}
+                                className="text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"
+                              >
+                                {a.phone}
+                              </a>
+                            ) : null}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </ModalOverlay>
       </main>
     </PageShell>
   )
