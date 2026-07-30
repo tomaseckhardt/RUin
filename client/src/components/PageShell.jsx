@@ -60,7 +60,7 @@ function PageShell({ eyebrow, title, subtitle, children, actions }) {
             {actions}
           </div>
         </header>
-        {children}
+        <main>{children}</main>
       </div>
     </div>
   )
