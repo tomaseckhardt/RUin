@@ -4174,3 +4174,632 @@ $$;
 grant execute on function public.remove_signup_claim(bigint, text, text) to anon, authenticated;
 
 commit;
+
+-- ==================== Realtime read hardening ====================
+-- Phase 17: Direct SELECT policies on event_polls/options/votes, event_photos,
+-- event_chat_messages/reactions, event_signup_items/claims and event_stops
+-- were `using (true)` (or `event_exists(event_id)`, which is trivially true
+-- for any real row) - meaning the anon key (public in the client bundle) can
+-- read every event's chat, signups, stops, photos and poll data at once via
+-- a plain REST call with no event_id filter, not just the one event a caller
+-- actually has the link for.
+--
+-- event_polls/options/votes and event_photos already have zero direct-table
+-- read dependents client-side (get_poll_payload/get_event_photos RPCs cover
+-- them), so those four are simply locked to `using (false)` below - no
+-- client change needed.
+--
+-- event_chat_messages/reactions, event_signup_items/claims and event_stops
+-- are different: the client reads them directly AND subscribes to their
+-- postgres_changes for live updates. Locking those to `using (false)` too
+-- would silently break both. So this phase also:
+--   1) adds dedicated SECURITY DEFINER RPCs that do the same event_id-scoped
+--      read server-side (get_event_chat_messages, get_chat_reactions,
+--      get_event_signup_items, get_event_stops), replacing the direct
+--      `.from(table).select()` calls in api.js;
+--   2) converts event_chat_messages inserts (the one remaining direct
+--      client write) to a send_event_chat_message RPC, since the client's
+--      `.insert().select()` needs to read back the row it just inserted,
+--      which `using (false)` would otherwise block;
+--   3) replaces the direct postgres_changes subscriptions on these five
+--      tables with the same "listen on event_realtime_ticks, then refetch"
+--      pattern phase 5 already established for attendees/events/pings -
+--      event_realtime_ticks carries no sensitive payload, so it's the only
+--      one of these actually safe to subscribe to directly. As a side
+--      effect, this also fixes event_signup_items/event_stops never having
+--      been added to the supabase_realtime publication (their live refresh
+--      was silently dead before this phase) - they no longer need to be,
+--      since clients now only subscribe to ticks.
+--
+-- unclaim_signup_item is also hardened here: it took a single
+-- p_attendee_name used both as "whose claim to remove" and, implicitly, as
+-- proof of identity - unlike remove_signup_claim (phase 16), nothing
+-- required the caller to assert who THEY are versus who they're unclaiming.
+-- Added a p_requester_name parameter that must match, mirroring
+-- remove_signup_claim's pattern. Worth being honest about what this does
+-- and doesn't buy: this app has no authentication anywhere (every identity
+-- is a self-asserted name, by design - see submit_rsvp, ping_attendee,
+-- claim_signup_item), so this doesn't cryptographically stop a caller
+-- willing to assert a false name for both parameters. It closes the gap of
+-- one field silently doing double duty and brings it in line with the
+-- sibling function - it is not, and can't be, a real identity check without
+-- a larger auth redesign.
+
+begin;
+
+-- --- event_polls / event_poll_options / event_poll_votes / event_photos:
+-- no direct client reads left once poll/photo data goes through RPCs only.
+
+drop policy if exists "event_polls_select" on public.event_polls;
+create policy "event_polls_select" on public.event_polls for select to anon, authenticated using (false);
+
+drop policy if exists "event_poll_options_select" on public.event_poll_options;
+create policy "event_poll_options_select" on public.event_poll_options for select to anon, authenticated using (false);
+
+drop policy if exists "event_poll_votes_select" on public.event_poll_votes;
+create policy "event_poll_votes_select" on public.event_poll_votes for select to anon, authenticated using (false);
+
+drop policy if exists "event_photos_select" on public.event_photos;
+create policy "event_photos_select" on public.event_photos for select to anon, authenticated using (false);
+
+-- --- event_chat_messages / event_chat_message_reactions / event_signup_items
+-- / event_signup_claims / event_stops: locked down too, matched by the RPCs
+-- and realtime-tick triggers below that replace direct table access.
+
+drop policy if exists "event_chat_select_allowed" on public.event_chat_messages;
+create policy "event_chat_select_allowed"
+  on public.event_chat_messages
+  for select
+  to anon, authenticated
+  using (false);
+
+drop policy if exists "event_chat_message_reactions_select" on public.event_chat_message_reactions;
+create policy "event_chat_message_reactions_select"
+  on public.event_chat_message_reactions
+  for select
+  to anon, authenticated
+  using (false);
+
+drop policy if exists "event_signup_items_select" on public.event_signup_items;
+create policy "event_signup_items_select" on public.event_signup_items for select to anon, authenticated using (false);
+
+drop policy if exists "event_signup_claims_select" on public.event_signup_claims;
+create policy "event_signup_claims_select" on public.event_signup_claims for select to anon, authenticated using (false);
+
+drop policy if exists "event_stops_select" on public.event_stops;
+create policy "event_stops_select" on public.event_stops for select to anon, authenticated using (false);
+
+-- --- Replacement read RPCs (SECURITY DEFINER; scope by p_event_id
+-- server-side, so a caller can no longer get more than the one event they
+-- asked about).
+
+create or replace function public.get_event_chat_messages(
+  p_event_id text,
+  p_limit integer default 120
+)
+returns table (id bigint, event_id text, sender_name text, message text, created_at timestamptz)
+language sql
+security definer
+set search_path = public
+as $$
+  select m.id, m.event_id, m.sender_name, m.message, m.created_at
+  from public.event_chat_messages m
+  where m.event_id = p_event_id
+  order by m.created_at desc
+  limit greatest(coalesce(p_limit, 120), 1);
+$$;
+
+create or replace function public.send_event_chat_message(
+  p_event_id text,
+  p_sender_name text,
+  p_message text
+)
+returns table (id bigint, event_id text, sender_name text, message text, created_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_sender_name text := nullif(trim(p_sender_name), '');
+  v_message text := nullif(trim(p_message), '');
+begin
+  if not exists (select 1 from public.events e where e.id = p_event_id) then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if v_sender_name is null then
+    raise exception 'Pro odeslání zprávy vyplň svoje jméno.';
+  end if;
+
+  if v_message is null then
+    raise exception 'Napiš zprávu do chatu.';
+  end if;
+
+  return query
+  insert into public.event_chat_messages as m (event_id, sender_name, message)
+  values (p_event_id, v_sender_name, v_message)
+  returning m.id, m.event_id, m.sender_name, m.message, m.created_at;
+end;
+$$;
+
+create or replace function public.get_chat_reactions(
+  p_event_id text,
+  p_message_ids bigint[]
+)
+returns table (id bigint, message_id bigint, sender_name text, emoji text)
+language sql
+security definer
+set search_path = public
+as $$
+  select r.id, r.message_id, r.sender_name, r.emoji
+  from public.event_chat_message_reactions r
+  join public.event_chat_messages m on m.id = r.message_id
+  where m.event_id = p_event_id
+    and r.message_id = any(p_message_ids);
+$$;
+
+create or replace function public.get_event_signup_items(p_event_id text)
+returns table (
+  id bigint,
+  event_id text,
+  category text,
+  label text,
+  capacity integer,
+  note text,
+  created_by text,
+  created_at timestamptz,
+  event_signup_claims jsonb
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select
+    i.id, i.event_id, i.category, i.label, i.capacity, i.note, i.created_by, i.created_at,
+    coalesce(
+      (
+        select jsonb_agg(jsonb_build_object('id', c.id, 'attendee_name', c.attendee_name, 'seats', c.seats) order by c.created_at asc)
+        from public.event_signup_claims c
+        where c.item_id = i.id
+      ),
+      '[]'::jsonb
+    ) as event_signup_claims
+  from public.event_signup_items i
+  where i.event_id = p_event_id
+  order by i.created_at asc;
+$$;
+
+create or replace function public.get_event_stops(p_event_id text)
+returns table (id bigint, event_id text, position integer, name text, location text, starts_at_label text)
+language sql
+security definer
+set search_path = public
+as $$
+  select s.id, s.event_id, s.position, s.name, s.location, s.starts_at_label
+  from public.event_stops s
+  where s.event_id = p_event_id
+  order by s.position asc;
+$$;
+
+grant execute on function public.get_event_chat_messages(text, integer) to anon, authenticated;
+grant execute on function public.send_event_chat_message(text, text, text) to anon, authenticated;
+grant execute on function public.get_chat_reactions(text, bigint[]) to anon, authenticated;
+grant execute on function public.get_event_signup_items(text) to anon, authenticated;
+grant execute on function public.get_event_stops(text) to anon, authenticated;
+
+-- --- event_realtime_ticks: new reasons for the tables above, so clients can
+-- subscribe to ticks instead of the tables directly.
+
+alter table public.event_realtime_ticks drop constraint if exists event_realtime_ticks_reason_check;
+alter table public.event_realtime_ticks add constraint event_realtime_ticks_reason_check
+  check (reason in ('event', 'attendee', 'ping', 'chat_message', 'chat_reaction', 'signup_item', 'signup_claim', 'stop'));
+
+create or replace function public.emit_event_realtime_tick_from_chat_messages()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.emit_event_realtime_tick(new.event_id, 'chat_message');
+  return new;
+end;
+$$;
+
+create or replace function public.emit_event_realtime_tick_from_chat_reactions()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event_id text;
+begin
+  select m.event_id into v_event_id
+  from public.event_chat_messages m
+  where m.id = coalesce(new.message_id, old.message_id);
+
+  perform public.emit_event_realtime_tick(v_event_id, 'chat_reaction');
+  return coalesce(new, old);
+end;
+$$;
+
+create or replace function public.emit_event_realtime_tick_from_signup_items()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.emit_event_realtime_tick(coalesce(new.event_id, old.event_id), 'signup_item');
+  return coalesce(new, old);
+end;
+$$;
+
+create or replace function public.emit_event_realtime_tick_from_signup_claims()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event_id text;
+begin
+  select i.event_id into v_event_id
+  from public.event_signup_items i
+  where i.id = coalesce(new.item_id, old.item_id);
+
+  perform public.emit_event_realtime_tick(v_event_id, 'signup_claim');
+  return coalesce(new, old);
+end;
+$$;
+
+create or replace function public.emit_event_realtime_tick_from_stops()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.emit_event_realtime_tick(coalesce(new.event_id, old.event_id), 'stop');
+  return coalesce(new, old);
+end;
+$$;
+
+drop trigger if exists event_chat_messages_emit_event_realtime_tick_tg on public.event_chat_messages;
+create trigger event_chat_messages_emit_event_realtime_tick_tg
+after insert on public.event_chat_messages
+for each row
+execute function public.emit_event_realtime_tick_from_chat_messages();
+
+drop trigger if exists event_chat_reactions_emit_event_realtime_tick_tg on public.event_chat_message_reactions;
+create trigger event_chat_reactions_emit_event_realtime_tick_tg
+after insert or delete on public.event_chat_message_reactions
+for each row
+execute function public.emit_event_realtime_tick_from_chat_reactions();
+
+drop trigger if exists event_signup_items_emit_event_realtime_tick_tg on public.event_signup_items;
+create trigger event_signup_items_emit_event_realtime_tick_tg
+after insert or delete on public.event_signup_items
+for each row
+execute function public.emit_event_realtime_tick_from_signup_items();
+
+drop trigger if exists event_signup_claims_emit_event_realtime_tick_tg on public.event_signup_claims;
+create trigger event_signup_claims_emit_event_realtime_tick_tg
+after insert or delete on public.event_signup_claims
+for each row
+execute function public.emit_event_realtime_tick_from_signup_claims();
+
+drop trigger if exists event_stops_emit_event_realtime_tick_tg on public.event_stops;
+create trigger event_stops_emit_event_realtime_tick_tg
+after insert or delete on public.event_stops
+for each row
+execute function public.emit_event_realtime_tick_from_stops();
+
+-- --- unclaim_signup_item: require the caller to assert who they are, not
+-- just who they're unclaiming (see comment at the top of this phase).
+-- Changing the parameter list creates a new overload rather than replacing
+-- the old one - drop the old two-arg version explicitly so nothing can
+-- still call it and skip the requester check.
+
+drop function if exists public.unclaim_signup_item(bigint, text);
+
+create or replace function public.unclaim_signup_item(
+  p_item_id bigint,
+  p_attendee_name text,
+  p_requester_name text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_target text := nullif(trim(p_attendee_name), '');
+  v_requester text := nullif(trim(p_requester_name), '');
+begin
+  if v_target is null then
+    raise exception 'Chybí jméno.';
+  end if;
+
+  if v_requester is null or lower(v_requester) <> lower(v_target) then
+    raise exception 'Odhlásit můžeš jen svoje vlastní přihlášení.';
+  end if;
+
+  delete from public.event_signup_claims
+  where item_id = p_item_id and lower(attendee_name) = lower(v_target);
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.unclaim_signup_item(bigint, text, text) to anon, authenticated;
+
+commit;
+
+-- ==================== Organizer identity ====================
+-- Phase 18: ManageEventPage derived "who is the organizer" client-side as
+-- `attendees[0]?.name` (the earliest confirmed attendee row) - there was
+-- never a real "this attendee is the organizer" marker anywhere. If the
+-- organizer's own attendee row is later deleted (nothing stops them
+-- deleting their own row from the roster, by mistake or otherwise),
+-- attendees[0] silently becomes a different, unrelated attendee, and every
+-- action that stamps "as the organizer" (chat, pings, signup claims,
+-- photos) starts recording that other person's name instead - with no
+-- error or warning.
+--
+-- Added an explicit organizer_name column on events, set once at creation
+-- time (create_event, and transitively finalize_event_poll which calls it)
+-- and returned by get_event_payload, so the client no longer has to guess
+-- it from attendee ordering. Existing events are backfilled with the same
+-- "earliest confirmed attendee" heuristic as a one-time best-effort
+-- migration - it's exactly as accurate as the old client-side guess for
+-- data that already exists, but every event created from here on has a
+-- stable, authoritative value that survives roster edits.
+
+begin;
+
+alter table public.events add column if not exists organizer_name text;
+
+update public.events e
+set organizer_name = (
+  select a.name
+  from public.attendees a
+  where a.event_id = e.id
+  order by a.created_at asc, a.id asc
+  limit 1
+)
+where e.organizer_name is null;
+
+create or replace function public.create_event(
+  p_name text,
+  p_location text,
+  p_datetime timestamp without time zone,
+  p_description text,
+  p_organizer_name text,
+  p_organizer_pin text,
+  p_require_phone boolean default false
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(trim(p_name), '');
+  v_location text := nullif(trim(p_location), '');
+  v_description text := nullif(trim(p_description), '');
+  v_organizer_name text := nullif(trim(p_organizer_name), '');
+  v_organizer_pin text := nullif(trim(p_organizer_pin), '');
+  v_id text;
+  v_token text;
+  v_attempts integer := 0;
+begin
+  if v_name is null or v_location is null or p_datetime is null or v_description is null or v_organizer_name is null then
+    raise exception 'Vyplň svoje jméno, název, místo, datum a stručný popis akce.';
+  end if;
+
+  if v_organizer_pin is null or v_organizer_pin !~ '^[0-9]{4}$' then
+    raise exception 'Správcovský PIN musí mít přesně 4 číslice.';
+  end if;
+
+  loop
+    v_attempts := v_attempts + 1;
+    if v_attempts > 20 then
+      raise exception 'Nepodařilo se vytvořit jedinečný identifikátor akce.';
+    end if;
+
+    v_id := public._random_token(10);
+    exit when not exists (select 1 from public.events e where e.id = v_id);
+  end loop;
+
+  loop
+    v_token := public._random_token(24);
+    exit when not exists (select 1 from public.events e where e.organizer_token = v_token);
+  end loop;
+
+  insert into public.events (
+    id,
+    name,
+    location,
+    datetime,
+    description,
+    organizer_token,
+    organizer_name,
+    organizer_pin_hash,
+    organizer_pin_failed_attempts,
+    organizer_pin_locked_until,
+    require_phone
+  )
+  values (
+    v_id,
+    v_name,
+    v_location,
+    p_datetime,
+    v_description,
+    v_token,
+    v_organizer_name,
+    extensions.crypt(v_organizer_pin, extensions.gen_salt('bf')),
+    0,
+    null,
+    coalesce(p_require_phone, false)
+  );
+
+  insert into public.attendees (event_id, name, status, excuse_reason)
+  values (v_id, v_organizer_name, 'confirmed', null);
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_id,
+      'name', v_name,
+      'location', v_location,
+      'datetime', p_datetime,
+      'description', v_description,
+      'requirePhone', coalesce(p_require_phone, false)
+    ),
+    'guestPath', '/event/' || v_id,
+    'organizerPath', '/event/' || v_id || '/manage?token=' || v_token
+  );
+end;
+$$;
+
+create or replace function public.get_event_payload(
+  p_event_id text,
+  p_organizer_token text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event public.events%rowtype;
+  v_is_organizer boolean;
+  v_attendees jsonb;
+  v_summary jsonb;
+begin
+  select *
+  into v_event
+  from public.events e
+  where e.id = p_event_id;
+
+  if not found then
+    raise exception 'Tahle akce už neexistuje.';
+  end if;
+
+  v_is_organizer := p_organizer_token is not null and p_organizer_token = v_event.organizer_token;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', a.id,
+        'event_id', a.event_id,
+        'name', a.name,
+        'status', a.status,
+        'excuse_reason', a.excuse_reason,
+        'phone', case when v_is_organizer then a.phone else null end,
+        'created_at', a.created_at,
+        'checked_in_at', a.checked_in_at,
+        'ping_count', coalesce(p.ping_count, 0),
+        'ping_last_source_name', p.last_source_name,
+        'ping_last_message', p.last_message,
+        'ping_last_created_at', p.last_created_at
+      )
+      order by
+        case a.status
+          when 'confirmed' then 1
+          when 'excused' then 2
+          when 'excused_accepted' then 3
+          when 'excused_rejected' then 4
+          else 5
+        end,
+        a.created_at asc,
+        a.name asc
+    ),
+    '[]'::jsonb
+  )
+  into v_attendees
+  from public.attendees a
+  left join lateral (
+    select
+      (
+        select count(*)::integer
+        from public.attendee_pings ap_count
+        where ap_count.event_id = p_event_id
+          and ap_count.target_attendee_id = a.id
+      ) as ping_count,
+      (
+        select ap_last.source_name
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_source_name,
+      (
+        select ap_last.message
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_message,
+      (
+        select ap_last.created_at
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_created_at
+  ) p on true
+  where a.event_id = p_event_id;
+
+  select jsonb_build_object(
+    'confirmed', count(*) filter (where a.status = 'confirmed'),
+    'excused', count(*) filter (where a.status in ('excused', 'excused_accepted')),
+    'rejected', count(*) filter (where a.status = 'excused_rejected')
+  )
+  into v_summary
+  from public.attendees a
+  where a.event_id = p_event_id;
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_event.id,
+      'name', v_event.name,
+      'location', v_event.location,
+      'datetime', v_event.datetime,
+      'description', v_event.description,
+      'createdAt', v_event.created_at,
+      'requirePhone', v_event.require_phone,
+      'organizerName', v_event.organizer_name
+    ),
+    'attendees', v_attendees,
+    'summary', v_summary
+  );
+end;
+$$;
+
+grant execute on function public.create_event(text, text, timestamp without time zone, text, text, text, boolean) to anon, authenticated;
+grant execute on function public.get_event_payload(text, text) to anon, authenticated;
+
+commit;
+
+-- ==================== Photo upload validation ====================
+-- Phase 19: the event-photos storage bucket had no file_size_limit or
+-- allowed_mime_types, so the only thing stopping an arbitrarily large or
+-- non-image upload was a client-side `file.type.startsWith('image/')` check
+-- in PhotoGallery.jsx/api.js - trivially bypassed by calling the Storage API
+-- directly with the anon key, which is public in the client bundle.
+-- Constrains the bucket itself so this can't be bypassed from outside the
+-- app; the client-side check stays too, purely for instant UX feedback.
+
+begin;
+
+update storage.buckets
+set file_size_limit = 10485760, -- 10 MB, matches the client-side check in api.js
+    allowed_mime_types = array['image/*']
+where id = 'event-photos';
+
+commit;
