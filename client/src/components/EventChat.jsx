@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getChatReactions, getEventChatMessages, sendEventChatMessage, toggleChatReaction } from '../lib/api.js'
-import { supabase } from '../lib/supabase.js'
+import { subscribeToEventTicks } from '../lib/realtimeTick.js'
 
 const CHAT_MESSAGE_MAX = 500
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '🍻']
@@ -84,128 +84,60 @@ function EventChat({ eventId, currentName, canSend }) {
   const [isSending, setIsSending] = useState(false)
   const [openPickerFor, setOpenPickerFor] = useState(null)
   const [pendingReactions, setPendingReactions] = useState(() => new Set())
-  const messageIdsRef = useRef(new Set())
+  const latestRequestIdRef = useRef(0)
 
-  useEffect(() => {
-    messageIdsRef.current = new Set(messages.map((message) => message.id))
-  }, [messages])
+  async function loadMessages() {
+    const requestId = ++latestRequestIdRef.current
 
-  useEffect(() => {
-    let cancelled = false
+    try {
+      const nextMessages = await getEventChatMessages(eventId)
 
-    async function loadMessages() {
-      try {
-        const nextMessages = await getEventChatMessages(eventId)
+      if (requestId !== latestRequestIdRef.current) {
+        return
+      }
 
-        if (cancelled) {
-          return
+      setMessages((previousMessages) => mergeMessages(previousMessages, nextMessages))
+
+      const reactions = await getChatReactions(eventId, nextMessages.map((message) => message.id))
+
+      if (requestId !== latestRequestIdRef.current) {
+        return
+      }
+
+      const grouped = {}
+
+      for (const reaction of reactions) {
+        if (!grouped[reaction.message_id]) {
+          grouped[reaction.message_id] = []
         }
 
-        setMessages((previousMessages) => mergeMessages(previousMessages, nextMessages))
+        grouped[reaction.message_id].push(reaction)
+      }
 
-        const reactions = await getChatReactions(nextMessages.map((message) => message.id))
-
-        if (cancelled) {
-          return
-        }
-
-        const grouped = {}
-
-        for (const reaction of reactions) {
-          if (!grouped[reaction.message_id]) {
-            grouped[reaction.message_id] = []
-          }
-
-          grouped[reaction.message_id].push(reaction)
-        }
-
-        setReactionsByMessage(grouped)
-      } catch (error) {
-        if (!cancelled) {
-          toast.error(error.message)
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
+      setReactionsByMessage(grouped)
+    } catch (error) {
+      if (requestId === latestRequestIdRef.current) {
+        toast.error(error.message)
+      }
+    } finally {
+      if (requestId === latestRequestIdRef.current) {
+        setIsLoading(false)
       }
     }
+  }
 
+  useEffect(() => {
+    // Fetch-on-mount-and-eventId-change, refreshed again by the realtime
+    // tick subscription below - there's no external system to "subscribe" to
+    // for the initial load itself.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadMessages()
-
-    return () => {
-      cancelled = true
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`event-chat:${eventId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'event_chat_messages',
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          setMessages((previousMessages) => upsertMessage(previousMessages, payload.new))
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [eventId])
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`event-chat-reactions:${eventId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'event_chat_message_reactions' },
-        (payload) => {
-          const reaction = payload.new
-
-          if (!messageIdsRef.current.has(reaction.message_id)) {
-            return
-          }
-
-          setReactionsByMessage((current) => {
-            const existing = current[reaction.message_id] || []
-
-            if (existing.some((item) => item.id === reaction.id)) {
-              return current
-            }
-
-            return { ...current, [reaction.message_id]: [...existing, reaction] }
-          })
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'event_chat_message_reactions' },
-        (payload) => {
-          const removedId = payload.old?.id
-
-          setReactionsByMessage((current) => {
-            const next = {}
-
-            for (const [messageId, list] of Object.entries(current)) {
-              next[messageId] = list.filter((item) => item.id !== removedId)
-            }
-
-            return next
-          })
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return subscribeToEventTicks(eventId, ['chat_message', 'chat_reaction'], loadMessages)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
 
   async function handleToggleReaction(messageId, emoji) {

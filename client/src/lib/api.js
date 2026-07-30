@@ -123,12 +123,10 @@ export function updateEvent(eventId, data) {
 }
 
 export async function getEventChatMessages(eventId, limit = 120) {
-  const { data, error } = await supabase
-    .from('event_chat_messages')
-    .select('id, event_id, sender_name, message, created_at')
-    .eq('event_id', eventId)
-    .order('created_at', { ascending: false })
-    .limit(limit)
+  const { data, error } = await supabase.rpc('get_event_chat_messages', {
+    p_event_id: eventId,
+    p_limit: limit,
+  })
 
   if (error) {
     throw new Error(error.message || 'Chat se nepodařilo načíst.')
@@ -174,15 +172,15 @@ export function toggleChatReaction(messageId, senderName, emoji) {
   )
 }
 
-export async function getChatReactions(messageIds) {
+export async function getChatReactions(eventId, messageIds) {
   if (!messageIds.length) {
     return []
   }
 
-  const { data, error } = await supabase
-    .from('event_chat_message_reactions')
-    .select('id, message_id, sender_name, emoji')
-    .in('message_id', messageIds)
+  const { data, error } = await supabase.rpc('get_chat_reactions', {
+    p_event_id: eventId,
+    p_message_ids: messageIds,
+  })
 
   if (error) {
     throw new Error(error.message || 'Reakce se nepodařilo načíst.')
@@ -217,7 +215,7 @@ export function claimSignupItem(itemId, attendeeName, seats = 1) {
 export function unclaimSignupItem(itemId, attendeeName) {
   return callRpc(
     'unclaim_signup_item',
-    { p_item_id: itemId, p_attendee_name: attendeeName },
+    { p_item_id: itemId, p_attendee_name: attendeeName, p_requester_name: attendeeName },
     'Odhlášení se nepodařilo uložit.',
   )
 }
@@ -239,11 +237,7 @@ export function deleteSignupItem(eventId, itemId, token) {
 }
 
 export async function getSignupItems(eventId) {
-  const { data, error } = await supabase
-    .from('event_signup_items')
-    .select('id, event_id, category, label, capacity, note, created_by, created_at, event_signup_claims(id, attendee_name, seats)')
-    .eq('event_id', eventId)
-    .order('created_at', { ascending: true })
+  const { data, error } = await supabase.rpc('get_event_signup_items', { p_event_id: eventId })
 
   if (error) {
     throw new Error(error.message || 'Seznam se nepodařilo načíst.')
@@ -275,11 +269,7 @@ export function deleteEventStop(eventId, token, stopId) {
 }
 
 export async function getEventStops(eventId) {
-  const { data, error } = await supabase
-    .from('event_stops')
-    .select('id, event_id, position, name, location, starts_at_label')
-    .eq('event_id', eventId)
-    .order('position', { ascending: true })
+  const { data, error } = await supabase.rpc('get_event_stops', { p_event_id: eventId })
 
   if (error) {
     throw new Error(error.message || 'Itinerář se nepodařilo načíst.')
@@ -357,7 +347,17 @@ export function deleteEventPhoto(eventId, token, photoId) {
   )
 }
 
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024
+
 export async function uploadEventPhoto(eventId, file) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Nahrát lze jen obrázky.')
+  }
+
+  if (file.size > MAX_PHOTO_BYTES) {
+    throw new Error('Fotka je moc velká (limit je 10 MB).')
+  }
+
   const fileExt = file.name.split('.').pop()
   const storagePath = `${eventId}/${crypto.randomUUID()}.${fileExt}`
 
@@ -389,19 +389,15 @@ export async function sendEventChatMessage(eventId, senderName, message) {
     throw new Error('Napiš zprávu do chatu.')
   }
 
-  const { data, error } = await supabase
-    .from('event_chat_messages')
-    .insert({
-      event_id: eventId,
-      sender_name: cleanSenderName,
-      message: cleanMessage,
-    })
-    .select('id, event_id, sender_name, message, created_at')
-    .single()
+  const { data, error } = await supabase.rpc('send_event_chat_message', {
+    p_event_id: eventId,
+    p_sender_name: cleanSenderName,
+    p_message: cleanMessage,
+  })
 
   if (error) {
     throw new Error(error.message || 'Zprávu se nepodařilo odeslat.')
   }
 
-  return data
+  return data?.[0]
 }

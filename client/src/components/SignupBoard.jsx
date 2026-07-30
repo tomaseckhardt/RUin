@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import CollapsibleCard from './CollapsibleCard.jsx'
 import { addSignupItem, claimSignupItem, deleteSignupItem, getSignupItems, removeSignupClaim, unclaimSignupItem } from '../lib/api.js'
-import { supabase } from '../lib/supabase.js'
+import { subscribeToEventTicks } from '../lib/realtimeTick.js'
 
 function normalizeName(value) {
   return (value || '').trim().toLocaleLowerCase('cs-CZ')
@@ -38,11 +38,6 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
   const [note, setNote] = useState('')
   const [busyItemId, setBusyItemId] = useState(null)
   const latestRequestIdRef = useRef(0)
-  const itemIdsRef = useRef(new Set())
-
-  useEffect(() => {
-    itemIdsRef.current = new Set(items.map((item) => item.id))
-  }, [items])
 
   async function loadItems() {
     const requestId = ++latestRequestIdRef.current
@@ -68,32 +63,17 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
 
   useEffect(() => {
     // Fetch-on-mount-and-eventId/category-change, refreshed again by the
-    // realtime subscription below - there's no external system to
+    // realtime tick subscription below - there's no external system to
     // "subscribe" to for the initial load itself.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadItems()
-
-    const channel = supabase
-      .channel(`signup-board:${eventId}:${category}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_signup_items', filter: `event_id=eq.${eventId}` }, loadItems)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_signup_claims' }, (payload) => {
-        // event_signup_claims has no event_id column to filter server-side on,
-        // so only reload when the claim actually belongs to an item on this board.
-        const itemId = payload.new?.item_id ?? payload.old?.item_id
-
-        if (itemId !== undefined && !itemIdsRef.current.has(itemId)) {
-          return
-        }
-
-        loadItems()
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, category])
+
+  useEffect(() => {
+    return subscribeToEventTicks(eventId, ['signup_item', 'signup_claim'], loadItems)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId])
 
   async function handleAdd(event) {
     event.preventDefault()
