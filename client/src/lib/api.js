@@ -410,10 +410,10 @@ export function submitFeedback(type, name, message) {
   )
 }
 
-export function getFeedbackReports(pin) {
+export function getFeedbackReports() {
   return callRpc(
     'get_feedback_reports',
-    { p_pin: pin },
+    {},
     'Hlášení se nepodařilo načíst.',
   )
 }

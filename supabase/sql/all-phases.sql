@@ -4949,3 +4949,30 @@ grant execute on function public.submit_feedback_report(text, text, text) to ano
 grant execute on function public.get_feedback_reports(text) to anon, authenticated;
 
 commit;
+
+-- ==================== Feedback: remove PIN gate ====================
+-- Phase 21: /feedback no longer requires a PIN, per explicit request -
+-- anyone who navigates there (or calls the RPC directly) can now read every
+-- submitted bug report/idea, including the reporter's name. feedback_admin
+-- (the PIN-hash table from phase 20) is dropped since nothing else uses it.
+
+begin;
+
+drop function if exists public.get_feedback_reports(text);
+
+create or replace function public.get_feedback_reports()
+returns table (id bigint, type text, name text, message text, created_at timestamptz)
+language sql
+security definer
+set search_path = public
+as $$
+  select r.id, r.type, r.name, r.message, r.created_at
+  from public.feedback_reports r
+  order by r.created_at desc;
+$$;
+
+grant execute on function public.get_feedback_reports() to anon, authenticated;
+
+drop table if exists public.feedback_admin;
+
+commit;

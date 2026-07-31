@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import PageShell from '../components/PageShell.jsx'
 import { getFeedbackReports } from '../lib/api.js'
@@ -25,48 +25,19 @@ function formatReportedAt(value) {
 }
 
 function FeedbackPage() {
-  const [pin, setPin] = useState('')
   const [reports, setReports] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
   const [filter, setFilter] = useState('all')
 
-  async function handleUnlock(event) {
-    event.preventDefault()
-    setIsLoading(true)
-
-    try {
-      const data = await getFeedbackReports(pin)
-      setReports(data ?? [])
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  useEffect(() => {
+    getFeedbackReports()
+      .then((data) => setReports(data ?? []))
+      .catch((error) => toast.error(error.message))
+  }, [])
 
   if (!reports) {
     return (
-      <PageShell eyebrow="interní" title="Chyby a nápady" subtitle="Zadej admin PIN pro zobrazení hlášení.">
-        <form className="panel mx-auto max-w-sm space-y-4" onSubmit={handleUnlock}>
-          <div>
-            <label htmlFor="feedback-pin" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Admin PIN
-            </label>
-            <input
-              id="feedback-pin"
-              type="password"
-              className="field"
-              value={pin}
-              onChange={(event) => setPin(event.target.value)}
-              placeholder="••••"
-              required
-              autoFocus
-            />
-          </div>
-          <button type="submit" className="primary-button w-full justify-center" disabled={isLoading}>
-            {isLoading ? 'Ověřuji…' : 'Zobrazit hlášení'}
-          </button>
-        </form>
+      <PageShell eyebrow="interní" title="Chyby a nápady" subtitle="Načítám hlášení…">
+        <p className="panel text-sm text-slate-500 dark:text-slate-400">Načítám…</p>
       </PageShell>
     )
   }
