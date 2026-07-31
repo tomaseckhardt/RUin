@@ -401,3 +401,19 @@ export async function sendEventChatMessage(eventId, senderName, message) {
 
   return data?.[0]
 }
+
+export function submitFeedback(type, name, message) {
+  return callRpc(
+    'submit_feedback_report',
+    { p_type: type, p_name: name, p_message: message },
+    'Hlášení se nepodařilo odeslat.',
+  )
+}
+
+export function getFeedbackReports(pin) {
+  return callRpc(
+    'get_feedback_reports',
+    { p_pin: pin },
+    'Hlášení se nepodařilo načíst.',
+  )
+}
