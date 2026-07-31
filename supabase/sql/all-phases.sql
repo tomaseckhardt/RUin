@@ -3367,6 +3367,14 @@ commit;
 
 begin;
 
+-- Renaming a parameter (token_length -> p_token_length below) is not
+-- something CREATE OR REPLACE FUNCTION allows for a same-signature function -
+-- Postgres errors with "cannot change name of input parameter" and points at
+-- exactly this DROP as the fix. Explicit, so a full top-to-bottom run always
+-- works instead of only succeeding on databases where this happened to
+-- already be dropped some other way.
+drop function if exists public._random_token(integer);
+
 create or replace function public._random_token(p_token_length integer)
 returns text
 language plpgsql
@@ -4370,7 +4378,7 @@ as $$
 $$;
 
 create or replace function public.get_event_stops(p_event_id text)
-returns table (id bigint, event_id text, position integer, name text, location text, starts_at_label text)
+returns table (id bigint, event_id text, "position" integer, name text, location text, starts_at_label text)
 language sql
 security definer
 set search_path = public
