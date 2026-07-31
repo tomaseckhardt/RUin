@@ -146,6 +146,13 @@ drop function if exists public.ping_attendee(text, bigint, text);
 drop function if exists public.ping_attendee(text, bigint, text, text);
 drop function if exists public.delete_attendee(text, bigint, text);
 
+-- Re-running this whole file on a database that already has phase 14's
+-- _random_token(p_token_length integer) applied would otherwise hit the same
+-- "cannot change name of input parameter" error phase 14 works around, just
+-- in the opposite direction (p_token_length -> token_length). Drop first so
+-- a full top-to-bottom re-run is idempotent either way.
+drop function if exists public._random_token(integer);
+
 create or replace function public._random_token(token_length integer)
 returns text
 language plpgsql
@@ -4809,5 +4816,163 @@ update storage.buckets
 set file_size_limit = 10485760, -- 10 MB, matches the client-side check in api.js
     allowed_mime_types = array['image/*']
 where id = 'event-photos';
+
+commit;
+
+-- ==================== Feedback (bugs + ideas) ====================
+-- Phase 20: Site-wide floating feedback button (bug report OR improvement
+-- idea) + an admin page to read them back.
+--
+-- feedback_admin is a singleton table (id boolean primary key default true,
+-- checked to always equal true) holding a single bcrypt hash - the same
+-- pattern events.organizer_pin_hash already uses. There's no RPC to seed
+-- it: run the insert below yourself, with your own PIN, directly in the SQL
+-- Editor - that way the actual secret never goes into this file or git
+-- history. To set or change the admin PIN:
+--
+--   insert into public.feedback_admin (id, pin_hash)
+--   values (true, extensions.crypt('choose-your-own-pin', extensions.gen_salt('bf')))
+--   on conflict (id) do update set pin_hash = excluded.pin_hash;
+--
+-- Both tables are locked to `using (false)` for every direct operation -
+-- submit_feedback_report/get_feedback_reports (SECURITY DEFINER) are the
+-- only way in or out, same as every other table in this file.
+
+begin;
+
+create table if not exists public.feedback_reports (
+  id bigint generated always as identity primary key,
+  type text not null check (type in ('bug', 'idea')),
+  name text not null check (length(trim(name)) between 1 and 100),
+  message text not null check (length(trim(message)) between 1 and 2000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists feedback_reports_created_at_idx
+  on public.feedback_reports (created_at desc);
+
+create table if not exists public.feedback_admin (
+  id boolean primary key default true,
+  pin_hash text not null,
+  constraint feedback_admin_single_row check (id)
+);
+
+alter table public.feedback_reports enable row level security;
+alter table public.feedback_admin enable row level security;
+
+drop policy if exists "feedback_reports_no_direct_access" on public.feedback_reports;
+create policy "feedback_reports_no_direct_access"
+  on public.feedback_reports
+  for all
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+drop policy if exists "feedback_admin_no_direct_access" on public.feedback_admin;
+create policy "feedback_admin_no_direct_access"
+  on public.feedback_admin
+  for all
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create or replace function public.submit_feedback_report(
+  p_type text,
+  p_name text,
+  p_message text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(trim(p_name), '');
+  v_message text := nullif(trim(p_message), '');
+begin
+  if p_type not in ('bug', 'idea') then
+    raise exception 'Neplatný typ hlášení.';
+  end if;
+
+  if v_name is null then
+    raise exception 'Napiš svoje jméno.';
+  end if;
+
+  if length(v_name) > 100 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
+  if v_message is null then
+    raise exception 'Napiš prosím pár slov.';
+  end if;
+
+  if length(v_message) > 2000 then
+    raise exception 'Text je moc dlouhý (limit 2000 znaků).';
+  end if;
+
+  insert into public.feedback_reports (type, name, message)
+  values (p_type, v_name, v_message);
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+create or replace function public.get_feedback_reports(
+  p_pin text
+)
+returns table (id bigint, type text, name text, message text, created_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_admin public.feedback_admin%rowtype;
+begin
+  select * into v_admin from public.feedback_admin where id = true;
+
+  if not found then
+    raise exception 'Správa hlášení ještě není nastavená.';
+  end if;
+
+  if p_pin is null or extensions.crypt(p_pin, v_admin.pin_hash) <> v_admin.pin_hash then
+    raise exception 'Neplatný PIN.';
+  end if;
+
+  return query
+    select r.id, r.type, r.name, r.message, r.created_at
+    from public.feedback_reports r
+    order by r.created_at desc;
+end;
+$$;
+
+grant execute on function public.submit_feedback_report(text, text, text) to anon, authenticated;
+grant execute on function public.get_feedback_reports(text) to anon, authenticated;
+
+commit;
+
+-- ==================== Feedback: remove PIN gate ====================
+-- Phase 21: /feedback no longer requires a PIN, per explicit request -
+-- anyone who navigates there (or calls the RPC directly) can now read every
+-- submitted bug report/idea, including the reporter's name. feedback_admin
+-- (the PIN-hash table from phase 20) is dropped since nothing else uses it.
+
+begin;
+
+drop function if exists public.get_feedback_reports(text);
+
+create or replace function public.get_feedback_reports()
+returns table (id bigint, type text, name text, message text, created_at timestamptz)
+language sql
+security definer
+set search_path = public
+as $$
+  select r.id, r.type, r.name, r.message, r.created_at
+  from public.feedback_reports r
+  order by r.created_at desc;
+$$;
+
+grant execute on function public.get_feedback_reports() to anon, authenticated;
+
+drop table if exists public.feedback_admin;
 
 commit;

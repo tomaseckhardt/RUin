@@ -38,6 +38,7 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
 - přidání do kalendáře (.ics soubor) a na plochu telefonu (PWA)
 - sdílení pozvánky (odkaz, QR kód, QR plakátek ke stažení)
 - push připomínky den a hodinu předem akcí
+- plovoucí tlačítko na každé stránce pro nahlášení chyby nebo nápadu na vylepšení; přehled všech hlášení je na `/feedback` (veřejná stránka, bez PINu)
 
 ## Technologický stack
 
@@ -118,6 +119,7 @@ Co všechno `all-phases.sql` obsahuje:
 - Bezpečnostní hardening: `_random_token` přes `pgcrypto`/`gen_random_bytes()` místo nekryptografického `random()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` vrací telefonní čísla jen s platným `p_organizer_token`; opravená race podmínka v `moderate_attendee`; srozumitelná hláška místo syrové Postgres chyby při konfliktu telefonního čísla. Záměrně neřeší: `organizer_token` zůstává čitelný (ne hash), protože appka přes PIN umí "obnovit" zapomenutý manage odkaz a to s jednosměrným hashem nejde bez přestavby celého recovery flow.
 - Mazání fotek ze Storage při zániku akce (dřív zůstávaly navždy ležet bez reference) - ruční mazání jde přes klientské Storage API, automatické po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` (viz [Automatický úklid expirovaných akcí](#automaticky-uklid-expirovanych-akci-fotky-ze-storage)) - a vlastní životní cyklus anket (nefinalizovaná zanikne 14 dní od vytvoření, finalizovaná automaticky spolu s akcí, co z ní vznikla).
 - Blokace přihlášení řidiče na vlastní nabídku odvozu + možnost odebrat konkrétního spolujezdce z vlastní nabídky.
+- Feedback (hlášení chyb a nápadů): `feedback_reports` + RPC `submit_feedback_report`/`get_feedback_reports`. Čtení přes `/feedback` je záměrně veřejné bez PINu - kdokoliv na tuhle adresu uvidí jméno i text všech hlášení.
 
 **Důležité:** klient posílá do `get_event_payload` parametr `p_organizer_token` a do `remove_signup_claim`/`claim_signup_item` odpovídající kontroly (viz `client/src/lib/api.js`). Pokud `all-phases.sql` neběží na stejném Supabase projektu, jako na který ukazuje `.env.local`, appka přestane fungovat s chybou `Could not find the function ... in the schema cache` (PostgREST nenajde odpovídající signaturu funkce) - klient a databázové schéma musí být vždycky na stejné verzi.
 
