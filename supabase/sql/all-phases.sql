@@ -4370,7 +4370,7 @@ as $$
 $$;
 
 create or replace function public.get_event_stops(p_event_id text)
-returns table (id bigint, event_id text, position integer, name text, location text, starts_at_label text)
+returns table (id bigint, event_id text, "position" integer, name text, location text, starts_at_label text)
 language sql
 security definer
 set search_path = public
