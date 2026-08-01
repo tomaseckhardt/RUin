@@ -4976,3 +4976,77 @@ grant execute on function public.get_feedback_reports() to anon, authenticated;
 drop table if exists public.feedback_admin;
 
 commit;
+
+-- ==================== Editable description + require_phone ====================
+-- Phase 22: update_event only ever let the organizer change name, location and
+-- datetime after creation - description and the "require phone number"
+-- setting were fixed at create_event time forever, even though both are
+-- perfectly reasonable things to fix a typo in or toggle later. Adds
+-- p_description/p_require_phone as required parameters (the events columns
+-- they map to are themselves not-null, so there's no sane "leave unset"
+-- meaning here), validated with the same non-blank check create_event uses.
+
+begin;
+
+drop function if exists public.update_event(text, text, text, text, timestamp without time zone);
+
+create or replace function public.update_event(
+  p_event_id text,
+  p_token text,
+  p_name text,
+  p_location text,
+  p_datetime timestamp without time zone,
+  p_description text,
+  p_require_phone boolean
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_token text := nullif(trim(p_token), '');
+  v_name text := nullif(trim(p_name), '');
+  v_location text := nullif(trim(p_location), '');
+  v_description text := nullif(trim(p_description), '');
+  v_event public.events%rowtype;
+begin
+  if v_token is null then
+    raise exception 'Správa vyžaduje platný organizátorský odkaz.';
+  end if;
+
+  if v_name is null or v_location is null or p_datetime is null or v_description is null then
+    raise exception 'Vyplň název, místo, datum a stručný popis akce.';
+  end if;
+
+  update public.events e
+  set
+    name = v_name,
+    location = v_location,
+    datetime = p_datetime,
+    description = v_description,
+    require_phone = p_require_phone
+  where e.id = p_event_id
+    and e.organizer_token = v_token
+  returning * into v_event;
+
+  if not found then
+    raise exception 'Neplatný organizátorský odkaz.';
+  end if;
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_event.id,
+      'name', v_event.name,
+      'location', v_event.location,
+      'datetime', v_event.datetime,
+      'description', v_event.description,
+      'requirePhone', v_event.require_phone
+    )
+  );
+end;
+$$;
+
+grant execute on function public.update_event(text, text, text, text, timestamp without time zone, text, boolean) to anon, authenticated;
+
+commit;

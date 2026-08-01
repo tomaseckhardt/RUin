@@ -30,9 +30,12 @@ import {
   subscribeToEventReminders,
   unsubscribeFromEventReminders,
 } from "../lib/push.js";
-import { supabase } from "../lib/supabase.js";
+import { subscribeToEventTicks } from "../lib/realtimeTick.js";
 
-const AUTO_REFRESH_MS = 10000;
+// Realtime (subscribeToEventTicks below) is the primary refresh mechanism.
+// This is now just a low-frequency safety net for missed/dropped realtime
+// events, not the primary refresh path.
+const AUTO_REFRESH_MS = 60000;
 const IDENTITY_STORAGE_PREFIX = "ruin-event-identity";
 const PING_SEEN_STORAGE_PREFIX = "ruin-event-last-seen-ping";
 const PING_COOLDOWN_STORAGE_PREFIX = "ruin-event-ping-cooldown";
@@ -356,52 +359,12 @@ function EventPage() {
   }, [id, maybeShowIncomingPing]);
 
   useEffect(() => {
-    let refreshTimeout = null;
-
-    function scheduleRealtimeRefresh() {
-      if (refreshTimeout) {
-        return;
-      }
-
-      refreshTimeout = setTimeout(() => {
-        refreshTimeout = null;
-        loadEvent();
-      }, 120);
-    }
-
-    const channel = supabase
-      .channel(`event-live:${id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "attendee_pings",
-          filter: `event_id=eq.${id}`,
-        },
-        scheduleRealtimeRefresh,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "event_realtime_ticks",
-          filter: `event_id=eq.${id}`,
-        },
-        scheduleRealtimeRefresh,
-      )
-      .subscribe();
-
-    return () => {
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-
-      supabase.removeChannel(channel);
-    };
+    return subscribeToEventTicks(id, ["event", "attendee", "ping"], loadEvent);
   }, [id, loadEvent]);
 
+  // Low-frequency safety net in case realtime ticks are missed or the
+  // realtime connection silently drops; subscribeToEventTicks above is the
+  // primary refresh mechanism.
   useEffect(() => {
     let cancelled = false;
     let inFlight = false;

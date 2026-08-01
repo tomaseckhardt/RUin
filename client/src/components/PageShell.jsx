@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useOnlineStatus } from '../lib/useOnlineStatus.js'
 
 function getInitialTheme() {
   if (typeof window === 'undefined') {
@@ -17,6 +18,7 @@ function getInitialTheme() {
 
 function PageShell({ eyebrow, title, subtitle, children, actions }) {
   const [theme, setTheme] = useState(getInitialTheme)
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -60,6 +62,14 @@ function PageShell({ eyebrow, title, subtitle, children, actions }) {
             {actions}
           </div>
         </header>
+        {!isOnline && (
+          <div
+            role="status"
+            className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm font-medium leading-6 text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100"
+          >
+            Jsi offline - některé věci se neuloží, dokud se nepřipojíš.
+          </div>
+        )}
         <main>{children}</main>
       </div>
     </div>

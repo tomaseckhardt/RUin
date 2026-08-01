@@ -102,3 +102,10 @@ Pred odeslanim PR over:
 ## Bezpecnost
 
 Nalezene zranitelnosti nehlas verejne v issue. Pouzij postup v [SECURITY.md](SECURITY.md).
+
+Pred zmenou RLS politik, RPC funkci nebo pridanim nove tabulky si prectete
+[SECURITY_MODEL.md](SECURITY_MODEL.md) - popisuje, jak appka resi (a neresi)
+identitu a autorizaci (zadna autentizace, `organizer_token` jako jediny bearer
+credential, proc musi RLS defaultne vse zamitat a autorizaci overuje az RPC
+funkce). Bez tohohle kontextu je snadne nevedomky zopakovat chybu, ktera uz
+v projektu jednou byla a je zdokumentovana v [CODE_REVIEW.md](CODE_REVIEW.md).

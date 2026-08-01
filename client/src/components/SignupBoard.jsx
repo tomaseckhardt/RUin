@@ -153,6 +153,12 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
       return
     }
 
+    const confirmed = window.confirm(`Opravdu chceš smazat položku ${item.label}?`)
+
+    if (!confirmed) {
+      return
+    }
+
     setBusyItemId(item.id)
 
     try {

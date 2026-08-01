@@ -64,7 +64,7 @@ function ManageEventPage() {
   const [pingTargetId, setPingTargetId] = useState(null)
   const [pingMessageInput, setPingMessageInput] = useState('')
   const [showEditEventModal, setShowEditEventModal] = useState(false)
-  const [eventForm, setEventForm] = useState({ name: '', location: '', datetime: '' })
+  const [eventForm, setEventForm] = useState({ name: '', location: '', datetime: '', description: '', requirePhone: false })
   const [isSavingEvent, setIsSavingEvent] = useState(false)
   const [showUnlockModal, setShowUnlockModal] = useState(false)
   const [unlockHint, setUnlockHint] = useState('')
@@ -337,6 +337,8 @@ function ManageEventPage() {
       name: payload.event.name || '',
       location: payload.event.location || '',
       datetime: parsedDatetime ? toDateTimeLocalValue(parsedDatetime) : '',
+      description: payload.event.description || '',
+      requirePhone: Boolean(payload.event.requirePhone),
     })
     setShowEditEventModal(true)
   }
@@ -372,6 +374,8 @@ function ManageEventPage() {
         name: eventForm.name,
         location: eventForm.location,
         datetime: eventForm.datetime,
+        description: eventForm.description,
+        requirePhone: eventForm.requirePhone,
       })
       toast.success('Detaily akce jsou upravené.')
       setShowEditEventModal(false)
@@ -769,6 +773,30 @@ function ManageEventPage() {
                   onChange={(nextValue) => setEventForm((current) => ({ ...current, datetime: nextValue }))}
                 />
               </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Popis</label>
+                <textarea
+                  className="field min-h-32"
+                  value={eventForm.description}
+                  onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Co se děje, co vzít s sebou a jestli hrozí dress code."
+                  required
+                />
+              </div>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                  checked={eventForm.requirePhone}
+                  onChange={(event) => setEventForm((current) => ({ ...current, requirePhone: event.target.checked }))}
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Vyžadovat telefonní číslo</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Učastníci budou muset vyplnit telefon. Z organizátorské stránky pak můžeš na každého přímo zavolat.</p>
+                </div>
+              </label>
 
               <div className="flex gap-3">
                 <button type="button" className="secondary-button flex-1 justify-center" onClick={closeEditEventModal}>

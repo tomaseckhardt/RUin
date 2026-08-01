@@ -1,17 +1,21 @@
 const APP_BASE_PATH = import.meta.env.BASE_URL || '/'
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY?.trim() || ''
 
+function isServiceWorkerSupported() {
+  return typeof window !== 'undefined' && 'serviceWorker' in navigator
+}
+
 function isPushSupported() {
-  return (
-    typeof window !== 'undefined' &&
-    'serviceWorker' in navigator &&
-    'PushManager' in window &&
-    'Notification' in window
-  )
+  return isServiceWorkerSupported() && 'PushManager' in window && 'Notification' in window
 }
 
 export async function ensurePushServiceWorker() {
-  if (!isPushSupported()) {
+  // The same service worker also drives offline app-shell caching, so it
+  // should register whenever the browser supports service workers at all -
+  // push support (checked separately below) is only required for the actual
+  // push-subscription flow, not for registering the worker in the first
+  // place.
+  if (!isServiceWorkerSupported()) {
     return null
   }
 

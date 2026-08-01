@@ -1,7 +1,4 @@
-import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-
-const MOBILE_QUERY = '(max-width: 767px)'
 
 function pad(value) {
   return String(value).padStart(2, '0')
@@ -129,25 +126,7 @@ function buildIcs(eventData) {
 }
 
 function AddToCalendarButton({ eventData }) {
-  const [isMobile, setIsMobile] = useState(false)
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(MOBILE_QUERY)
-
-    const syncMobileState = () => {
-      setIsMobile(mediaQuery.matches)
-    }
-
-    syncMobileState()
-
-    mediaQuery.addEventListener('change', syncMobileState)
-
-    return () => {
-      mediaQuery.removeEventListener('change', syncMobileState)
-    }
-  }, [])
-
-  if (!isMobile || !eventData?.datetime) {
+  if (!eventData?.datetime) {
     return null
   }
 
