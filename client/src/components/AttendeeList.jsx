@@ -32,6 +32,12 @@ const statusConfig = {
     accent: 'border-slate-200 bg-slate-100/90 dark:border-slate-700 dark:bg-slate-900/50',
     icon: '⚪',
   },
+  invited: {
+    label: 'Pozváno',
+    tone: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300',
+    accent: 'border-sky-200/80 bg-sky-50/70 dark:border-sky-900/70 dark:bg-sky-950/20',
+    icon: '📨',
+  },
 }
 
 function AttendeeList({
@@ -65,6 +71,9 @@ function AttendeeList({
           <span className="status-chip bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✅ {summary.confirmed} přijde</span>
           <span className="status-chip bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">⏳ {summary.excused} omluvenky</span>
           <span className="status-chip bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">⚪ {summary.rejected} zamítnuté</span>
+          {summary.invited ? (
+            <span className="status-chip bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">📨 {summary.invited} pozváno</span>
+          ) : null}
         </div>
       </div>
 
@@ -110,7 +119,7 @@ function AttendeeList({
                       „{attendee.excuse_reason}“
                     </p>
                   ) : null}
-                  {showPhone && attendee.phone ? (
+                  {(showPhone || attendee.status === 'invited') && attendee.phone ? (
                     <a
                       href={`tel:${attendee.phone}`}
                       className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"

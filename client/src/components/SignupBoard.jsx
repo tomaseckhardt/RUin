@@ -71,9 +71,9 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
   }, [eventId, category])
 
   useEffect(() => {
-    return subscribeToEventTicks(eventId, ['signup_item', 'signup_claim'], loadItems)
+    return subscribeToEventTicks(eventId, ['signup_item', 'signup_claim'], loadItems, category)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId])
+  }, [eventId, category])
 
   async function handleAdd(event) {
     event.preventDefault()
@@ -150,6 +150,12 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
 
   async function handleDelete(item) {
     if (!organizerToken) {
+      return
+    }
+
+    const confirmed = window.confirm(`Opravdu chceš smazat položku ${item.label}?`)
+
+    if (!confirmed) {
       return
     }
 

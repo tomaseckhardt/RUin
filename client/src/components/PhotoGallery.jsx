@@ -53,10 +53,10 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   }, [eventId])
 
   async function handleFileChange(event) {
-    const file = event.target.files?.[0]
+    const files = Array.from(event.target.files || [])
     event.target.value = ''
 
-    if (!file) {
+    if (files.length === 0) {
       return
     }
 
@@ -65,26 +65,43 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
       return
     }
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Nahraj prosím obrázek.')
-      return
-    }
-
     setIsUploading(true)
 
+    let successCount = 0
+
     try {
-      const storagePath = await uploadEventPhoto(eventId, file)
-      await recordEventPhoto(eventId, storagePath, currentName || 'Organizátor')
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          toast.error('Nahraj prosím obrázek.')
+          continue
+        }
+
+        try {
+          const storagePath = await uploadEventPhoto(eventId, file)
+          await recordEventPhoto(eventId, storagePath, currentName || 'Organizátor')
+          successCount += 1
+        } catch (error) {
+          toast.error(error.message)
+        }
+      }
+
       await loadPhotos()
-      toast.success('Fotka nahraná.')
-    } catch (error) {
-      toast.error(error.message)
+
+      if (successCount > 0) {
+        toast.success(files.length === 1 ? 'Fotka nahraná.' : `Nahráno ${successCount}/${files.length} fotek.`)
+      }
     } finally {
       setIsUploading(false)
     }
   }
 
   async function handleDelete(photo) {
+    const confirmed = window.confirm('Opravdu chceš smazat tuto fotku?')
+
+    if (!confirmed) {
+      return
+    }
+
     try {
       const { error: storageError } = await supabase.storage.from('event-photos').remove([photo.storage_path])
 
@@ -168,7 +185,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
             {isUploading ? 'Nahrávám…' : '📷 Přidat fotku'}
           </button>
         </div>
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
       </div>
 
       {photos.length === 0 ? (
@@ -191,7 +208,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                     event.stopPropagation()
                     handleDelete(photo)
                   }}
-                  className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
+                  className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white transition"
                 >
                   Smazat
                 </button>

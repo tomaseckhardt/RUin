@@ -10,6 +10,7 @@ import PageShell from '../components/PageShell.jsx'
 import ShareInviteModal from '../components/ShareInviteModal.jsx'
 import WeatherWidget from '../components/WeatherWidget.jsx'
 import EventStops from '../components/EventStops.jsx'
+import InvitePeopleModal from '../components/InvitePeopleModal.jsx'
 import SignupBoard from '../components/SignupBoard.jsx'
 import PhotoGallery from '../components/PhotoGallery.jsx'
 import { deleteAttendee, getEvent, getEventPhotos, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
@@ -60,11 +61,12 @@ function ManageEventPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showOverviewModal, setShowOverviewModal] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
+  const [showInvitePeopleModal, setShowInvitePeopleModal] = useState(false)
   const [showPingComposerModal, setShowPingComposerModal] = useState(false)
   const [pingTargetId, setPingTargetId] = useState(null)
   const [pingMessageInput, setPingMessageInput] = useState('')
   const [showEditEventModal, setShowEditEventModal] = useState(false)
-  const [eventForm, setEventForm] = useState({ name: '', location: '', datetime: '' })
+  const [eventForm, setEventForm] = useState({ name: '', location: '', datetime: '', description: '', requirePhone: false })
   const [isSavingEvent, setIsSavingEvent] = useState(false)
   const [showUnlockModal, setShowUnlockModal] = useState(false)
   const [unlockHint, setUnlockHint] = useState('')
@@ -337,6 +339,8 @@ function ManageEventPage() {
       name: payload.event.name || '',
       location: payload.event.location || '',
       datetime: parsedDatetime ? toDateTimeLocalValue(parsedDatetime) : '',
+      description: payload.event.description || '',
+      requirePhone: Boolean(payload.event.requirePhone),
     })
     setShowEditEventModal(true)
   }
@@ -372,6 +376,8 @@ function ManageEventPage() {
         name: eventForm.name,
         location: eventForm.location,
         datetime: eventForm.datetime,
+        description: eventForm.description,
+        requirePhone: eventForm.requirePhone,
       })
       toast.success('Detaily akce jsou upravené.')
       setShowEditEventModal(false)
@@ -587,6 +593,9 @@ function ManageEventPage() {
             <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowShareModal(true)}>
               Pozvánka
             </button>
+            <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
+              Pozvat lidi
+            </button>
             <button
               type="button"
               className="secondary-button w-full justify-center border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
@@ -620,6 +629,9 @@ function ManageEventPage() {
               </button>
               <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowShareModal(true)}>
                 Pozvánka
+              </button>
+              <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
+                Pozvat lidi
               </button>
               <button
                 type="button"
@@ -698,6 +710,14 @@ function ManageEventPage() {
           datetime={event.datetime}
         />
 
+        <InvitePeopleModal
+          open={showInvitePeopleModal}
+          onClose={() => setShowInvitePeopleModal(false)}
+          eventId={id}
+          token={activeToken}
+          onInvited={loadEvent}
+        />
+
         <ModalOverlay open={showPingComposerModal} onClose={closePingComposerModal} labelledBy="manage-ping-composer-title">
           <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Šťouchnout účastníka</p>
@@ -769,6 +789,30 @@ function ManageEventPage() {
                   onChange={(nextValue) => setEventForm((current) => ({ ...current, datetime: nextValue }))}
                 />
               </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Popis</label>
+                <textarea
+                  className="field min-h-32"
+                  value={eventForm.description}
+                  onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Co se děje, co vzít s sebou a jestli hrozí dress code."
+                  required
+                />
+              </div>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                  checked={eventForm.requirePhone}
+                  onChange={(event) => setEventForm((current) => ({ ...current, requirePhone: event.target.checked }))}
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Vyžadovat telefonní číslo</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Učastníci budou muset vyplnit telefon. Z organizátorské stránky pak můžeš na každého přímo zavolat.</p>
+                </div>
+              </label>
 
               <div className="flex gap-3">
                 <button type="button" className="secondary-button flex-1 justify-center" onClick={closeEditEventModal}>
@@ -842,10 +886,11 @@ function ManageEventPage() {
                   {event.description || 'Bez poznámky.'}
                 </p>
               </div>
-              {['confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
+              {['invited', 'confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
                 const group = attendees.filter((a) => a.status === statusGroup)
                 if (group.length === 0) return null
                 const labels = {
+                  invited: '📨 Pozváno (čeká)',
                   confirmed: '✅ Přijdou',
                   excused: '⏳ Omluvenky (čeká)',
                   excused_accepted: '❌ Omluvenka přijatá',
@@ -865,7 +910,7 @@ function ManageEventPage() {
                         >
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{a.name}</span>
-                            {event.requirePhone && a.phone ? (
+                            {(event.requirePhone || a.status === 'invited') && a.phone ? (
                               <a
                                 href={`tel:${a.phone}`}
                                 className="text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"

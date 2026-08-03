@@ -4976,3 +4976,1182 @@ grant execute on function public.get_feedback_reports() to anon, authenticated;
 drop table if exists public.feedback_admin;
 
 commit;
+
+-- ==================== Editable description + require_phone ====================
+-- Phase 22: update_event only ever let the organizer change name, location and
+-- datetime after creation - description and the "require phone number"
+-- setting were fixed at create_event time forever, even though both are
+-- perfectly reasonable things to fix a typo in or toggle later. Adds
+-- p_description/p_require_phone as required parameters (the events columns
+-- they map to are themselves not-null, so there's no sane "leave unset"
+-- meaning here), validated with the same non-blank check create_event uses.
+
+begin;
+
+drop function if exists public.update_event(text, text, text, text, timestamp without time zone);
+
+create or replace function public.update_event(
+  p_event_id text,
+  p_token text,
+  p_name text,
+  p_location text,
+  p_datetime timestamp without time zone,
+  p_description text,
+  p_require_phone boolean
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_token text := nullif(trim(p_token), '');
+  v_name text := nullif(trim(p_name), '');
+  v_location text := nullif(trim(p_location), '');
+  v_description text := nullif(trim(p_description), '');
+  v_event public.events%rowtype;
+begin
+  if v_token is null then
+    raise exception 'Správa vyžaduje platný organizátorský odkaz.';
+  end if;
+
+  if v_name is null or v_location is null or p_datetime is null or v_description is null then
+    raise exception 'Vyplň název, místo, datum a stručný popis akce.';
+  end if;
+
+  update public.events e
+  set
+    name = v_name,
+    location = v_location,
+    datetime = p_datetime,
+    description = v_description,
+    require_phone = p_require_phone
+  where e.id = p_event_id
+    and e.organizer_token = v_token
+  returning * into v_event;
+
+  if not found then
+    raise exception 'Neplatný organizátorský odkaz.';
+  end if;
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_event.id,
+      'name', v_event.name,
+      'location', v_event.location,
+      'datetime', v_event.datetime,
+      'description', v_event.description,
+      'requirePhone', v_event.require_phone
+    )
+  );
+end;
+$$;
+
+grant execute on function public.update_event(text, text, text, text, timestamp without time zone, text, boolean) to anon, authenticated;
+
+commit;
+
+-- ==================== Contact groups + event templates ====================
+-- Phase 23: Reusable named "groups" of pre-known people (name+phone) that can
+-- be bulk-invited into any future event, and reusable named event "templates"
+-- (name/location/description/require_phone prefill), both owned by a new
+-- standalone bearer-token identity (public.owners) independent of any single
+-- event's lifecycle. Unlike events.organizer_token (recovered via a
+-- bookmarked link + 4-digit PIN), an owner account is recovered by name +
+-- phone number + a 6-digit code via access_owner_account() - a single
+-- "log in or sign up" RPC, using the same upsert idiom submit_rsvp already
+-- uses for attendee identity (type your name -> recognized if it matches,
+-- otherwise a new record is created), just applied to phone+code instead of
+-- name.
+--
+-- Also adds a new attendees.status value, 'invited', for people the
+-- organizer pre-added (by name+phone) before they've answered anything
+-- themselves - and teaches submit_rsvp to claim that placeholder row by
+-- normalized phone number when the person later RSVPs under a different
+-- name, instead of creating a second, duplicate row.
+
+begin;
+
+-- --- owners: standalone bearer-token identity for groups/templates,
+-- recovered by phone + 6-digit code rather than a bookmarked link ---
+
+create table if not exists public.owners (
+  id text primary key,
+  token text not null unique,
+  name text not null,
+  phone text not null,
+  code_hash text not null,
+  code_failed_attempts integer not null default 0,
+  code_locked_until timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists owners_phone_normalized_uidx
+  on public.owners (public.normalize_phone(phone));
+
+create index if not exists owners_created_at_idx on public.owners (created_at desc);
+
+alter table public.owners enable row level security;
+
+drop policy if exists "owners_select_none" on public.owners;
+drop policy if exists "owners_insert_none" on public.owners;
+drop policy if exists "owners_update_none" on public.owners;
+drop policy if exists "owners_delete_none" on public.owners;
+
+create policy "owners_select_none"
+  on public.owners
+  for select
+  to anon, authenticated
+  using (false);
+
+create policy "owners_insert_none"
+  on public.owners
+  for insert
+  to anon, authenticated
+  with check (false);
+
+create policy "owners_update_none"
+  on public.owners
+  for update
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create policy "owners_delete_none"
+  on public.owners
+  for delete
+  to anon, authenticated
+  using (false);
+
+-- --- contact_groups: reusable named group of people, owned by one owner ---
+
+create table if not exists public.contact_groups (
+  id bigint generated always as identity primary key,
+  owner_id text not null references public.owners(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists contact_groups_owner_name_lower_uidx
+  on public.contact_groups (owner_id, lower(name));
+
+create index if not exists contact_groups_owner_id_idx on public.contact_groups (owner_id);
+
+alter table public.contact_groups enable row level security;
+
+drop policy if exists "contact_groups_select_none" on public.contact_groups;
+drop policy if exists "contact_groups_insert_none" on public.contact_groups;
+drop policy if exists "contact_groups_update_none" on public.contact_groups;
+drop policy if exists "contact_groups_delete_none" on public.contact_groups;
+
+create policy "contact_groups_select_none"
+  on public.contact_groups
+  for select
+  to anon, authenticated
+  using (false);
+
+create policy "contact_groups_insert_none"
+  on public.contact_groups
+  for insert
+  to anon, authenticated
+  with check (false);
+
+create policy "contact_groups_update_none"
+  on public.contact_groups
+  for update
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create policy "contact_groups_delete_none"
+  on public.contact_groups
+  for delete
+  to anon, authenticated
+  using (false);
+
+-- --- contact_group_members: people inside a group; phone is mandatory and
+-- must survive normalize_phone() (reused from Phase 9, already immutable) ---
+
+create table if not exists public.contact_group_members (
+  id bigint generated always as identity primary key,
+  group_id bigint not null references public.contact_groups(id) on delete cascade,
+  name text not null,
+  phone text not null check (public.normalize_phone(phone) is not null),
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists contact_group_members_group_phone_normalized_uidx
+  on public.contact_group_members (group_id, public.normalize_phone(phone));
+
+create index if not exists contact_group_members_group_id_idx on public.contact_group_members (group_id);
+
+alter table public.contact_group_members enable row level security;
+
+drop policy if exists "contact_group_members_select_none" on public.contact_group_members;
+drop policy if exists "contact_group_members_insert_none" on public.contact_group_members;
+drop policy if exists "contact_group_members_update_none" on public.contact_group_members;
+drop policy if exists "contact_group_members_delete_none" on public.contact_group_members;
+
+create policy "contact_group_members_select_none"
+  on public.contact_group_members
+  for select
+  to anon, authenticated
+  using (false);
+
+create policy "contact_group_members_insert_none"
+  on public.contact_group_members
+  for insert
+  to anon, authenticated
+  with check (false);
+
+create policy "contact_group_members_update_none"
+  on public.contact_group_members
+  for update
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create policy "contact_group_members_delete_none"
+  on public.contact_group_members
+  for delete
+  to anon, authenticated
+  using (false);
+
+-- --- event_templates: reusable prefill for create_event's own fields ---
+-- default_group_id is purely advisory (client UX hint: "after creating from
+-- this template, offer to bulk-invite this group") - it is NOT a foreign key
+-- events/attendees ever consult server-side, so deleting the referenced
+-- group must not block or cascade-delete the template; it just clears the
+-- hint (on delete set null).
+
+create table if not exists public.event_templates (
+  id bigint generated always as identity primary key,
+  owner_id text not null references public.owners(id) on delete cascade,
+  name text not null,
+  event_name text not null,
+  location text not null,
+  description text not null,
+  require_phone boolean not null default false,
+  default_group_id bigint references public.contact_groups(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists event_templates_owner_name_lower_uidx
+  on public.event_templates (owner_id, lower(name));
+
+create index if not exists event_templates_owner_id_idx on public.event_templates (owner_id);
+create index if not exists event_templates_default_group_id_idx on public.event_templates (default_group_id);
+
+alter table public.event_templates enable row level security;
+
+drop policy if exists "event_templates_select_none" on public.event_templates;
+drop policy if exists "event_templates_insert_none" on public.event_templates;
+drop policy if exists "event_templates_update_none" on public.event_templates;
+drop policy if exists "event_templates_delete_none" on public.event_templates;
+
+create policy "event_templates_select_none"
+  on public.event_templates
+  for select
+  to anon, authenticated
+  using (false);
+
+create policy "event_templates_insert_none"
+  on public.event_templates
+  for insert
+  to anon, authenticated
+  with check (false);
+
+create policy "event_templates_update_none"
+  on public.event_templates
+  for update
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create policy "event_templates_delete_none"
+  on public.event_templates
+  for delete
+  to anon, authenticated
+  using (false);
+
+-- --- attendees: add the 'invited' pending status (organizer pre-added this
+-- person by name+phone; they haven't answered anything themselves yet) ---
+
+alter table public.attendees drop constraint if exists attendees_status_check;
+alter table public.attendees add constraint attendees_status_check
+  check (status in ('confirmed', 'excused', 'excused_accepted', 'excused_rejected', 'invited'));
+
+-- --- access_owner_account: log in or sign up in one call, by phone+code ---
+
+create or replace function public.access_owner_account(
+  p_name text,
+  p_phone text,
+  p_code text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(trim(p_name), '');
+  v_phone text := public.normalize_phone(p_phone);
+  v_code text := nullif(trim(p_code), '');
+  v_owner public.owners%rowtype;
+  v_id text;
+  v_token text;
+  v_attempts integer := 0;
+begin
+  if v_name is null then
+    raise exception 'Vyplň své jméno.';
+  end if;
+
+  if v_phone is null then
+    raise exception 'Vyplň telefonní číslo.';
+  end if;
+
+  if v_code is null or v_code !~ '^[0-9]{6}$' then
+    raise exception 'Kód musí mít přesně 6 číslic.';
+  end if;
+
+  select *
+  into v_owner
+  from public.owners o
+  where public.normalize_phone(o.phone) = v_phone
+  for update;
+
+  if found then
+    if v_owner.code_locked_until is not null and v_owner.code_locked_until > now() then
+      raise exception 'Kód je dočasně zablokovaný. Zkus to později.';
+    end if;
+
+    if extensions.crypt(v_code, v_owner.code_hash) <> v_owner.code_hash then
+      update public.owners
+      set
+        code_failed_attempts = code_failed_attempts + 1,
+        code_locked_until = case
+          when code_failed_attempts + 1 >= 15 then now() + interval '24 hours'
+          when code_failed_attempts + 1 >= 10 then now() + interval '1 hour'
+          when code_failed_attempts + 1 >= 5 then now() + interval '15 minutes'
+          else code_locked_until
+        end
+      where id = v_owner.id;
+
+      raise exception 'Neplatný kód.';
+    end if;
+
+    update public.owners
+    set
+      name = v_name,
+      code_failed_attempts = 0,
+      code_locked_until = null
+    where id = v_owner.id
+    returning * into v_owner;
+
+    return jsonb_build_object('ownerId', v_owner.id, 'token', v_owner.token);
+  end if;
+
+  loop
+    v_attempts := v_attempts + 1;
+    if v_attempts > 20 then
+      raise exception 'Nepodařilo se vytvořit jedinečný identifikátor.';
+    end if;
+
+    v_id := public._random_token(10);
+    exit when not exists (select 1 from public.owners o where o.id = v_id);
+  end loop;
+
+  loop
+    v_token := public._random_token(24);
+    exit when not exists (select 1 from public.owners o where o.token = v_token);
+  end loop;
+
+  begin
+    insert into public.owners (id, token, name, phone, code_hash, code_failed_attempts, code_locked_until)
+    values (v_id, v_token, v_name, v_phone, extensions.crypt(v_code, extensions.gen_salt('bf')), 0, null);
+  exception
+    when unique_violation then
+      raise exception 'Zkus to znovu, prosím.';
+  end;
+
+  return jsonb_build_object('ownerId', v_id, 'token', v_token);
+end;
+$$;
+
+-- --- get_owner_payload: everything an owner needs to render their groups
+-- and templates, in one call ---
+
+create or replace function public.get_owner_payload(
+  p_owner_id text,
+  p_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+  v_groups jsonb;
+  v_templates jsonb;
+begin
+  select *
+  into v_owner
+  from public.owners o
+  where o.id = p_owner_id;
+
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', g.id,
+        'name', g.name,
+        'createdAt', g.created_at,
+        'members', (
+          select coalesce(
+            jsonb_agg(
+              jsonb_build_object('id', m.id, 'name', m.name, 'phone', m.phone, 'createdAt', m.created_at)
+              order by lower(m.name) asc
+            ),
+            '[]'::jsonb
+          )
+          from public.contact_group_members m
+          where m.group_id = g.id
+        )
+      )
+      order by lower(g.name) asc
+    ),
+    '[]'::jsonb
+  )
+  into v_groups
+  from public.contact_groups g
+  where g.owner_id = p_owner_id;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', t.id,
+        'name', t.name,
+        'eventName', t.event_name,
+        'location', t.location,
+        'description', t.description,
+        'requirePhone', t.require_phone,
+        'defaultGroupId', t.default_group_id,
+        'createdAt', t.created_at
+      )
+      order by lower(t.name) asc
+    ),
+    '[]'::jsonb
+  )
+  into v_templates
+  from public.event_templates t
+  where t.owner_id = p_owner_id;
+
+  return jsonb_build_object('groups', v_groups, 'templates', v_templates);
+end;
+$$;
+
+-- --- contact group CRUD ---
+
+create or replace function public.create_contact_group(
+  p_owner_id text,
+  p_token text,
+  p_name text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+  v_name text := nullif(trim(p_name), '');
+  v_group public.contact_groups%rowtype;
+begin
+  select * into v_owner from public.owners o where o.id = p_owner_id;
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  if v_name is null then
+    raise exception 'Vyplň název skupiny.';
+  end if;
+
+  if (select count(*) from public.contact_groups g where g.owner_id = p_owner_id) >= 25 then
+    raise exception 'Maximálně 25 skupin na účet.';
+  end if;
+
+  begin
+    insert into public.contact_groups (owner_id, name)
+    values (p_owner_id, v_name)
+    returning * into v_group;
+  exception
+    when unique_violation then
+      raise exception 'Skupina s tímto názvem už existuje.';
+  end;
+
+  return jsonb_build_object(
+    'group', jsonb_build_object('id', v_group.id, 'name', v_group.name, 'createdAt', v_group.created_at, 'members', '[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.rename_contact_group(
+  p_owner_id text,
+  p_token text,
+  p_group_id bigint,
+  p_name text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+  v_name text := nullif(trim(p_name), '');
+  v_group public.contact_groups%rowtype;
+begin
+  select * into v_owner from public.owners o where o.id = p_owner_id;
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  if v_name is null then
+    raise exception 'Vyplň název skupiny.';
+  end if;
+
+  begin
+    update public.contact_groups
+    set name = v_name
+    where id = p_group_id and owner_id = p_owner_id
+    returning * into v_group;
+  exception
+    when unique_violation then
+      raise exception 'Skupina s tímto názvem už existuje.';
+  end;
+
+  if not found then
+    raise exception 'Skupina nebyla nalezena.';
+  end if;
+
+  return jsonb_build_object('group', jsonb_build_object('id', v_group.id, 'name', v_group.name));
+end;
+$$;
+
+create or replace function public.delete_contact_group(
+  p_owner_id text,
+  p_token text,
+  p_group_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+begin
+  select * into v_owner from public.owners o where o.id = p_owner_id;
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  delete from public.contact_groups where id = p_group_id and owner_id = p_owner_id;
+
+  if not found then
+    raise exception 'Skupina nebyla nalezena.';
+  end if;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+create or replace function public.add_contact_group_member(
+  p_owner_id text,
+  p_token text,
+  p_group_id bigint,
+  p_name text,
+  p_phone text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+  v_name text := nullif(trim(p_name), '');
+  v_phone text := public.normalize_phone(p_phone);
+  v_member public.contact_group_members%rowtype;
+begin
+  select * into v_owner from public.owners o where o.id = p_owner_id;
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  if not exists (select 1 from public.contact_groups g where g.id = p_group_id and g.owner_id = p_owner_id) then
+    raise exception 'Skupina nebyla nalezena.';
+  end if;
+
+  if v_name is null then
+    raise exception 'Vyplň jméno.';
+  end if;
+
+  if v_phone is null then
+    raise exception 'Vyplň telefonní číslo.';
+  end if;
+
+  if length(v_phone) > 20 then
+    raise exception 'Telefonní číslo je příliš dlouhé.';
+  end if;
+
+  if (select count(*) from public.contact_group_members m where m.group_id = p_group_id) >= 200 then
+    raise exception 'Maximálně 200 lidí ve skupině.';
+  end if;
+
+  begin
+    insert into public.contact_group_members (group_id, name, phone)
+    values (p_group_id, v_name, v_phone)
+    returning * into v_member;
+  exception
+    when unique_violation then
+      raise exception 'Tohle telefonní číslo je ve skupině už použité.';
+  end;
+
+  return jsonb_build_object('member', jsonb_build_object('id', v_member.id, 'name', v_member.name, 'phone', v_member.phone));
+end;
+$$;
+
+create or replace function public.remove_contact_group_member(
+  p_owner_id text,
+  p_token text,
+  p_group_id bigint,
+  p_member_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+begin
+  select * into v_owner from public.owners o where o.id = p_owner_id;
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  if not exists (select 1 from public.contact_groups g where g.id = p_group_id and g.owner_id = p_owner_id) then
+    raise exception 'Skupina nebyla nalezena.';
+  end if;
+
+  delete from public.contact_group_members where id = p_member_id and group_id = p_group_id;
+
+  if not found then
+    raise exception 'Osoba nebyla nalezena.';
+  end if;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+-- --- event template CRUD ---
+
+create or replace function public.create_event_template(
+  p_owner_id text,
+  p_token text,
+  p_name text,
+  p_event_name text,
+  p_location text,
+  p_description text,
+  p_require_phone boolean,
+  p_default_group_id bigint default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+  v_name text := nullif(trim(p_name), '');
+  v_event_name text := nullif(trim(p_event_name), '');
+  v_location text := nullif(trim(p_location), '');
+  v_description text := nullif(trim(p_description), '');
+  v_template public.event_templates%rowtype;
+begin
+  select * into v_owner from public.owners o where o.id = p_owner_id;
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  if v_name is null or v_event_name is null or v_location is null or v_description is null then
+    raise exception 'Vyplň název šablony, název akce, místo a popis.';
+  end if;
+
+  if p_default_group_id is not null
+     and not exists (select 1 from public.contact_groups g where g.id = p_default_group_id and g.owner_id = p_owner_id) then
+    raise exception 'Neplatná skupina.';
+  end if;
+
+  if (select count(*) from public.event_templates t where t.owner_id = p_owner_id) >= 25 then
+    raise exception 'Maximálně 25 šablon na účet.';
+  end if;
+
+  begin
+    insert into public.event_templates (owner_id, name, event_name, location, description, require_phone, default_group_id)
+    values (p_owner_id, v_name, v_event_name, v_location, v_description, coalesce(p_require_phone, false), p_default_group_id)
+    returning * into v_template;
+  exception
+    when unique_violation then
+      raise exception 'Šablona s tímto názvem už existuje.';
+  end;
+
+  return jsonb_build_object('template', to_jsonb(v_template));
+end;
+$$;
+
+create or replace function public.update_event_template(
+  p_owner_id text,
+  p_token text,
+  p_template_id bigint,
+  p_name text,
+  p_event_name text,
+  p_location text,
+  p_description text,
+  p_require_phone boolean,
+  p_default_group_id bigint default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+  v_name text := nullif(trim(p_name), '');
+  v_event_name text := nullif(trim(p_event_name), '');
+  v_location text := nullif(trim(p_location), '');
+  v_description text := nullif(trim(p_description), '');
+  v_template public.event_templates%rowtype;
+begin
+  select * into v_owner from public.owners o where o.id = p_owner_id;
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  if v_name is null or v_event_name is null or v_location is null or v_description is null then
+    raise exception 'Vyplň název šablony, název akce, místo a popis.';
+  end if;
+
+  if p_default_group_id is not null
+     and not exists (select 1 from public.contact_groups g where g.id = p_default_group_id and g.owner_id = p_owner_id) then
+    raise exception 'Neplatná skupina.';
+  end if;
+
+  begin
+    update public.event_templates
+    set
+      name = v_name,
+      event_name = v_event_name,
+      location = v_location,
+      description = v_description,
+      require_phone = coalesce(p_require_phone, false),
+      default_group_id = p_default_group_id
+    where id = p_template_id and owner_id = p_owner_id
+    returning * into v_template;
+  exception
+    when unique_violation then
+      raise exception 'Šablona s tímto názvem už existuje.';
+  end;
+
+  if not found then
+    raise exception 'Šablona nebyla nalezena.';
+  end if;
+
+  return jsonb_build_object('template', to_jsonb(v_template));
+end;
+$$;
+
+create or replace function public.delete_event_template(
+  p_owner_id text,
+  p_token text,
+  p_template_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner public.owners%rowtype;
+begin
+  select * into v_owner from public.owners o where o.id = p_owner_id;
+  if not found or v_owner.token <> p_token then
+    raise exception 'Neplatný přístupový token.';
+  end if;
+
+  delete from public.event_templates where id = p_template_id and owner_id = p_owner_id;
+
+  if not found then
+    raise exception 'Šablona nebyla nalezena.';
+  end if;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+-- --- invite_attendees: organizer bulk pre-adds name+phone pairs to their
+-- own event, authorized by the event's own organizer_token (this is an
+-- event-scoped action, like add_event_stop - independent of the owner
+-- bearer token used for groups/templates above) ---
+
+create or replace function public.invite_attendees(
+  p_event_id text,
+  p_token text,
+  p_invitees jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event public.events%rowtype;
+  v_item jsonb;
+  v_name text;
+  v_phone text;
+  v_existing_id bigint;
+  v_existing_status text;
+  v_inserted integer := 0;
+  v_updated integer := 0;
+  v_skipped integer := 0;
+begin
+  select * into v_event from public.events e where e.id = p_event_id;
+  if not found then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if v_event.organizer_token <> p_token then
+    raise exception 'Neplatný organizátorský odkaz.';
+  end if;
+
+  if p_invitees is null or jsonb_typeof(p_invitees) <> 'array' or jsonb_array_length(p_invitees) = 0 then
+    raise exception 'Vyplň alespoň jednu osobu k pozvání.';
+  end if;
+
+  if jsonb_array_length(p_invitees) > 200 then
+    raise exception 'Najednou lze pozvat maximálně 200 lidí.';
+  end if;
+
+  for v_item in select jsonb_array_elements(p_invitees)
+  loop
+    v_name := nullif(trim(v_item->>'name'), '');
+    v_phone := public.normalize_phone(v_item->>'phone');
+
+    if v_name is null then
+      continue;
+    end if;
+
+    v_existing_id := null;
+    v_existing_status := null;
+
+    select a.id, a.status
+    into v_existing_id, v_existing_status
+    from public.attendees a
+    where a.event_id = p_event_id
+      and (
+        (v_phone is not null and public.normalize_phone(a.phone) = v_phone)
+        or lower(a.name) = lower(v_name)
+      )
+    order by (case when v_phone is not null and public.normalize_phone(a.phone) = v_phone then 0 else 1 end)
+    limit 1;
+
+    begin
+      if v_existing_id is not null then
+        if v_existing_status = 'invited' then
+          update public.attendees
+          set name = v_name, phone = coalesce(v_phone, phone)
+          where id = v_existing_id;
+          v_updated := v_updated + 1;
+        else
+          v_skipped := v_skipped + 1;
+        end if;
+      else
+        insert into public.attendees (event_id, name, status, phone)
+        values (p_event_id, v_name, 'invited', v_phone);
+        v_inserted := v_inserted + 1;
+      end if;
+    exception
+      when unique_violation then
+        v_skipped := v_skipped + 1;
+    end;
+  end loop;
+
+  return jsonb_build_object('invited', v_inserted, 'updated', v_updated, 'skipped', v_skipped);
+end;
+$$;
+
+-- --- submit_rsvp: claim a pre-invited placeholder row by phone number when
+-- the person answers with a different name than the organizer used, instead
+-- of creating a duplicate attendee. Signature is unchanged from Phase 6, so
+-- no drop function is needed - this fully replaces the previous body. ---
+
+create or replace function public.submit_rsvp(
+  p_event_id text,
+  p_name text,
+  p_status text,
+  p_excuse_reason text default null,
+  p_phone text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(trim(p_name), '');
+  v_excuse_reason text := nullif(trim(coalesce(p_excuse_reason, '')), '');
+  v_phone text := public.normalize_phone(p_phone);
+  v_event public.events%rowtype;
+  v_attendee public.attendees%rowtype;
+  v_invited_match_id bigint := null;
+begin
+  select *
+  into v_event
+  from public.events e
+  where e.id = p_event_id;
+
+  if not found then
+    raise exception 'Na tuhle akci se už nedá odpovědět.';
+  end if;
+
+  if v_name is null then
+    raise exception 'Vyplň svoje jméno.';
+  end if;
+
+  if p_status not in ('confirmed', 'excused') then
+    raise exception 'Neplatný typ odpovědi.';
+  end if;
+
+  if v_event.require_phone and v_phone is null then
+    raise exception 'Vyplň prosím telefonní číslo.';
+  end if;
+
+  if v_phone is not null and length(v_phone) > 20 then
+    raise exception 'Telefonní číslo je příliš dlouhé.';
+  end if;
+
+  -- Claim a pre-invited placeholder row by phone, regardless of what name
+  -- the person types (organizer wrote "Jarda", they type "Jaroslav").
+  -- Restricted to status='invited' on purpose: it can never repoint an
+  -- already-answered attendee's row to a different name via a phone
+  -- collision - that stays a hard error below, exactly as before.
+  if v_phone is not null then
+    select a.id into v_invited_match_id
+    from public.attendees a
+    where a.event_id = p_event_id
+      and a.status = 'invited'
+      and public.normalize_phone(a.phone) = v_phone
+    limit 1;
+  end if;
+
+  if v_invited_match_id is not null then
+    begin
+      update public.attendees
+      set
+        name = v_name,
+        status = p_status,
+        excuse_reason = case when p_status = 'excused' then v_excuse_reason else null end,
+        phone = v_phone
+      where id = v_invited_match_id
+      returning * into v_attendee;
+    exception
+      when unique_violation then
+        raise exception 'Tohle jméno je na této akci už obsazené jiným účastníkem.';
+    end;
+
+    return jsonb_build_object('attendee', to_jsonb(v_attendee) - 'phone');
+  end if;
+
+  if v_phone is not null and exists (
+    select 1
+    from public.attendees a
+    where a.event_id = p_event_id
+      and public.normalize_phone(a.phone) = v_phone
+      and lower(a.name) <> lower(v_name)
+  ) then
+    raise exception 'Tohle telefonní číslo už je na této akci použité.';
+  end if;
+
+  begin
+    insert into public.attendees (event_id, name, status, excuse_reason, phone)
+    values (
+      p_event_id,
+      v_name,
+      p_status,
+      case when p_status = 'excused' then v_excuse_reason else null end,
+      v_phone
+    )
+    on conflict (event_id, lower(name))
+    do update set
+      status = excluded.status,
+      excuse_reason = excluded.excuse_reason,
+      phone = coalesce(excluded.phone, public.attendees.phone)
+    returning * into v_attendee;
+  exception
+    when unique_violation then
+      raise exception 'Tohle telefonní číslo už je na této akci použité.';
+  end;
+
+  -- phone is deliberately excluded from the response - see the original
+  -- comment on this function from Phase 6: submit_rsvp is callable by
+  -- anyone with an attendee's exact name, so returning the full row would
+  -- hand back an existing attendee's phone number to whoever guesses it.
+  return jsonb_build_object('attendee', to_jsonb(v_attendee) - 'phone');
+end;
+$$;
+
+-- --- get_event_payload: surface the 'invited' bucket so organizers can see
+-- how many pre-invited people haven't answered yet. Signature is unchanged,
+-- so no drop function is needed. ---
+
+create or replace function public.get_event_payload(
+  p_event_id text,
+  p_organizer_token text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event public.events%rowtype;
+  v_is_organizer boolean;
+  v_attendees jsonb;
+  v_summary jsonb;
+begin
+  select *
+  into v_event
+  from public.events e
+  where e.id = p_event_id;
+
+  if not found then
+    raise exception 'Tahle akce už neexistuje.';
+  end if;
+
+  v_is_organizer := p_organizer_token is not null and p_organizer_token = v_event.organizer_token;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', a.id,
+        'event_id', a.event_id,
+        'name', a.name,
+        'status', a.status,
+        'excuse_reason', a.excuse_reason,
+        'phone', case when v_is_organizer then a.phone else null end,
+        'created_at', a.created_at,
+        'checked_in_at', a.checked_in_at,
+        'ping_count', coalesce(p.ping_count, 0),
+        'ping_last_source_name', p.last_source_name,
+        'ping_last_message', p.last_message,
+        'ping_last_created_at', p.last_created_at
+      )
+      order by
+        case a.status
+          when 'invited' then 0
+          when 'confirmed' then 1
+          when 'excused' then 2
+          when 'excused_accepted' then 3
+          when 'excused_rejected' then 4
+          else 5
+        end,
+        a.created_at asc,
+        a.name asc
+    ),
+    '[]'::jsonb
+  )
+  into v_attendees
+  from public.attendees a
+  left join lateral (
+    select
+      (
+        select count(*)::integer
+        from public.attendee_pings ap_count
+        where ap_count.event_id = p_event_id
+          and ap_count.target_attendee_id = a.id
+      ) as ping_count,
+      (
+        select ap_last.source_name
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_source_name,
+      (
+        select ap_last.message
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_message,
+      (
+        select ap_last.created_at
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_created_at
+  ) p on true
+  where a.event_id = p_event_id;
+
+  select jsonb_build_object(
+    'confirmed', count(*) filter (where a.status = 'confirmed'),
+    'excused', count(*) filter (where a.status in ('excused', 'excused_accepted')),
+    'rejected', count(*) filter (where a.status = 'excused_rejected'),
+    'invited', count(*) filter (where a.status = 'invited')
+  )
+  into v_summary
+  from public.attendees a
+  where a.event_id = p_event_id;
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_event.id,
+      'name', v_event.name,
+      'location', v_event.location,
+      'datetime', v_event.datetime,
+      'description', v_event.description,
+      'createdAt', v_event.created_at,
+      'requirePhone', v_event.require_phone,
+      'organizerName', v_event.organizer_name
+    ),
+    'attendees', v_attendees,
+    'summary', v_summary
+  );
+end;
+$$;
+
+grant execute on function public.access_owner_account(text, text, text) to anon, authenticated;
+grant execute on function public.get_owner_payload(text, text) to anon, authenticated;
+grant execute on function public.create_contact_group(text, text, text) to anon, authenticated;
+grant execute on function public.rename_contact_group(text, text, bigint, text) to anon, authenticated;
+grant execute on function public.delete_contact_group(text, text, bigint) to anon, authenticated;
+grant execute on function public.add_contact_group_member(text, text, bigint, text, text) to anon, authenticated;
+grant execute on function public.remove_contact_group_member(text, text, bigint, bigint) to anon, authenticated;
+grant execute on function public.create_event_template(text, text, text, text, text, text, boolean, bigint) to anon, authenticated;
+grant execute on function public.update_event_template(text, text, bigint, text, text, text, text, boolean, bigint) to anon, authenticated;
+grant execute on function public.delete_event_template(text, text, bigint) to anon, authenticated;
+grant execute on function public.invite_attendees(text, text, jsonb) to anon, authenticated;
+-- submit_rsvp and get_event_payload keep their existing grants - signatures
+-- unchanged, so no new grant statement is needed for either.
+
+commit;

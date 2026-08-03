@@ -85,6 +85,8 @@ function EventChat({ eventId, currentName, canSend }) {
   const [openPickerFor, setOpenPickerFor] = useState(null)
   const [pendingReactions, setPendingReactions] = useState(() => new Set())
   const latestRequestIdRef = useRef(0)
+  const scrollContainerRef = useRef(null)
+  const shouldAutoScrollRef = useRef(true)
 
   async function loadMessages() {
     const requestId = ++latestRequestIdRef.current
@@ -139,6 +141,19 @@ function EventChat({ eventId, currentName, canSend }) {
     return subscribeToEventTicks(eventId, ['chat_message', 'chat_reaction'], loadMessages)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
+
+  useEffect(() => {
+    if (shouldAutoScrollRef.current && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+    }
+  }, [messages])
+
+  function handleMessagesScroll(event) {
+    const container = event.currentTarget
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+
+    shouldAutoScrollRef.current = distanceFromBottom < 48
+  }
 
   async function handleToggleReaction(messageId, emoji) {
     if (!currentName?.trim()) {
@@ -215,7 +230,11 @@ function EventChat({ eventId, currentName, canSend }) {
         </p>
       </div>
 
-      <div className="max-h-80 space-y-3 overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/45">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleMessagesScroll}
+        className="max-h-80 space-y-3 overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/45"
+      >
         {isLoading ? (
           <p className="text-sm text-slate-500 dark:text-slate-300">Načítám chat…</p>
         ) : null}

@@ -1,9 +1,148 @@
 import { supabase } from './supabase.js'
+import { toast } from 'sonner'
+
+const OFFLINE_ERROR_MESSAGE = 'Jsi offline - zkontroluj připojení a zkus to znovu.'
+const RETRY_QUEUE_STORAGE_KEY = 'ruin-retry-queue'
+
+// RPCs that are upsert/delete-by-identity operations under the hood - replaying
+// them again (because the first attempt failed while offline) is idempotent or
+// harmless, so they're safe to queue and blindly retry once we're back online.
+// Anything not in this set (chat messages, pings, adding a signup item, ...)
+// would create a visible duplicate if replayed twice, so those just surface
+// the offline error above instead of being queued.
+const RETRYABLE_RPCS = new Set([
+  'submit_rsvp',
+  'check_in_attendee',
+  'claim_signup_item',
+  'unclaim_signup_item',
+])
+
+function isOfflineError(error) {
+  if (!error) {
+    return false
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return true
+  }
+
+  // supabase-js/postgrest-js swallows a fetch-level network failure (DNS
+  // failure, dropped connection, timeout, ...) into a plain `{ error }`
+  // object with no Postgres/PostgREST error code, tagging the message with
+  // the name of the underlying fetch exception - e.g. "TypeError: Failed to
+  // fetch", "TypeError: NetworkError when attempting to fetch resource.",
+  // "TypeError: Load failed" (Safari). A real RPC/business-logic error (e.g.
+  // a Czech validation message from `raise exception`) always carries a
+  // Postgres error code and never looks like that.
+  const message = typeof error.message === 'string' ? error.message : ''
+  return !error.code && /^(TypeError|FetchError|AbortError)\b/.test(message)
+}
+
+function readRetryQueue() {
+  try {
+    const raw = window.localStorage.getItem(RETRY_QUEUE_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writeRetryQueue(queue) {
+  try {
+    window.localStorage.setItem(RETRY_QUEUE_STORAGE_KEY, JSON.stringify(queue))
+  } catch {
+    // localStorage unavailable or full - not worth failing the request over.
+  }
+}
+
+function queueRetryableCall(name, args) {
+  if (!RETRYABLE_RPCS.has(name)) {
+    return
+  }
+
+  const queue = readRetryQueue()
+  queue.push({ name, args })
+  writeRetryQueue(queue)
+}
+
+let isReplayingRetryQueue = false
+
+// Replays queued write calls, oldest first, once the app is back online.
+// Anything that succeeds is dropped from the queue. Anything that fails
+// again for a real (non-network) reason is also dropped - we don't retry
+// forever - and its failure is surfaced via a toast. If we're still offline,
+// the remaining items (this one included) are left queued for next time.
+async function replayRetryQueue() {
+  if (isReplayingRetryQueue) {
+    return
+  }
+
+  const queue = readRetryQueue()
+
+  if (!queue.length) {
+    return
+  }
+
+  isReplayingRetryQueue = true
+
+  try {
+    let successCount = 0
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const item = queue[index]
+      const { error } = await supabase.rpc(item.name, item.args)
+
+      if (!error) {
+        successCount += 1
+        continue
+      }
+
+      if (isOfflineError(error)) {
+        // Still offline (or offline again) - keep this item and everything
+        // after it for the next reconnect instead of dropping them.
+        writeRetryQueue(queue.slice(index))
+        return
+      }
+
+      toast.error(`Odloženou akci se nepodařilo dokončit: ${error.message || 'neznámá chyba'}`)
+    }
+
+    writeRetryQueue([])
+
+    if (successCount > 0) {
+      toast.success(
+        successCount === 1
+          ? 'Jedna odložená akce se úspěšně odeslala.'
+          : `${successCount} odložených akcí se úspěšně odeslalo.`,
+      )
+    }
+  } finally {
+    isReplayingRetryQueue = false
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    replayRetryQueue()
+  })
+
+  // Also try once on load: a previous session may have queued something
+  // while offline and then been closed before an "online" event ever fired.
+  if (navigator.onLine) {
+    replayRetryQueue()
+  }
+}
 
 async function callRpc(name, args, fallbackMessage) {
   const { data, error } = await supabase.rpc(name, args)
 
   if (error) {
+    if (isOfflineError(error)) {
+      queueRetryableCall(name, args)
+      throw new Error(OFFLINE_ERROR_MESSAGE)
+    }
+
     throw new Error(error.message || fallbackMessage || 'Požadavek se nepovedl.')
   }
 
@@ -117,8 +256,121 @@ export function updateEvent(eventId, data) {
       p_name: data.name,
       p_location: data.location,
       p_datetime: data.datetime,
+      p_description: data.description,
+      p_require_phone: data.requirePhone ?? false,
     },
     'Akci se nepodařilo upravit.',
+  )
+}
+
+export function inviteAttendees(eventId, token, invitees) {
+  return callRpc(
+    'invite_attendees',
+    {
+      p_event_id: eventId,
+      p_token: token,
+      p_invitees: invitees.map((invitee) => ({ name: invitee.name, phone: invitee.phone || null })),
+    },
+    'Pozvánky se nepodařilo uložit.',
+  )
+}
+
+export function accessOwnerAccount(name, phone, code) {
+  return callRpc(
+    'access_owner_account',
+    { p_name: name, p_phone: phone, p_code: code },
+    'Nepodařilo se ověřit přístup ke skupinám a šablonám.',
+  )
+}
+
+export function getOwnerPayload(ownerId, token) {
+  return callRpc(
+    'get_owner_payload',
+    { p_owner_id: ownerId, p_token: token },
+    'Skupiny a šablony se nepodařilo načíst.',
+  )
+}
+
+export function createContactGroup(ownerId, token, name) {
+  return callRpc(
+    'create_contact_group',
+    { p_owner_id: ownerId, p_token: token, p_name: name },
+    'Skupinu se nepodařilo uložit.',
+  )
+}
+
+export function renameContactGroup(ownerId, token, groupId, name) {
+  return callRpc(
+    'rename_contact_group',
+    { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_name: name },
+    'Skupinu se nepodařilo přejmenovat.',
+  )
+}
+
+export function deleteContactGroup(ownerId, token, groupId) {
+  return callRpc(
+    'delete_contact_group',
+    { p_owner_id: ownerId, p_token: token, p_group_id: groupId },
+    'Skupinu se nepodařilo smazat.',
+  )
+}
+
+export function addContactGroupMember(ownerId, token, groupId, member) {
+  return callRpc(
+    'add_contact_group_member',
+    { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_name: member.name, p_phone: member.phone },
+    'Člena se nepodařilo přidat.',
+  )
+}
+
+export function removeContactGroupMember(ownerId, token, groupId, memberId) {
+  return callRpc(
+    'remove_contact_group_member',
+    { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_member_id: memberId },
+    'Člena se nepodařilo odebrat.',
+  )
+}
+
+export function createEventTemplate(ownerId, token, data) {
+  return callRpc(
+    'create_event_template',
+    {
+      p_owner_id: ownerId,
+      p_token: token,
+      p_name: data.name,
+      p_event_name: data.eventName,
+      p_location: data.location,
+      p_description: data.description,
+      p_require_phone: data.requirePhone ?? false,
+      p_default_group_id: data.defaultGroupId ?? null,
+    },
+    'Šablonu se nepodařilo uložit.',
+  )
+}
+
+export function updateEventTemplate(ownerId, token, templateId, data) {
+  return callRpc(
+    'update_event_template',
+    {
+      p_owner_id: ownerId,
+      p_token: token,
+      p_template_id: templateId,
+      p_name: data.name,
+      p_event_name: data.eventName,
+      p_location: data.location,
+      p_description: data.description,
+      p_require_phone: data.requirePhone ?? false,
+      p_default_group_id: data.defaultGroupId ?? null,
+    },
+    'Šablonu se nepodařilo upravit.',
+  )
+}
+
+export function deleteEventTemplate(ownerId, token, templateId) {
+  return callRpc(
+    'delete_event_template',
+    { p_owner_id: ownerId, p_token: token, p_template_id: templateId },
+    'Šablonu se nepodařilo smazat.',
   )
 }
 

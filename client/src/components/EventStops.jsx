@@ -60,9 +60,15 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
     }
   }
 
-  async function handleDelete(stopId) {
+  async function handleDelete(stop) {
+    const confirmed = window.confirm(`Opravdu chceš smazat zastávku ${stop.name}?`)
+
+    if (!confirmed) {
+      return
+    }
+
     try {
-      await deleteEventStop(eventId, organizerToken, stopId)
+      await deleteEventStop(eventId, organizerToken, stop.id)
       await loadStops()
     } catch (error) {
       toast.error(error.message)
@@ -115,7 +121,7 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
                 {stop.location ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{stop.location}</p> : null}
               </div>
               {isOrganizer ? (
-                <button type="button" className="text-xs text-rose-600 hover:underline dark:text-rose-300" onClick={() => handleDelete(stop.id)}>
+                <button type="button" className="text-xs text-rose-600 hover:underline dark:text-rose-300" onClick={() => handleDelete(stop)}>
                   Smazat
                 </button>
               ) : null}
