@@ -4,10 +4,25 @@ import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
 import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
+import GroupPicker from '../components/GroupPicker.jsx'
+import InviteListEditor from '../components/InviteListEditor.jsx'
+import OwnerAccessModal from '../components/OwnerAccessModal.jsx'
 import PageShell from '../components/PageShell.jsx'
-import { addEventStop, createEvent, getEvent } from '../lib/api.js'
+import TemplatesPanel from '../components/TemplatesPanel.jsx'
+import {
+  addContactGroupMember,
+  addEventStop,
+  createContactGroup,
+  createEvent,
+  createEventTemplate,
+  getEvent,
+  getOwnerPayload,
+  inviteAttendees,
+} from '../lib/api.js'
 import { formatDateTime, parseLocalDateTime } from '../lib/format.js'
+import { createEmptyInvitee, getFilledInvitees, mergeInvitees } from '../lib/invitees.js'
 import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
+import { getSavedOwner } from '../lib/ownerLinkStorage.js'
 
 function parseTokenFromPath(path) {
   try {
@@ -38,6 +53,18 @@ function CreateEventPage() {
   const [afterpartyTime, setAfterpartyTime] = useState('')
   const [confettiOrigin, setConfettiOrigin] = useState(null)
   const [burstKey, setBurstKey] = useState(0)
+  const [owner, setOwner] = useState(() => getSavedOwner())
+  const [ownerPayload, setOwnerPayload] = useState({ groups: [], templates: [] })
+  const [hasLoadedOwnerPayload, setHasLoadedOwnerPayload] = useState(false)
+  const isLoadingOwnerPayload = Boolean(owner) && !hasLoadedOwnerPayload
+  const [showInvites, setShowInvites] = useState(false)
+  const [invitees, setInvitees] = useState(() => [createEmptyInvitee()])
+  const [saveAsGroup, setSaveAsGroup] = useState(false)
+  const [groupName, setGroupName] = useState('')
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [showOwnerAccessModal, setShowOwnerAccessModal] = useState(false)
+  const [pendingOwnerCheckbox, setPendingOwnerCheckbox] = useState(null)
 
   const whyItWorks = [
     'Všichni vidí stejný plán, žádné ztracené zprávy v chatu.',
@@ -64,20 +91,57 @@ function CreateEventPage() {
 
     try {
       const payload = await createEvent(form)
+      const organizerToken = parseTokenFromPath(payload.organizerPath)
 
-      if (showAfterparty && afterpartyLocation.trim() && afterpartyTime) {
-        const token = parseTokenFromPath(payload.organizerPath)
+      if (showAfterparty && afterpartyLocation.trim() && afterpartyTime && organizerToken) {
+        try {
+          await addEventStop(payload.event.id, organizerToken, {
+            name: 'Afterparty',
+            location: afterpartyLocation,
+            startsAtLabel: afterpartyTime,
+          })
+        } catch (afterpartyError) {
+          toast.error(`Akce je založená, ale afterparty se nepodařilo uložit: ${afterpartyError.message}`)
+        }
+      }
 
-        if (token) {
-          try {
-            await addEventStop(payload.event.id, token, {
-              name: 'Afterparty',
-              location: afterpartyLocation,
-              startsAtLabel: afterpartyTime,
-            })
-          } catch (afterpartyError) {
-            toast.error(`Akce je založená, ale afterparty se nepodařilo uložit: ${afterpartyError.message}`)
+      const filledInvitees = getFilledInvitees(invitees)
+
+      if (filledInvitees.length > 0 && organizerToken) {
+        try {
+          await inviteAttendees(payload.event.id, organizerToken, filledInvitees)
+        } catch (inviteError) {
+          toast.error(`Akce je založená, ale pozvánky se nepodařilo uložit: ${inviteError.message}`)
+        }
+      }
+
+      let createdGroupId = null
+
+      if (saveAsGroup && groupName.trim() && owner) {
+        try {
+          const groupResult = await createContactGroup(owner.ownerId, owner.token, groupName)
+          createdGroupId = groupResult.group.id
+
+          for (const invitee of filledInvitees) {
+            await addContactGroupMember(owner.ownerId, owner.token, createdGroupId, invitee)
           }
+        } catch (groupError) {
+          toast.error(`Akce je založená, ale skupinu se nepodařilo uložit: ${groupError.message}`)
+        }
+      }
+
+      if (saveAsTemplate && templateName.trim() && owner) {
+        try {
+          await createEventTemplate(owner.ownerId, owner.token, {
+            name: templateName,
+            eventName: form.name,
+            location: form.location,
+            description: form.description,
+            requirePhone: form.requirePhone,
+            defaultGroupId: createdGroupId,
+          })
+        } catch (templateError) {
+          toast.error(`Akce je založená, ale šablonu se nepodařilo uložit: ${templateError.message}`)
         }
       }
 
@@ -86,6 +150,12 @@ function CreateEventPage() {
       setShowAfterparty(false)
       setAfterpartyLocation('')
       setAfterpartyTime('')
+      setShowInvites(false)
+      setInvitees([createEmptyInvitee()])
+      setSaveAsGroup(false)
+      setGroupName('')
+      setSaveAsTemplate(false)
+      setTemplateName('')
       navigate(payload.organizerPath)
     } catch (error) {
       toast.error(error.message)
@@ -112,6 +182,91 @@ function CreateEventPage() {
       }))
     }
   }
+
+  function handleToggleSaveAsGroup(checked) {
+    if (checked && !owner) {
+      setPendingOwnerCheckbox('group')
+      setShowOwnerAccessModal(true)
+      return
+    }
+
+    setSaveAsGroup(checked)
+  }
+
+  function handleToggleSaveAsTemplate(checked) {
+    if (checked && !owner) {
+      setPendingOwnerCheckbox('template')
+      setShowOwnerAccessModal(true)
+      return
+    }
+
+    setSaveAsTemplate(checked)
+  }
+
+  function handleOwnerAccessGranted(nextOwner) {
+    setOwner(nextOwner)
+    setShowOwnerAccessModal(false)
+
+    if (pendingOwnerCheckbox === 'group') {
+      setSaveAsGroup(true)
+    } else if (pendingOwnerCheckbox === 'template') {
+      setSaveAsTemplate(true)
+    }
+
+    setPendingOwnerCheckbox(null)
+  }
+
+  function handlePickGroup(group) {
+    setInvitees((current) => mergeInvitees(current, group.members))
+  }
+
+  function handleUseTemplate(template) {
+    setForm((current) => ({
+      ...current,
+      name: template.eventName,
+      location: template.location,
+      description: template.description,
+      requirePhone: template.requirePhone,
+    }))
+
+    const defaultGroup = ownerPayload.groups.find((group) => group.id === template.defaultGroupId)
+
+    if (defaultGroup) {
+      setShowInvites(true)
+      setInvitees((current) => mergeInvitees(current, defaultGroup.members))
+    }
+
+    toast.success(`Šablona „${template.name}“ je načtená do formuláře.`)
+  }
+
+  useEffect(() => {
+    if (!owner) {
+      return undefined
+    }
+
+    let cancelled = false
+
+    getOwnerPayload(owner.ownerId, owner.token)
+      .then((nextPayload) => {
+        if (!cancelled) {
+          setOwnerPayload(nextPayload)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOwnerPayload({ groups: [], templates: [] })
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHasLoadedOwnerPayload(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [owner])
 
   useEffect(() => {
     let cancelled = false
@@ -169,7 +324,14 @@ function CreateEventPage() {
       eyebrow="group plans, less chaos"
       title="R U in?"
       subtitle="Pozvánka, co vypadá fresh, funguje rychle a nenechá skupinový chat spadnout do tří dnů ticha a šesti výmluv."
-      actions={<AddToHomeButton />}
+      actions={
+        <>
+          <Link to="/moje" className="secondary-button">
+            Moje skupiny a šablony
+          </Link>
+          <AddToHomeButton />
+        </>
+      }
     >
       <main className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]">
         <section className="space-y-6">
@@ -276,6 +438,14 @@ function CreateEventPage() {
                 ))}
               </div>
             ) : null}
+          </div>
+
+          <div className="mb-6">
+            <TemplatesPanel
+              templates={ownerPayload.templates}
+              isLoading={isLoadingOwnerPayload}
+              onUseTemplate={handleUseTemplate}
+            />
           </div>
 
           <div className="mb-6">
@@ -401,6 +571,70 @@ function CreateEventPage() {
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Učastníci budou muset vyplnit telefon. Z organizátorské stránky pak můžeš na každého přímo zavolat.</p>
               </div>
             </label>
+
+            <div>
+              <button
+                type="button"
+                className="secondary-button w-full justify-center"
+                onClick={() => setShowInvites((current) => !current)}
+              >
+                {showInvites ? 'Zavřít pozvané' : '+ Pozvat lidi předem'}
+              </button>
+
+              {showInvites ? (
+                <div className="mt-3 space-y-4 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                  <GroupPicker groups={ownerPayload.groups} onPick={handlePickGroup} disabled={isSubmitting} />
+                  <InviteListEditor invitees={invitees} onChange={setInvitees} disabled={isSubmitting} />
+
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                      checked={saveAsGroup}
+                      onChange={(event) => handleToggleSaveAsGroup(event.target.checked)}
+                      disabled={isSubmitting}
+                    />
+                    <div className="w-full">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Uložit tento seznam jako skupinu</p>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Příště je pozveš znovu jedním kliknutím.</p>
+                      {saveAsGroup ? (
+                        <input
+                          className="field mt-3"
+                          value={groupName}
+                          onChange={(event) => setGroupName(event.target.value)}
+                          placeholder="Např. badminton"
+                          disabled={isSubmitting}
+                        />
+                      ) : null}
+                    </div>
+                  </label>
+                </div>
+              ) : null}
+            </div>
+
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                checked={saveAsTemplate}
+                onChange={(event) => handleToggleSaveAsTemplate(event.target.checked)}
+                disabled={isSubmitting}
+              />
+              <div className="w-full">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Uložit tuto akci jako šablonu</p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Příště založíš podobnou akci jedním kliknutím.</p>
+                {saveAsTemplate ? (
+                  <input
+                    className="field mt-3"
+                    value={templateName}
+                    onChange={(event) => setTemplateName(event.target.value)}
+                    placeholder="Např. Badminton"
+                    disabled={isSubmitting}
+                  />
+                ) : null}
+              </div>
+            </label>
+
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
                 {isSubmitting ? 'Zakládám akci…' : 'Vytvořit akci'}
@@ -414,6 +648,15 @@ function CreateEventPage() {
       </main>
 
       <ConfettiBurst origin={confettiOrigin} burstKey={burstKey} />
+
+      <OwnerAccessModal
+        open={showOwnerAccessModal}
+        onClose={() => {
+          setShowOwnerAccessModal(false)
+          setPendingOwnerCheckbox(null)
+        }}
+        onAccessGranted={handleOwnerAccessGranted}
+      />
     </PageShell>
   )
 }

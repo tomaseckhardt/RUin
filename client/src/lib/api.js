@@ -263,6 +263,117 @@ export function updateEvent(eventId, data) {
   )
 }
 
+export function inviteAttendees(eventId, token, invitees) {
+  return callRpc(
+    'invite_attendees',
+    {
+      p_event_id: eventId,
+      p_token: token,
+      p_invitees: invitees.map((invitee) => ({ name: invitee.name, phone: invitee.phone || null })),
+    },
+    'Pozvánky se nepodařilo uložit.',
+  )
+}
+
+export function accessOwnerAccount(name, phone, code) {
+  return callRpc(
+    'access_owner_account',
+    { p_name: name, p_phone: phone, p_code: code },
+    'Nepodařilo se ověřit přístup ke skupinám a šablonám.',
+  )
+}
+
+export function getOwnerPayload(ownerId, token) {
+  return callRpc(
+    'get_owner_payload',
+    { p_owner_id: ownerId, p_token: token },
+    'Skupiny a šablony se nepodařilo načíst.',
+  )
+}
+
+export function createContactGroup(ownerId, token, name) {
+  return callRpc(
+    'create_contact_group',
+    { p_owner_id: ownerId, p_token: token, p_name: name },
+    'Skupinu se nepodařilo uložit.',
+  )
+}
+
+export function renameContactGroup(ownerId, token, groupId, name) {
+  return callRpc(
+    'rename_contact_group',
+    { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_name: name },
+    'Skupinu se nepodařilo přejmenovat.',
+  )
+}
+
+export function deleteContactGroup(ownerId, token, groupId) {
+  return callRpc(
+    'delete_contact_group',
+    { p_owner_id: ownerId, p_token: token, p_group_id: groupId },
+    'Skupinu se nepodařilo smazat.',
+  )
+}
+
+export function addContactGroupMember(ownerId, token, groupId, member) {
+  return callRpc(
+    'add_contact_group_member',
+    { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_name: member.name, p_phone: member.phone },
+    'Člena se nepodařilo přidat.',
+  )
+}
+
+export function removeContactGroupMember(ownerId, token, groupId, memberId) {
+  return callRpc(
+    'remove_contact_group_member',
+    { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_member_id: memberId },
+    'Člena se nepodařilo odebrat.',
+  )
+}
+
+export function createEventTemplate(ownerId, token, data) {
+  return callRpc(
+    'create_event_template',
+    {
+      p_owner_id: ownerId,
+      p_token: token,
+      p_name: data.name,
+      p_event_name: data.eventName,
+      p_location: data.location,
+      p_description: data.description,
+      p_require_phone: data.requirePhone ?? false,
+      p_default_group_id: data.defaultGroupId ?? null,
+    },
+    'Šablonu se nepodařilo uložit.',
+  )
+}
+
+export function updateEventTemplate(ownerId, token, templateId, data) {
+  return callRpc(
+    'update_event_template',
+    {
+      p_owner_id: ownerId,
+      p_token: token,
+      p_template_id: templateId,
+      p_name: data.name,
+      p_event_name: data.eventName,
+      p_location: data.location,
+      p_description: data.description,
+      p_require_phone: data.requirePhone ?? false,
+      p_default_group_id: data.defaultGroupId ?? null,
+    },
+    'Šablonu se nepodařilo upravit.',
+  )
+}
+
+export function deleteEventTemplate(ownerId, token, templateId) {
+  return callRpc(
+    'delete_event_template',
+    { p_owner_id: ownerId, p_token: token, p_template_id: templateId },
+    'Šablonu se nepodařilo smazat.',
+  )
+}
+
 export async function getEventChatMessages(eventId, limit = 120) {
   const { data, error } = await supabase.rpc('get_event_chat_messages', {
     p_event_id: eventId,

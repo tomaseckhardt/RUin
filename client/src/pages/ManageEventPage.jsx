@@ -10,6 +10,7 @@ import PageShell from '../components/PageShell.jsx'
 import ShareInviteModal from '../components/ShareInviteModal.jsx'
 import WeatherWidget from '../components/WeatherWidget.jsx'
 import EventStops from '../components/EventStops.jsx'
+import InvitePeopleModal from '../components/InvitePeopleModal.jsx'
 import SignupBoard from '../components/SignupBoard.jsx'
 import PhotoGallery from '../components/PhotoGallery.jsx'
 import { deleteAttendee, getEvent, getEventPhotos, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
@@ -60,6 +61,7 @@ function ManageEventPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showOverviewModal, setShowOverviewModal] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
+  const [showInvitePeopleModal, setShowInvitePeopleModal] = useState(false)
   const [showPingComposerModal, setShowPingComposerModal] = useState(false)
   const [pingTargetId, setPingTargetId] = useState(null)
   const [pingMessageInput, setPingMessageInput] = useState('')
@@ -591,6 +593,9 @@ function ManageEventPage() {
             <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowShareModal(true)}>
               Pozvánka
             </button>
+            <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
+              Pozvat lidi
+            </button>
             <button
               type="button"
               className="secondary-button w-full justify-center border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
@@ -624,6 +629,9 @@ function ManageEventPage() {
               </button>
               <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowShareModal(true)}>
                 Pozvánka
+              </button>
+              <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
+                Pozvat lidi
               </button>
               <button
                 type="button"
@@ -700,6 +708,14 @@ function ManageEventPage() {
           eventId={id}
           eventName={event.name}
           datetime={event.datetime}
+        />
+
+        <InvitePeopleModal
+          open={showInvitePeopleModal}
+          onClose={() => setShowInvitePeopleModal(false)}
+          eventId={id}
+          token={activeToken}
+          onInvited={loadEvent}
         />
 
         <ModalOverlay open={showPingComposerModal} onClose={closePingComposerModal} labelledBy="manage-ping-composer-title">
@@ -870,10 +886,11 @@ function ManageEventPage() {
                   {event.description || 'Bez poznámky.'}
                 </p>
               </div>
-              {['confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
+              {['invited', 'confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
                 const group = attendees.filter((a) => a.status === statusGroup)
                 if (group.length === 0) return null
                 const labels = {
+                  invited: '📨 Pozváno (čeká)',
                   confirmed: '✅ Přijdou',
                   excused: '⏳ Omluvenky (čeká)',
                   excused_accepted: '❌ Omluvenka přijatá',
@@ -893,7 +910,7 @@ function ManageEventPage() {
                         >
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{a.name}</span>
-                            {event.requirePhone && a.phone ? (
+                            {(event.requirePhone || a.status === 'invited') && a.phone ? (
                               <a
                                 href={`tel:${a.phone}`}
                                 className="text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"
