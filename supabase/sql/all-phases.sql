@@ -6155,3 +6155,407 @@ grant execute on function public.invite_attendees(text, text, jsonb) to anon, au
 -- unchanged, so no new grant statement is needed for either.
 
 commit;
+
+-- ==================== Optional per-event modules ====================
+-- Phase 24: "Kdo co bere" (bring list), carpool (ride list) and the
+-- itinerary/stops block used to always render for every event regardless of
+-- whether the organizer wanted them. Adds three boolean toggles on events
+-- (enable_bring_list, enable_carpool, enable_stops, all default true so
+-- existing events keep behaving exactly as before) that the organizer picks
+-- at creation time and can still change later via update_event; both
+-- EventPage (guest) and ManageEventPage (organizer) now check these before
+-- rendering the corresponding section. Chat and the photo gallery were
+-- deliberately left always-on, per explicit request.
+
+begin;
+
+alter table public.events
+  add column if not exists enable_bring_list boolean not null default true;
+
+alter table public.events
+  add column if not exists enable_carpool boolean not null default true;
+
+alter table public.events
+  add column if not exists enable_stops boolean not null default true;
+
+drop function if exists public.create_event(text, text, timestamp without time zone, text, text, text, boolean);
+
+create or replace function public.create_event(
+  p_name text,
+  p_location text,
+  p_datetime timestamp without time zone,
+  p_description text,
+  p_organizer_name text,
+  p_organizer_pin text,
+  p_require_phone boolean default false,
+  p_enable_bring_list boolean default true,
+  p_enable_carpool boolean default true,
+  p_enable_stops boolean default true
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(trim(p_name), '');
+  v_location text := nullif(trim(p_location), '');
+  v_description text := nullif(trim(p_description), '');
+  v_organizer_name text := nullif(trim(p_organizer_name), '');
+  v_organizer_pin text := nullif(trim(p_organizer_pin), '');
+  v_id text;
+  v_token text;
+  v_attempts integer := 0;
+begin
+  if v_name is null or v_location is null or p_datetime is null or v_description is null or v_organizer_name is null then
+    raise exception 'Vyplň svoje jméno, název, místo, datum a stručný popis akce.';
+  end if;
+
+  if v_organizer_pin is null or v_organizer_pin !~ '^[0-9]{4}$' then
+    raise exception 'Správcovský PIN musí mít přesně 4 číslice.';
+  end if;
+
+  loop
+    v_attempts := v_attempts + 1;
+    if v_attempts > 20 then
+      raise exception 'Nepodařilo se vytvořit jedinečný identifikátor akce.';
+    end if;
+
+    v_id := public._random_token(10);
+    exit when not exists (select 1 from public.events e where e.id = v_id);
+  end loop;
+
+  loop
+    v_token := public._random_token(24);
+    exit when not exists (select 1 from public.events e where e.organizer_token = v_token);
+  end loop;
+
+  insert into public.events (
+    id,
+    name,
+    location,
+    datetime,
+    description,
+    organizer_token,
+    organizer_name,
+    organizer_pin_hash,
+    organizer_pin_failed_attempts,
+    organizer_pin_locked_until,
+    require_phone,
+    enable_bring_list,
+    enable_carpool,
+    enable_stops
+  )
+  values (
+    v_id,
+    v_name,
+    v_location,
+    p_datetime,
+    v_description,
+    v_token,
+    v_organizer_name,
+    extensions.crypt(v_organizer_pin, extensions.gen_salt('bf')),
+    0,
+    null,
+    coalesce(p_require_phone, false),
+    coalesce(p_enable_bring_list, true),
+    coalesce(p_enable_carpool, true),
+    coalesce(p_enable_stops, true)
+  );
+
+  insert into public.attendees (event_id, name, status, excuse_reason)
+  values (v_id, v_organizer_name, 'confirmed', null);
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_id,
+      'name', v_name,
+      'location', v_location,
+      'datetime', p_datetime,
+      'description', v_description,
+      'requirePhone', coalesce(p_require_phone, false),
+      'enableBringList', coalesce(p_enable_bring_list, true),
+      'enableCarpool', coalesce(p_enable_carpool, true),
+      'enableStops', coalesce(p_enable_stops, true)
+    ),
+    'guestPath', '/event/' || v_id,
+    'organizerPath', '/event/' || v_id || '/manage?token=' || v_token
+  );
+end;
+$$;
+
+drop function if exists public.update_event(text, text, text, text, timestamp without time zone, text, boolean);
+
+create or replace function public.update_event(
+  p_event_id text,
+  p_token text,
+  p_name text,
+  p_location text,
+  p_datetime timestamp without time zone,
+  p_description text,
+  p_require_phone boolean,
+  p_enable_bring_list boolean default true,
+  p_enable_carpool boolean default true,
+  p_enable_stops boolean default true
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_token text := nullif(trim(p_token), '');
+  v_name text := nullif(trim(p_name), '');
+  v_location text := nullif(trim(p_location), '');
+  v_description text := nullif(trim(p_description), '');
+  v_event public.events%rowtype;
+begin
+  if v_token is null then
+    raise exception 'Správa vyžaduje platný organizátorský odkaz.';
+  end if;
+
+  if v_name is null or v_location is null or p_datetime is null or v_description is null then
+    raise exception 'Vyplň název, místo, datum a stručný popis akce.';
+  end if;
+
+  update public.events e
+  set
+    name = v_name,
+    location = v_location,
+    datetime = p_datetime,
+    description = v_description,
+    require_phone = p_require_phone,
+    enable_bring_list = coalesce(p_enable_bring_list, true),
+    enable_carpool = coalesce(p_enable_carpool, true),
+    enable_stops = coalesce(p_enable_stops, true)
+  where e.id = p_event_id
+    and e.organizer_token = v_token
+  returning * into v_event;
+
+  if not found then
+    raise exception 'Neplatný organizátorský odkaz.';
+  end if;
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_event.id,
+      'name', v_event.name,
+      'location', v_event.location,
+      'datetime', v_event.datetime,
+      'description', v_event.description,
+      'requirePhone', v_event.require_phone,
+      'enableBringList', v_event.enable_bring_list,
+      'enableCarpool', v_event.enable_carpool,
+      'enableStops', v_event.enable_stops
+    )
+  );
+end;
+$$;
+
+-- get_event_payload keeps its Phase 23 signature (p_event_id, p_organizer_token
+-- default null) - no drop needed, just surfaces the three new flags.
+
+create or replace function public.get_event_payload(
+  p_event_id text,
+  p_organizer_token text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event public.events%rowtype;
+  v_is_organizer boolean;
+  v_attendees jsonb;
+  v_summary jsonb;
+begin
+  select *
+  into v_event
+  from public.events e
+  where e.id = p_event_id;
+
+  if not found then
+    raise exception 'Tahle akce už neexistuje.';
+  end if;
+
+  v_is_organizer := p_organizer_token is not null and p_organizer_token = v_event.organizer_token;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', a.id,
+        'event_id', a.event_id,
+        'name', a.name,
+        'status', a.status,
+        'excuse_reason', a.excuse_reason,
+        'phone', case when v_is_organizer then a.phone else null end,
+        'created_at', a.created_at,
+        'checked_in_at', a.checked_in_at,
+        'ping_count', coalesce(p.ping_count, 0),
+        'ping_last_source_name', p.last_source_name,
+        'ping_last_message', p.last_message,
+        'ping_last_created_at', p.last_created_at
+      )
+      order by
+        case a.status
+          when 'invited' then 0
+          when 'confirmed' then 1
+          when 'excused' then 2
+          when 'excused_accepted' then 3
+          when 'excused_rejected' then 4
+          else 5
+        end,
+        a.created_at asc,
+        a.name asc
+    ),
+    '[]'::jsonb
+  )
+  into v_attendees
+  from public.attendees a
+  left join lateral (
+    select
+      (
+        select count(*)::integer
+        from public.attendee_pings ap_count
+        where ap_count.event_id = p_event_id
+          and ap_count.target_attendee_id = a.id
+      ) as ping_count,
+      (
+        select ap_last.source_name
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_source_name,
+      (
+        select ap_last.message
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_message,
+      (
+        select ap_last.created_at
+        from public.attendee_pings ap_last
+        where ap_last.event_id = p_event_id
+          and ap_last.target_attendee_id = a.id
+        order by ap_last.created_at desc
+        limit 1
+      ) as last_created_at
+  ) p on true
+  where a.event_id = p_event_id;
+
+  select jsonb_build_object(
+    'confirmed', count(*) filter (where a.status = 'confirmed'),
+    'excused', count(*) filter (where a.status in ('excused', 'excused_accepted')),
+    'rejected', count(*) filter (where a.status = 'excused_rejected'),
+    'invited', count(*) filter (where a.status = 'invited')
+  )
+  into v_summary
+  from public.attendees a
+  where a.event_id = p_event_id;
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_event.id,
+      'name', v_event.name,
+      'location', v_event.location,
+      'datetime', v_event.datetime,
+      'description', v_event.description,
+      'createdAt', v_event.created_at,
+      'requirePhone', v_event.require_phone,
+      'organizerName', v_event.organizer_name,
+      'enableBringList', v_event.enable_bring_list,
+      'enableCarpool', v_event.enable_carpool,
+      'enableStops', v_event.enable_stops
+    ),
+    'attendees', v_attendees,
+    'summary', v_summary
+  );
+end;
+$$;
+
+grant execute on function public.create_event(text, text, timestamp without time zone, text, text, text, boolean, boolean, boolean, boolean) to anon, authenticated;
+grant execute on function public.update_event(text, text, text, text, timestamp without time zone, text, boolean, boolean, boolean, boolean) to anon, authenticated;
+-- get_event_payload keeps its existing grant - signature unchanged.
+
+commit;
+
+-- ==================== Organizer can remove any signup claim ====================
+-- Phase 25: pre-filling "kdo co bere" at event creation (CreateEventPage adds
+-- a signup item via add_signup_item and immediately assigns it to a named
+-- person via claim_signup_item - both already existed and needed no backend
+-- change) exposed a gap in editing that assignment afterward: for the
+-- 'bring' category, remove_signup_claim only ever let the item's own
+-- `created_by` remove someone's claim, and pre-filled items are created
+-- with created_by = the organizer's name at that moment - a free-text
+-- string, not an enforced identity, so nothing actually let the organizer
+-- (or anyone else) un-assign a specific person from a 'bring' item later
+-- without deleting the whole item via delete_event_signup_item and losing
+-- every other claim on it too. Adds an optional p_organizer_token
+-- parameter: when it matches the item's event's organizer_token, the caller
+-- may remove any claim on any category's item for that event, independent
+-- of created_by/requester-name matching. The existing ride-creator path
+-- (matching by name, no token) is unchanged for backward compatibility with
+-- the "Nabídnout výměnu" flow already in the client.
+
+begin;
+
+drop function if exists public.remove_signup_claim(bigint, text, text);
+
+create or replace function public.remove_signup_claim(
+  p_item_id bigint,
+  p_claim_attendee_name text,
+  p_requester_name text,
+  p_organizer_token text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_requester text := nullif(trim(p_requester_name), '');
+  v_target text := nullif(trim(p_claim_attendee_name), '');
+  v_item public.event_signup_items%rowtype;
+  v_event public.events%rowtype;
+  v_is_organizer boolean := false;
+begin
+  if v_target is null then
+    raise exception 'Chybí jméno účastníka k odebrání.';
+  end if;
+
+  select * into v_item from public.event_signup_items where id = p_item_id;
+
+  if not found then
+    raise exception 'Položka nebyla nalezena.';
+  end if;
+
+  if p_organizer_token is not null then
+    select * into v_event from public.events where id = v_item.event_id;
+    v_is_organizer := found and v_event.organizer_token = p_organizer_token;
+  end if;
+
+  if not v_is_organizer then
+    if v_requester is null then
+      raise exception 'Chybí jméno.';
+    end if;
+
+    if v_item.category <> 'ride' or lower(trim(v_item.created_by)) <> lower(v_requester) then
+      raise exception 'Jen ten, kdo nabídku odvozu založil, může někoho odebrat.';
+    end if;
+  end if;
+
+  delete from public.event_signup_claims
+  where item_id = p_item_id and lower(attendee_name) = lower(v_target);
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.remove_signup_claim(bigint, text, text, text) to anon, authenticated;
+
+commit;

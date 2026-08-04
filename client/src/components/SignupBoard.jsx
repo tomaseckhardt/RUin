@@ -148,6 +148,23 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
     }
   }
 
+  async function handleRemoveClaimAsOrganizer(item, claim) {
+    if (!organizerToken) {
+      return
+    }
+
+    setBusyItemId(item.id)
+
+    try {
+      await removeSignupClaim(item.id, claim.attendee_name, currentName, organizerToken)
+      await loadItems()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusyItemId(null)
+    }
+  }
+
   async function handleDelete(item) {
     if (!organizerToken) {
       return
@@ -250,6 +267,26 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                                 onClick={() => handleRemoveClaim(item, claim)}
                               >
                                 Nabídnout výměnu
+                              </button>
+                            </span>
+                          ))}
+                          <span className="text-xs text-slate-400 dark:text-slate-500">({claimedSeats}/{item.capacity})</span>
+                        </div>
+                      ) : isOrganizer ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {claims.map((claim) => (
+                            <span
+                              key={claim.id}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/60 py-1 pl-2.5 pr-1.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
+                            >
+                              {claim.attendee_name}
+                              <button
+                                type="button"
+                                className="rounded-full px-1.5 py-0.5 text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                                disabled={busyItemId === item.id}
+                                onClick={() => handleRemoveClaimAsOrganizer(item, claim)}
+                              >
+                                Odebrat
                               </button>
                             </span>
                           ))}

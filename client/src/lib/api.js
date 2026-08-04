@@ -160,6 +160,9 @@ export function createEvent(data) {
       p_organizer_name: data.organizerName,
       p_organizer_pin: data.organizerPin,
       p_require_phone: data.requirePhone ?? false,
+      p_enable_bring_list: data.enableBringList ?? true,
+      p_enable_carpool: data.enableCarpool ?? true,
+      p_enable_stops: data.enableStops ?? true,
     },
     'Akci se nepodařilo vytvořit.',
   )
@@ -258,6 +261,9 @@ export function updateEvent(eventId, data) {
       p_datetime: data.datetime,
       p_description: data.description,
       p_require_phone: data.requirePhone ?? false,
+      p_enable_bring_list: data.enableBringList ?? true,
+      p_enable_carpool: data.enableCarpool ?? true,
+      p_enable_stops: data.enableStops ?? true,
     },
     'Akci se nepodařilo upravit.',
   )
@@ -472,10 +478,15 @@ export function unclaimSignupItem(itemId, attendeeName) {
   )
 }
 
-export function removeSignupClaim(itemId, claimAttendeeName, requesterName) {
+export function removeSignupClaim(itemId, claimAttendeeName, requesterName, organizerToken = null) {
   return callRpc(
     'remove_signup_claim',
-    { p_item_id: itemId, p_claim_attendee_name: claimAttendeeName, p_requester_name: requesterName },
+    {
+      p_item_id: itemId,
+      p_claim_attendee_name: claimAttendeeName,
+      p_requester_name: requesterName,
+      p_organizer_token: organizerToken,
+    },
     'Odebrání se nepodařilo uložit.',
   )
 }
