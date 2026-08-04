@@ -1,4 +1,27 @@
-function BringListEditor({ items, onChange, disabled = false, maxRows = 20 }) {
+const CATEGORY_CONFIG = {
+  bring: {
+    itemLabel: 'Věc',
+    itemPlaceholder: 'Např. Pivo',
+    personLabel: 'Kdo (nepovinné)',
+    personPlaceholder: 'Např. Petr',
+    quantityLabel: 'Kolik',
+    addLabel: '+ Přidat věc',
+    hint: 'Když u věci nenapíšeš jméno, zůstane volná a kdokoli se na ni může přihlásit později.',
+  },
+  ride: {
+    itemLabel: 'Popis odvozu',
+    itemPlaceholder: 'Např. Auto z Prahy 6, odjezd 17:30',
+    personLabel: 'Kdo řídí (nepovinné)',
+    personPlaceholder: 'Např. Petr',
+    quantityLabel: 'Volná místa',
+    addLabel: '+ Přidat odvoz',
+    hint: 'Když nenapíšeš řidiče, nabídka zůstane bez jména - doplníte ho později.',
+  },
+}
+
+function SignupItemEditor({ category, items, onChange, disabled = false, maxRows = 20 }) {
+  const config = CATEGORY_CONFIG[category]
+
   function updateRow(index, patch) {
     onChange(items.map((item, i) => (i === index ? { ...item, ...patch } : item)))
   }
@@ -20,27 +43,27 @@ function BringListEditor({ items, onChange, disabled = false, maxRows = 20 }) {
       {items.map((item, index) => (
         <div key={item.key} className="grid gap-3 sm:grid-cols-[1fr_1fr_5rem_auto] sm:items-end">
           <div>
-            <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">Věc</label>
+            <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{config.itemLabel}</label>
             <input
               className="field"
               value={item.label}
               onChange={(event) => updateRow(index, { label: event.target.value })}
-              placeholder="Např. Pivo"
+              placeholder={config.itemPlaceholder}
               disabled={disabled}
             />
           </div>
           <div>
-            <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">Kdo (nepovinné)</label>
+            <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{config.personLabel}</label>
             <input
               className="field"
               value={item.personName}
               onChange={(event) => updateRow(index, { personName: event.target.value })}
-              placeholder="Např. Petr"
+              placeholder={config.personPlaceholder}
               disabled={disabled}
             />
           </div>
           <div>
-            <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">Kolik</label>
+            <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{config.quantityLabel}</label>
             <input
               type="number"
               min={1}
@@ -64,15 +87,13 @@ function BringListEditor({ items, onChange, disabled = false, maxRows = 20 }) {
 
       {items.length < maxRows ? (
         <button type="button" className="secondary-button" onClick={addRow} disabled={disabled}>
-          + Přidat věc
+          {config.addLabel}
         </button>
       ) : null}
 
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        Když u věci nenapíšeš jméno, zůstane volná a kdokoli se na ni může přihlásit později.
-      </p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{config.hint}</p>
     </div>
   )
 }
 
-export default BringListEditor
+export default SignupItemEditor

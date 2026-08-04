@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
-import BringListEditor from '../components/BringListEditor.jsx'
 import CollapsibleCard from '../components/CollapsibleCard.jsx'
 import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
@@ -10,6 +9,7 @@ import GroupPicker from '../components/GroupPicker.jsx'
 import InviteListEditor from '../components/InviteListEditor.jsx'
 import OwnerAccessModal from '../components/OwnerAccessModal.jsx'
 import PageShell from '../components/PageShell.jsx'
+import SignupItemEditor from '../components/SignupItemEditor.jsx'
 import TemplatesPanel from '../components/TemplatesPanel.jsx'
 import {
   addContactGroupMember,
@@ -23,11 +23,11 @@ import {
   getOwnerPayload,
   inviteAttendees,
 } from '../lib/api.js'
-import { createEmptyBringItem, getFilledBringItems } from '../lib/bringItems.js'
 import { formatDateTime, parseLocalDateTime } from '../lib/format.js'
 import { createEmptyInvitee, getFilledInvitees, mergeInvitees } from '../lib/invitees.js'
 import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
 import { getSavedOwner } from '../lib/ownerLinkStorage.js'
+import { createEmptySignupPrefillItem, getFilledSignupPrefillItems } from '../lib/signupPrefillItems.js'
 
 function parseTokenFromPath(path) {
   try {
@@ -67,8 +67,8 @@ function CreateEventPage() {
   const isLoadingOwnerPayload = Boolean(owner) && !hasLoadedOwnerPayload
   const [showInvites, setShowInvites] = useState(false)
   const [invitees, setInvitees] = useState(() => [createEmptyInvitee()])
-  const [showBringItems, setShowBringItems] = useState(false)
-  const [bringItems, setBringItems] = useState(() => [createEmptyBringItem()])
+  const [bringItems, setBringItems] = useState(() => [createEmptySignupPrefillItem()])
+  const [rideItems, setRideItems] = useState(() => [createEmptySignupPrefillItem()])
   const [saveAsGroup, setSaveAsGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [saveAsTemplate, setSaveAsTemplate] = useState(false)
@@ -156,7 +156,7 @@ function CreateEventPage() {
       }
 
       if (form.enableBringList) {
-        const filledBringItems = getFilledBringItems(bringItems)
+        const filledBringItems = getFilledSignupPrefillItems(bringItems)
 
         for (const item of filledBringItems) {
           try {
@@ -176,6 +176,23 @@ function CreateEventPage() {
         }
       }
 
+      if (form.enableCarpool) {
+        const filledRideItems = getFilledSignupPrefillItems(rideItems)
+
+        for (const item of filledRideItems) {
+          try {
+            await addSignupItem(payload.event.id, {
+              category: 'ride',
+              label: item.label,
+              capacity: item.quantity,
+              createdBy: item.personName || form.organizerName,
+            })
+          } catch (rideError) {
+            toast.error(`Akce je založená, ale odvoz "${item.label}" se nepodařilo uložit: ${rideError.message}`)
+          }
+        }
+      }
+
       toast.success('Akce je připravená. Odkazy můžeš rovnou sdílet.')
       setForm(initialForm)
       setShowAfterparty(false)
@@ -183,8 +200,8 @@ function CreateEventPage() {
       setAfterpartyTime('')
       setShowInvites(false)
       setInvitees([createEmptyInvitee()])
-      setShowBringItems(false)
-      setBringItems([createEmptyBringItem()])
+      setBringItems([createEmptySignupPrefillItem()])
+      setRideItems([createEmptySignupPrefillItem()])
       setSaveAsGroup(false)
       setGroupName('')
       setSaveAsTemplate(false)
@@ -615,6 +632,24 @@ function CreateEventPage() {
               </label>
             </div>
 
+            {form.enableBringList ? (
+              <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Kdo co bere</p>
+                <div className="mt-3">
+                  <SignupItemEditor category="bring" items={bringItems} onChange={setBringItems} disabled={isSubmitting} />
+                </div>
+              </div>
+            ) : null}
+
+            {form.enableCarpool ? (
+              <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Spolujízda</p>
+                <div className="mt-3">
+                  <SignupItemEditor category="ride" items={rideItems} onChange={setRideItems} disabled={isSubmitting} />
+                </div>
+              </div>
+            ) : null}
+
             <CollapsibleCard eyebrow="Nepovinné" title="Doplňkové možnosti" defaultOpen={false}>
               <div className="space-y-4">
                 {form.enableStops ? (
@@ -651,24 +686,6 @@ function CreateEventPage() {
                             onChange={(event) => setAfterpartyTime(event.target.value)}
                           />
                         </div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {form.enableBringList ? (
-                  <div>
-                    <button
-                      type="button"
-                      className="secondary-button w-full justify-center"
-                      onClick={() => setShowBringItems((current) => !current)}
-                    >
-                      {showBringItems ? 'Zavřít kdo co bere' : '+ Naplánovat, kdo co bere'}
-                    </button>
-
-                    {showBringItems ? (
-                      <div className="mt-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-                        <BringListEditor items={bringItems} onChange={setBringItems} disabled={isSubmitting} />
                       </div>
                     ) : null}
                   </div>

@@ -193,12 +193,19 @@ function OwnerDashboardPage() {
     }
   }
 
+  const backButton = (
+    <button type="button" className="secondary-button" onClick={() => navigate(-1)}>
+      ← Zpět
+    </button>
+  )
+
   if (!owner) {
     return (
       <PageShell
         eyebrow="Skupiny a šablony"
         title="Přihlas se telefonem a kódem"
         subtitle="Odtud spravuješ uložené skupiny kontaktů i šablony akcí."
+        actions={backButton}
       >
         <OwnerAccessModal open onClose={() => navigate('/')} onAccessGranted={handleAccessGranted} />
       </PageShell>
@@ -207,13 +214,13 @@ function OwnerDashboardPage() {
 
   if (isLoading) {
     return (
-      <PageShell eyebrow="Skupiny a šablony" title="Načítám…" subtitle="Chvilka, sbírám tvoje skupiny a šablony." />
+      <PageShell eyebrow="Skupiny a šablony" title="Načítám…" subtitle="Chvilka, sbírám tvoje skupiny a šablony." actions={backButton} />
     )
   }
 
   if (error || !payload) {
     return (
-      <PageShell eyebrow="Skupiny a šablony" title="Nepodařilo se načíst" subtitle={error || 'Zkus to znovu.'} />
+      <PageShell eyebrow="Skupiny a šablony" title="Nepodařilo se načíst" subtitle={error || 'Zkus to znovu.'} actions={backButton} />
     )
   }
 
@@ -222,6 +229,7 @@ function OwnerDashboardPage() {
       eyebrow="Skupiny a šablony"
       title="Moje skupiny a šablony"
       subtitle="Uložené kontakty a šablony akcí, dostupné z jakéhokoli zařízení přes telefon a kód."
+      actions={backButton}
     >
       <main className="grid gap-6">
         <section className="panel">
