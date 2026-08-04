@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
 import BringListEditor from '../components/BringListEditor.jsx'
+import CollapsibleCard from '../components/CollapsibleCard.jsx'
 import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import GroupPicker from '../components/GroupPicker.jsx'
@@ -366,7 +367,7 @@ function CreateEventPage() {
       }
     >
       <main className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]">
-        <section className="space-y-6">
+        <section className="order-2 space-y-6 xl:order-1">
           <article className="panel relative overflow-hidden">
             <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(111,76,255,0.18),transparent_68%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(111,76,255,0.24),transparent_68%)]" />
             <div className="pointer-events-none absolute -left-16 bottom-0 h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(122,28,63,0.18),transparent_66%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(122,28,63,0.28),transparent_66%)]" />
@@ -441,35 +442,36 @@ function CreateEventPage() {
 
         </section>
 
-        <aside id="create-form" className="panel h-fit xl:sticky xl:top-6">
+        <aside id="create-form" className="panel order-1 h-fit xl:order-2 xl:sticky xl:top-6">
           <div className="mb-6">
-            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Moje poslední akce</p>
-            {isLoadingRecentEvents ? (
-              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Načítám poslední akce…</p>
-            ) : null}
+            <CollapsibleCard eyebrow="Rychlý vstup" title="Moje poslední akce" defaultOpen={false}>
+              {isLoadingRecentEvents ? (
+                <p className="text-sm text-slate-600 dark:text-slate-300">Načítám poslední akce…</p>
+              ) : null}
 
-            {!isLoadingRecentEvents && recentEvents.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Zatím tu nic není. Jakmile založíš akci, objeví se tady rychlý vstup do správy.</p>
-            ) : null}
+              {!isLoadingRecentEvents && recentEvents.length === 0 ? (
+                <p className="text-sm text-slate-600 dark:text-slate-300">Zatím tu nic není. Jakmile založíš akci, objeví se tady rychlý vstup do správy.</p>
+              ) : null}
 
-            {!isLoadingRecentEvents && recentEvents.length > 0 ? (
-              <div className="mt-3 space-y-3">
-                {recentEvents.map(({ id: eventId, event }) => (
-                  <article key={eventId} className="rounded-2xl border border-slate-200 bg-white/65 p-3 dark:border-slate-700 dark:bg-slate-950/35">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.datetime)} · {event.location}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Link to={`/event/${eventId}/manage`} className="secondary-button px-3 py-1.5 text-xs">
-                        Otevřít správu
-                      </Link>
-                      <Link to={`/event/${eventId}`} className="secondary-button px-3 py-1.5 text-xs">
-                        Otevřít pozvánku
-                      </Link>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : null}
+              {!isLoadingRecentEvents && recentEvents.length > 0 ? (
+                <div className="space-y-3">
+                  {recentEvents.map(({ id: eventId, event }) => (
+                    <article key={eventId} className="rounded-2xl border border-slate-200 bg-white/65 p-3 dark:border-slate-700 dark:bg-slate-950/35">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.datetime)} · {event.location}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Link to={`/event/${eventId}/manage`} className="secondary-button px-3 py-1.5 text-xs">
+                          Otevřít správu
+                        </Link>
+                        <Link to={`/event/${eventId}`} className="secondary-button px-3 py-1.5 text-xs">
+                          Otevřít pozvánku
+                        </Link>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </CollapsibleCard>
           </div>
 
           <div className="mb-6">
@@ -555,44 +557,6 @@ function CreateEventPage() {
                 required
               />
             </div>
-            {form.enableStops ? (
-              <div>
-                <button
-                  type="button"
-                  onClick={handleAfterpartyClick}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-black tracking-[-0.01em] text-white shadow-lg"
-                  style={{
-                    background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
-                    animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
-                  }}
-                >
-                  🎉 {showAfterparty ? 'Zavřít afterparty' : 'Afterparty?!'} 🎉
-                </button>
-
-                {showAfterparty ? (
-                  <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Kam se jde potom</label>
-                      <input
-                        className="field"
-                        value={afterpartyLocation}
-                        onChange={(event) => setAfterpartyLocation(event.target.value)}
-                        placeholder="Klub Afterparty, Praha 7"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Čas</label>
-                      <input
-                        type="time"
-                        className="field"
-                        value={afterpartyTime}
-                        onChange={(event) => setAfterpartyTime(event.target.value)}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
               <input
                 type="checkbox"
@@ -651,86 +615,129 @@ function CreateEventPage() {
               </label>
             </div>
 
-            {form.enableBringList ? (
-              <div>
-                <button
-                  type="button"
-                  className="secondary-button w-full justify-center"
-                  onClick={() => setShowBringItems((current) => !current)}
-                >
-                  {showBringItems ? 'Zavřít kdo co bere' : '+ Naplánovat, kdo co bere'}
-                </button>
+            <CollapsibleCard eyebrow="Nepovinné" title="Doplňkové možnosti" defaultOpen={false}>
+              <div className="space-y-4">
+                {form.enableStops ? (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleAfterpartyClick}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-black tracking-[-0.01em] text-white shadow-lg"
+                      style={{
+                        background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
+                        animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
+                      }}
+                    >
+                      🎉 {showAfterparty ? 'Zavřít afterparty' : 'Afterparty?!'} 🎉
+                    </button>
 
-                {showBringItems ? (
-                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-                    <BringListEditor items={bringItems} onChange={setBringItems} disabled={isSubmitting} />
+                    {showAfterparty ? (
+                      <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Kam se jde potom</label>
+                          <input
+                            className="field"
+                            value={afterpartyLocation}
+                            onChange={(event) => setAfterpartyLocation(event.target.value)}
+                            placeholder="Klub Afterparty, Praha 7"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Čas</label>
+                          <input
+                            type="time"
+                            className="field"
+                            value={afterpartyTime}
+                            onChange={(event) => setAfterpartyTime(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
-              </div>
-            ) : null}
 
-            <div>
-              <button
-                type="button"
-                className="secondary-button w-full justify-center"
-                onClick={() => setShowInvites((current) => !current)}
-              >
-                {showInvites ? 'Zavřít pozvané' : '+ Pozvat lidi předem'}
-              </button>
+                {form.enableBringList ? (
+                  <div>
+                    <button
+                      type="button"
+                      className="secondary-button w-full justify-center"
+                      onClick={() => setShowBringItems((current) => !current)}
+                    >
+                      {showBringItems ? 'Zavřít kdo co bere' : '+ Naplánovat, kdo co bere'}
+                    </button>
 
-              {showInvites ? (
-                <div className="mt-3 space-y-4 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-                  <GroupPicker groups={ownerPayload.groups} onPick={handlePickGroup} disabled={isSubmitting} />
-                  <InviteListEditor invitees={invitees} onChange={setInvitees} disabled={isSubmitting} />
+                    {showBringItems ? (
+                      <div className="mt-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                        <BringListEditor items={bringItems} onChange={setBringItems} disabled={isSubmitting} />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
-                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                      checked={saveAsGroup}
-                      onChange={(event) => handleToggleSaveAsGroup(event.target.checked)}
-                      disabled={isSubmitting}
-                    />
-                    <div className="w-full">
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Uložit tento seznam jako skupinu</p>
-                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Příště je pozveš znovu jedním kliknutím.</p>
-                      {saveAsGroup ? (
+                <div>
+                  <button
+                    type="button"
+                    className="secondary-button w-full justify-center"
+                    onClick={() => setShowInvites((current) => !current)}
+                  >
+                    {showInvites ? 'Zavřít pozvané' : '+ Pozvat lidi předem'}
+                  </button>
+
+                  {showInvites ? (
+                    <div className="mt-3 space-y-4 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                      <GroupPicker groups={ownerPayload.groups} onPick={handlePickGroup} disabled={isSubmitting} />
+                      <InviteListEditor invitees={invitees} onChange={setInvitees} disabled={isSubmitting} />
+
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
                         <input
-                          className="field mt-3"
-                          value={groupName}
-                          onChange={(event) => setGroupName(event.target.value)}
-                          placeholder="Např. badminton"
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                          checked={saveAsGroup}
+                          onChange={(event) => handleToggleSaveAsGroup(event.target.checked)}
                           disabled={isSubmitting}
                         />
-                      ) : null}
+                        <div className="w-full">
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Uložit tento seznam jako skupinu</p>
+                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Příště je pozveš znovu jedním kliknutím.</p>
+                          {saveAsGroup ? (
+                            <input
+                              className="field mt-3"
+                              value={groupName}
+                              onChange={(event) => setGroupName(event.target.value)}
+                              placeholder="Např. badminton"
+                              disabled={isSubmitting}
+                            />
+                          ) : null}
+                        </div>
+                      </label>
                     </div>
-                  </label>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                checked={saveAsTemplate}
-                onChange={(event) => handleToggleSaveAsTemplate(event.target.checked)}
-                disabled={isSubmitting}
-              />
-              <div className="w-full">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Uložit tuto akci jako šablonu</p>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Příště založíš podobnou akci jedním kliknutím.</p>
-                {saveAsTemplate ? (
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
                   <input
-                    className="field mt-3"
-                    value={templateName}
-                    onChange={(event) => setTemplateName(event.target.value)}
-                    placeholder="Např. Badminton"
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                    checked={saveAsTemplate}
+                    onChange={(event) => handleToggleSaveAsTemplate(event.target.checked)}
                     disabled={isSubmitting}
                   />
-                ) : null}
+                  <div className="w-full">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Uložit tuto akci jako šablonu</p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Příště založíš podobnou akci jedním kliknutím.</p>
+                    {saveAsTemplate ? (
+                      <input
+                        className="field mt-3"
+                        value={templateName}
+                        onChange={(event) => setTemplateName(event.target.value)}
+                        placeholder="Např. Badminton"
+                        disabled={isSubmitting}
+                      />
+                    ) : null}
+                  </div>
+                </label>
               </div>
-            </label>
+            </CollapsibleCard>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
