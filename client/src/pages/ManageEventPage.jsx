@@ -66,7 +66,16 @@ function ManageEventPage() {
   const [pingTargetId, setPingTargetId] = useState(null)
   const [pingMessageInput, setPingMessageInput] = useState('')
   const [showEditEventModal, setShowEditEventModal] = useState(false)
-  const [eventForm, setEventForm] = useState({ name: '', location: '', datetime: '', description: '', requirePhone: false })
+  const [eventForm, setEventForm] = useState({
+    name: '',
+    location: '',
+    datetime: '',
+    description: '',
+    requirePhone: false,
+    enableBringList: true,
+    enableCarpool: true,
+    enableStops: true,
+  })
   const [isSavingEvent, setIsSavingEvent] = useState(false)
   const [showUnlockModal, setShowUnlockModal] = useState(false)
   const [unlockHint, setUnlockHint] = useState('')
@@ -341,6 +350,9 @@ function ManageEventPage() {
       datetime: parsedDatetime ? toDateTimeLocalValue(parsedDatetime) : '',
       description: payload.event.description || '',
       requirePhone: Boolean(payload.event.requirePhone),
+      enableBringList: payload.event.enableBringList ?? true,
+      enableCarpool: payload.event.enableCarpool ?? true,
+      enableStops: payload.event.enableStops ?? true,
     })
     setShowEditEventModal(true)
   }
@@ -378,6 +390,9 @@ function ManageEventPage() {
         datetime: eventForm.datetime,
         description: eventForm.description,
         requirePhone: eventForm.requirePhone,
+        enableBringList: eventForm.enableBringList,
+        enableCarpool: eventForm.enableCarpool,
+        enableStops: eventForm.enableStops,
       })
       toast.success('Detaily akce jsou upravené.')
       setShowEditEventModal(false)
@@ -672,17 +687,23 @@ function ManageEventPage() {
           />
         </div>
 
-        <div className="order-9 xl:order-5 xl:col-span-2">
-          <EventStops eventId={id} isOrganizer organizerToken={activeToken} />
-        </div>
+        {event.enableStops ? (
+          <div className="order-9 xl:order-5 xl:col-span-2">
+            <EventStops eventId={id} isOrganizer organizerToken={activeToken} />
+          </div>
+        ) : null}
 
-        <div className="order-10 xl:order-6 xl:col-span-2">
-          <SignupBoard eventId={id} category="bring" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
-        </div>
+        {event.enableBringList ? (
+          <div className="order-10 xl:order-6 xl:col-span-2">
+            <SignupBoard eventId={id} category="bring" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
+          </div>
+        ) : null}
 
-        <div className="order-11 xl:order-7 xl:col-span-2">
-          <SignupBoard eventId={id} category="ride" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
-        </div>
+        {event.enableCarpool ? (
+          <div className="order-11 xl:order-7 xl:col-span-2">
+            <SignupBoard eventId={id} category="ride" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
+          </div>
+        ) : null}
 
         <div className="order-12 xl:order-8 xl:col-span-2">
           <PhotoGallery eventId={id} currentName={organizerName} isOrganizer organizerToken={activeToken} />
@@ -813,6 +834,36 @@ function ManageEventPage() {
                   <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Učastníci budou muset vyplnit telefon. Z organizátorské stránky pak můžeš na každého přímo zavolat.</p>
                 </div>
               </label>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                    checked={eventForm.enableBringList}
+                    onChange={(event) => setEventForm((current) => ({ ...current, enableBringList: event.target.checked }))}
+                  />
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Kdo co bere</p>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                    checked={eventForm.enableCarpool}
+                    onChange={(event) => setEventForm((current) => ({ ...current, enableCarpool: event.target.checked }))}
+                  />
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Spolujízda</p>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                    checked={eventForm.enableStops}
+                    onChange={(event) => setEventForm((current) => ({ ...current, enableStops: event.target.checked }))}
+                  />
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Itinerář / zastávky</p>
+                </label>
+              </div>
 
               <div className="flex gap-3">
                 <button type="button" className="secondary-button flex-1 justify-center" onClick={closeEditEventModal}>

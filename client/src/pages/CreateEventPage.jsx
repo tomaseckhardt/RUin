@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
+import BringListEditor from '../components/BringListEditor.jsx'
 import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import GroupPicker from '../components/GroupPicker.jsx'
@@ -12,6 +13,8 @@ import TemplatesPanel from '../components/TemplatesPanel.jsx'
 import {
   addContactGroupMember,
   addEventStop,
+  addSignupItem,
+  claimSignupItem,
   createContactGroup,
   createEvent,
   createEventTemplate,
@@ -19,6 +22,7 @@ import {
   getOwnerPayload,
   inviteAttendees,
 } from '../lib/api.js'
+import { createEmptyBringItem, getFilledBringItems } from '../lib/bringItems.js'
 import { formatDateTime, parseLocalDateTime } from '../lib/format.js'
 import { createEmptyInvitee, getFilledInvitees, mergeInvitees } from '../lib/invitees.js'
 import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
@@ -40,6 +44,9 @@ const initialForm = {
   datetime: '',
   description: '',
   requirePhone: false,
+  enableBringList: true,
+  enableCarpool: true,
+  enableStops: true,
 }
 
 function CreateEventPage() {
@@ -59,6 +66,8 @@ function CreateEventPage() {
   const isLoadingOwnerPayload = Boolean(owner) && !hasLoadedOwnerPayload
   const [showInvites, setShowInvites] = useState(false)
   const [invitees, setInvitees] = useState(() => [createEmptyInvitee()])
+  const [showBringItems, setShowBringItems] = useState(false)
+  const [bringItems, setBringItems] = useState(() => [createEmptyBringItem()])
   const [saveAsGroup, setSaveAsGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [saveAsTemplate, setSaveAsTemplate] = useState(false)
@@ -145,6 +154,27 @@ function CreateEventPage() {
         }
       }
 
+      if (form.enableBringList) {
+        const filledBringItems = getFilledBringItems(bringItems)
+
+        for (const item of filledBringItems) {
+          try {
+            const itemResult = await addSignupItem(payload.event.id, {
+              category: 'bring',
+              label: item.label,
+              capacity: item.quantity,
+              createdBy: form.organizerName,
+            })
+
+            if (item.personName) {
+              await claimSignupItem(itemResult.id, item.personName, item.quantity)
+            }
+          } catch (bringError) {
+            toast.error(`Akce je založená, ale položku "${item.label}" se nepodařilo uložit: ${bringError.message}`)
+          }
+        }
+      }
+
       toast.success('Akce je připravená. Odkazy můžeš rovnou sdílet.')
       setForm(initialForm)
       setShowAfterparty(false)
@@ -152,6 +182,8 @@ function CreateEventPage() {
       setAfterpartyTime('')
       setShowInvites(false)
       setInvitees([createEmptyInvitee()])
+      setShowBringItems(false)
+      setBringItems([createEmptyBringItem()])
       setSaveAsGroup(false)
       setGroupName('')
       setSaveAsTemplate(false)
@@ -523,42 +555,44 @@ function CreateEventPage() {
                 required
               />
             </div>
-            <div>
-              <button
-                type="button"
-                onClick={handleAfterpartyClick}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-black tracking-[-0.01em] text-white shadow-lg"
-                style={{
-                  background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
-                  animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
-                }}
-              >
-                🎉 {showAfterparty ? 'Zavřít afterparty' : 'Afterparty?!'} 🎉
-              </button>
+            {form.enableStops ? (
+              <div>
+                <button
+                  type="button"
+                  onClick={handleAfterpartyClick}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-black tracking-[-0.01em] text-white shadow-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
+                    animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
+                  }}
+                >
+                  🎉 {showAfterparty ? 'Zavřít afterparty' : 'Afterparty?!'} 🎉
+                </button>
 
-              {showAfterparty ? (
-                <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Kam se jde potom</label>
-                    <input
-                      className="field"
-                      value={afterpartyLocation}
-                      onChange={(event) => setAfterpartyLocation(event.target.value)}
-                      placeholder="Klub Afterparty, Praha 7"
-                    />
+                {showAfterparty ? (
+                  <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Kam se jde potom</label>
+                      <input
+                        className="field"
+                        value={afterpartyLocation}
+                        onChange={(event) => setAfterpartyLocation(event.target.value)}
+                        placeholder="Klub Afterparty, Praha 7"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Čas</label>
+                      <input
+                        type="time"
+                        className="field"
+                        value={afterpartyTime}
+                        onChange={(event) => setAfterpartyTime(event.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Čas</label>
-                    <input
-                      type="time"
-                      className="field"
-                      value={afterpartyTime}
-                      onChange={(event) => setAfterpartyTime(event.target.value)}
-                    />
-                  </div>
-                </div>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            ) : null}
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
               <input
                 type="checkbox"
@@ -571,6 +605,69 @@ function CreateEventPage() {
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Učastníci budou muset vyplnit telefon. Z organizátorské stránky pak můžeš na každého přímo zavolat.</p>
               </div>
             </label>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                  checked={form.enableBringList}
+                  onChange={(e) => setForm((current) => ({ ...current, enableBringList: e.target.checked }))}
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Kdo co bere</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Seznam věcí k přinesení, kam se lidi zapisují.</p>
+                </div>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                  checked={form.enableCarpool}
+                  onChange={(e) => setForm((current) => ({ ...current, enableCarpool: e.target.checked }))}
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Spolujízda</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Kdo koho sveze, kam se lidi zapisují.</p>
+                </div>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                  checked={form.enableStops}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setForm((current) => ({ ...current, enableStops: checked }))
+                    if (!checked) {
+                      setShowAfterparty(false)
+                    }
+                  }}
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Itinerář / zastávky</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Vícero zastávek večera (i afterparty).</p>
+                </div>
+              </label>
+            </div>
+
+            {form.enableBringList ? (
+              <div>
+                <button
+                  type="button"
+                  className="secondary-button w-full justify-center"
+                  onClick={() => setShowBringItems((current) => !current)}
+                >
+                  {showBringItems ? 'Zavřít kdo co bere' : '+ Naplánovat, kdo co bere'}
+                </button>
+
+                {showBringItems ? (
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                    <BringListEditor items={bringItems} onChange={setBringItems} disabled={isSubmitting} />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div>
               <button

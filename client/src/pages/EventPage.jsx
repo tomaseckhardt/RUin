@@ -892,17 +892,23 @@ function EventPage() {
           />
         </div>
 
-        <div className="order-4 lg:order-4">
-          <EventStops eventId={id} />
-        </div>
+        {event.enableStops ? (
+          <div className="order-4 lg:order-4">
+            <EventStops eventId={id} />
+          </div>
+        ) : null}
 
-        <div className="order-5 lg:order-5">
-          <SignupBoard eventId={id} category="bring" currentName={sessionName} canInteract={isIdentityLocked} />
-        </div>
+        {event.enableBringList ? (
+          <div className="order-5 lg:order-5">
+            <SignupBoard eventId={id} category="bring" currentName={sessionName} canInteract={isIdentityLocked} />
+          </div>
+        ) : null}
 
-        <div className="order-6 lg:order-6">
-          <SignupBoard eventId={id} category="ride" currentName={sessionName} canInteract={isIdentityLocked} />
-        </div>
+        {event.enableCarpool ? (
+          <div className="order-6 lg:order-6">
+            <SignupBoard eventId={id} category="ride" currentName={sessionName} canInteract={isIdentityLocked} />
+          </div>
+        ) : null}
 
         <div className="order-7 lg:order-7">
           <PhotoGallery eventId={id} currentName={sessionName} />
