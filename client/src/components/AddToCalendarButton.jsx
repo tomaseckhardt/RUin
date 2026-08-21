@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { buildAbsoluteUrl } from "../lib/format.js";
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -169,14 +170,30 @@ function downloadIcs(content, fileName) {
 // data:-URI flow below, it works from inside restricted in-app browsers
 // (Instagram, Messenger, TikTok, ...) since those only block downloads and
 // non-http(s) navigation, not ordinary link clicks.
+function buildEventUrl(eventData) {
+  if (!eventData?.id) {
+    return "";
+  }
+
+  return buildAbsoluteUrl(`/event/${eventData.id}`);
+}
+
 function buildGoogleCalendarUrl(eventData) {
   const startDate = eventStartToUtcDate(eventData.datetime);
   const endDate = addHours(startDate, 3);
+  const eventUrl = buildEventUrl(eventData);
+  const details = [
+    eventData.description || "",
+    eventUrl ? `Odkaz na akci: ${eventUrl}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: eventData.name || "",
     dates: `${toUtcIcsDateTime(startDate)}/${toUtcIcsDateTime(endDate)}`,
-    details: eventData.description || "",
+    details,
     location: eventData.location || "",
   });
 
@@ -191,7 +208,12 @@ function buildIcs(eventData) {
   const name = eventData.name || "";
   const summary = escapeIcsText(name);
   const location = escapeIcsText(eventData.location);
-  const description = escapeIcsText(eventData.description);
+  const eventUrl = buildEventUrl(eventData);
+  const description = escapeIcsText(
+    [eventData.description || "", eventUrl ? `Tady to najdeš: ${eventUrl}` : ""]
+      .filter(Boolean)
+      .join("\n\n"),
+  );
   const reminderText = escapeIcsText(`Připomínka: ${name}`);
   const uid = `${eventData.id ?? Date.now()}@ruin.app`;
 
