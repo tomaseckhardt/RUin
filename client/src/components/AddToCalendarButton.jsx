@@ -135,17 +135,16 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
-function isIosDevice() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-}
-
 function downloadIcs(content, fileName) {
-  if (isIosDevice()) {
-    // iOS Safari doesn't honor a forced <a download> on a blob: URL - it
-    // just silently saves the file (a "download complete" banner, nothing
-    // added) instead of showing its native "Add Event" sheet. Navigating
-    // directly to a text/calendar data: URI, with no download attribute,
-    // makes Safari intercept it and show that native sheet instead.
+  const isMobileBrowser =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    ) || window.matchMedia("(pointer: coarse)").matches;
+
+  if (isMobileBrowser) {
+    // Mobile browsers often block download links or blob URLs, but they do
+    // intercept a direct data:text/calendar navigation and open the native
+    // calendar sheet to add the event.
     window.location.href = `data:text/calendar;charset=utf-8,${encodeURIComponent(content)}`;
     return;
   }
