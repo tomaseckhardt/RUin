@@ -176,7 +176,7 @@ function buildEventUrl(eventData) {
   return buildAbsoluteUrl(`/event/${eventData.id}`);
 }
 
-/*function buildGoogleCalendarUrl(eventData) {
+function buildGoogleCalendarUrl(eventData) {
   const startDate = eventStartToUtcDate(eventData.datetime);
   const endDate = addHours(startDate, 3);
   const eventUrl = buildEventUrl(eventData);
@@ -196,7 +196,7 @@ function buildEventUrl(eventData) {
   });
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}*/
+}
 
 function buildIcs(eventData) {
   const nowUtc = toUtcIcsDateTime(new Date());
@@ -247,7 +247,29 @@ function AddToCalendarButton({ eventData }) {
     return null;
   }
 
-  function handleDownloadIcs() {
+  function handleCalendarClick() {
+    try {
+      const googleCalendarUrl = buildGoogleCalendarUrl(eventData);
+
+      // On mobile/in-app browsers, a direct navigation to the Google Calendar
+      // "render" URL is the most reliable way to open the native add-event
+      // flow. If that is blocked, the ICS fallback below still gives the
+      // system calendar path on iPhone/Android.
+      window.location.href = googleCalendarUrl;
+      setTimeout(() => {
+        try {
+          const calendarContent = buildIcs(eventData);
+          const fileName = `${slugify(eventData.name) || "udalost"}.ics`;
+          downloadIcs(calendarContent, fileName);
+        } catch {
+          // Ignored: the direct Google Calendar navigation is already in flight.
+        }
+      }, 250);
+      return;
+    } catch {
+      // Fall through to ICS export below.
+    }
+
     try {
       const calendarContent = buildIcs(eventData);
       const fileName = `${slugify(eventData.name) || "udalost"}.ics`;
@@ -265,7 +287,7 @@ function AddToCalendarButton({ eventData }) {
     <button
       type="button"
       className="secondary-button"
-      onClick={handleDownloadIcs}>
+      onClick={handleCalendarClick}>
       Přidat do kalendáře
     </button>
   );
