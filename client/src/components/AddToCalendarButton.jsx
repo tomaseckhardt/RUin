@@ -245,50 +245,8 @@ function buildIcs(eventData) {
 }
 
 function AddToCalendarButton({ eventData }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    if (!isMenuOpen) {
-      return undefined;
-    }
-
-    function handleOutsideInteraction(event) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target)
-      ) {
-        setIsMenuOpen(false);
-      }
-    }
-
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        setIsMenuOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleOutsideInteraction);
-    document.addEventListener("touchstart", handleOutsideInteraction);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideInteraction);
-      document.removeEventListener("touchstart", handleOutsideInteraction);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isMenuOpen]);
-
   if (!eventData?.datetime) {
     return null;
-  }
-
-  let googleCalendarUrl = null;
-
-  try {
-    googleCalendarUrl = buildGoogleCalendarUrl(eventData);
-  } catch {
-    // leave googleCalendarUrl as null - the .ics download below still works
   }
 
   function handleDownloadIcs() {
@@ -302,41 +260,16 @@ function AddToCalendarButton({ eventData }) {
       );
     } catch {
       toast.error("Nepodařilo se vytvořit kalendářovou pozvánku.");
-    } finally {
-      setIsMenuOpen(false);
     }
   }
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
-      <button
-        type="button"
-        className="secondary-button"
-        onClick={() => setIsMenuOpen((current) => !current)}>
-        Přidat do kalendáře
-      </button>
-
-      {isMenuOpen && (
-        <div className="absolute bottom-full left-0 z-20 mb-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-          {googleCalendarUrl && (
-            <a
-              href={googleCalendarUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-              onClick={() => setIsMenuOpen(false)}>
-              Google Calendar
-            </a>
-          )}
-          <button
-            type="button"
-            className="block w-full px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-            onClick={handleDownloadIcs}>
-            Systémový kalendář (.ics)
-          </button>
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      className="secondary-button"
+      onClick={handleDownloadIcs}>
+      Přidat do kalendáře
+    </button>
   );
 }
 
