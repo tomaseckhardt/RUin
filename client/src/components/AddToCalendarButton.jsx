@@ -317,7 +317,7 @@ function AddToCalendarButton({ eventData }) {
       </button>
 
       {isMenuOpen && (
-        <div className="absolute left-0 z-20 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+        <div className="absolute bottom-full left-0 z-20 mb-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
           {googleCalendarUrl && (
             <a
               href={googleCalendarUrl}
