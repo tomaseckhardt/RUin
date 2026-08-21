@@ -210,7 +210,7 @@ function buildIcs(eventData) {
   const location = escapeIcsText(eventData.location);
   const eventUrl = buildEventUrl(eventData);
   const description = escapeIcsText(
-    [eventData.description || "", eventUrl ? `Odkaz na akci: ${eventUrl}` : ""]
+    [eventData.description || "", eventUrl ? `Tady to najdeš: ${eventUrl}` : ""]
       .filter(Boolean)
       .join("\n\n"),
   );
