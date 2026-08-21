@@ -24,7 +24,7 @@ function toUtcIcsDateTime(input) {
 function escapeIcsText(value) {
   return String(value || '')
     .replace(/\\/g, '\\\\')
-    .replace(/\r?\n/g, '\\n')
+    .replace(/\r\n|\r|\n/g, '\\n')
     .replace(/,/g, '\\,')
     .replace(/;/g, '\\;')
 }
@@ -67,6 +67,49 @@ function addHours(date, hours) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000)
 }
 
+const EVENT_TIME_ZONE = 'Europe/Prague'
+const NAIVE_DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/
+
+function getTimeZoneOffsetMinutes(utcMillis, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(utcMillis))
+
+  const get = (type) => Number(parts.find((part) => part.type === type).value)
+  const asIfUtcMillis = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'))
+
+  return (asIfUtcMillis - utcMillis) / 60000
+}
+
+// eventData.datetime has no timezone offset (Postgres "timestamp without
+// time zone") and is, by app-wide convention, wall-clock time in Europe/
+// Prague - not the viewer's device timezone. Resolve it to the correct UTC
+// instant using the IANA zone's real offset (which also covers DST) instead
+// of letting `new Date()` assume the browser's local timezone.
+function eventStartToUtcDate(input) {
+  const match = String(input).match(NAIVE_DATETIME_PATTERN)
+
+  if (!match) {
+    return new Date(input)
+  }
+
+  const [, year, month, day, hour, minute, second = '0'] = match
+  const naiveUtcMillis = Date.UTC(
+    Number(year), Number(month) - 1, Number(day),
+    Number(hour), Number(minute), Number(second),
+  )
+  const offsetMinutes = getTimeZoneOffsetMinutes(naiveUtcMillis, EVENT_TIME_ZONE)
+
+  return new Date(naiveUtcMillis - offsetMinutes * 60000)
+}
+
 function slugify(value) {
   return String(value || 'udalost')
     .normalize('NFD')
@@ -86,19 +129,22 @@ function downloadIcs(content, fileName) {
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  // Safari can read the blob: URL asynchronously after click() returns, so
+  // revoking it immediately can produce an empty/truncated download.
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 function buildIcs(eventData) {
   const nowUtc = toUtcIcsDateTime(new Date())
-  const startDate = new Date(eventData.datetime)
+  const startDate = eventStartToUtcDate(eventData.datetime)
   const startUtc = toUtcIcsDateTime(startDate)
   const endUtc = toUtcIcsDateTime(addHours(startDate, 3))
-  const summary = escapeIcsText(eventData.name)
+  const name = eventData.name || ''
+  const summary = escapeIcsText(name)
   const location = escapeIcsText(eventData.location)
   const description = escapeIcsText(eventData.description)
-  const reminderText = escapeIcsText(`Připomínka: ${eventData.name}`)
-  const uid = `${eventData.id || Date.now()}@ruin.app`
+  const reminderText = escapeIcsText(`Připomínka: ${name}`)
+  const uid = `${eventData.id ?? Date.now()}@ruin.app`
 
   return [
     'BEGIN:VCALENDAR',
