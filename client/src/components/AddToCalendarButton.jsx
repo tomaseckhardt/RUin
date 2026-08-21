@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 function pad(value) {
@@ -120,21 +119,7 @@ function slugify(value) {
     .replace(/^-+|-+$/g, '')
 }
 
-function isIosDevice() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
-}
-
 function downloadIcs(content, fileName) {
-  if (isIosDevice()) {
-    // iOS Safari doesn't honor a forced <a download> on a blob: URL - it
-    // just silently saves the file (a "download complete" banner, nothing
-    // added) instead of showing its native "Add Event" sheet. Navigating
-    // directly to a text/calendar data: URI, with no download attribute,
-    // makes Safari intercept it and show that native sheet instead.
-    window.location.href = `data:text/calendar;charset=utf-8,${encodeURIComponent(content)}`
-    return
-  }
-
   const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -147,25 +132,6 @@ function downloadIcs(content, fileName) {
   // Safari can read the blob: URL asynchronously after click() returns, so
   // revoking it immediately can produce an empty/truncated download.
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-// Google Calendar's "render" endpoint is a plain https URL that opens a
-// prefilled "add event" form on calendar.google.com - unlike the .ics/
-// data:-URI flow below, it works from inside restricted in-app browsers
-// (Instagram, Messenger, TikTok, ...) since those only block downloads and
-// non-http(s) navigation, not ordinary link clicks.
-function buildGoogleCalendarUrl(eventData) {
-  const startDate = eventStartToUtcDate(eventData.datetime)
-  const endDate = addHours(startDate, 3)
-  const params = new URLSearchParams({
-    action: 'TEMPLATE',
-    text: eventData.name || '',
-    dates: `${toUtcIcsDateTime(startDate)}/${toUtcIcsDateTime(endDate)}`,
-    details: eventData.description || '',
-    location: eventData.location || '',
-  })
-
-  return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
 function buildIcs(eventData) {
@@ -206,50 +172,11 @@ function buildIcs(eventData) {
 }
 
 function AddToCalendarButton({ eventData }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const containerRef = useRef(null)
-
-  useEffect(() => {
-    if (!isMenuOpen) {
-      return undefined
-    }
-
-    function handleOutsideInteraction(event) {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsMenuOpen(false)
-      }
-    }
-
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        setIsMenuOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleOutsideInteraction)
-    document.addEventListener('touchstart', handleOutsideInteraction)
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideInteraction)
-      document.removeEventListener('touchstart', handleOutsideInteraction)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isMenuOpen])
-
   if (!eventData?.datetime) {
     return null
   }
 
-  let googleCalendarUrl = null
-
-  try {
-    googleCalendarUrl = buildGoogleCalendarUrl(eventData)
-  } catch {
-    // leave googleCalendarUrl as null - the .ics download below still works
-  }
-
-  function handleDownloadIcs() {
+  function handleAddToCalendar() {
     try {
       const calendarContent = buildIcs(eventData)
       const fileName = `${slugify(eventData.name) || 'udalost'}.ics`
@@ -258,44 +185,13 @@ function AddToCalendarButton({ eventData }) {
       toast.success('Kalendář stažen. Upozornění je nastavené na 2 dny předem.')
     } catch {
       toast.error('Nepodařilo se vytvořit kalendářovou pozvánku.')
-    } finally {
-      setIsMenuOpen(false)
     }
   }
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
-      <button
-        type="button"
-        className="secondary-button"
-        onClick={() => setIsMenuOpen((current) => !current)}
-      >
-        Přidat do kalendáře
-      </button>
-
-      {isMenuOpen && (
-        <div className="absolute left-0 z-20 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-          {googleCalendarUrl && (
-            <a
-              href={googleCalendarUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Google Calendar
-            </a>
-          )}
-          <button
-            type="button"
-            className="block w-full px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-            onClick={handleDownloadIcs}
-          >
-            Systémový kalendář (.ics)
-          </button>
-        </div>
-      )}
-    </div>
+    <button type="button" className="secondary-button" onClick={handleAddToCalendar}>
+      Přidat do kalendáře
+    </button>
   )
 }
 
