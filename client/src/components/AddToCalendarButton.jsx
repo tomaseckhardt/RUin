@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { buildAbsoluteUrl } from "../lib/format.js";
 
@@ -178,7 +177,7 @@ function buildEventUrl(eventData) {
   return buildAbsoluteUrl(`/event/${eventData.id}`);
 }
 
-function buildGoogleCalendarUrl(eventData) {
+/*function buildGoogleCalendarUrl(eventData) {
   const startDate = eventStartToUtcDate(eventData.datetime);
   const endDate = addHours(startDate, 3);
   const eventUrl = buildEventUrl(eventData);
@@ -198,7 +197,7 @@ function buildGoogleCalendarUrl(eventData) {
   });
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
+}*/
 
 function buildIcs(eventData) {
   const nowUtc = toUtcIcsDateTime(new Date());
