@@ -615,7 +615,7 @@ function ManageEventPage() {
               Pozvánka
             </button>
             <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
-              Pozvat lidi
+              Kdo by měl/a přijít?
             </button>
             <button
               type="button"
@@ -652,7 +652,7 @@ function ManageEventPage() {
                 Pozvánka
               </button>
               <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
-                Pozvat lidi
+                Kdo by měl/a přijít?
               </button>
               <button
                 type="button"
@@ -714,19 +714,6 @@ function ManageEventPage() {
         <div className="order-12 xl:order-8 xl:col-span-2">
           <PhotoGallery eventId={id} currentName={organizerName} isOrganizer organizerToken={activeToken} />
         </div>
-
-        <section className="panel order-5 xl:order-2 xl:col-start-2">
-          <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Správa akce</p>
-          <p className="mt-3 break-all text-sm leading-6 text-slate-700 dark:text-slate-300">
-            {buildAbsoluteUrl(`/event/${id}/manage`)}
-          </p>
-          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-            Tenhle odkaz je chráněný PINem — kdokoli ho otevře, musí PIN zadat znovu. Přihlášení zůstává uložené jen v tomhle prohlížeči.
-          </p>
-          <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
-            Veřejná pozvánka: <Link className="font-medium text-slate-900 underline dark:text-slate-50" to={`/event/${id}`}>otevřít RSVP stránku</Link>
-          </div>
-        </section>
 
         <ShareInviteModal
           open={showShareModal}
