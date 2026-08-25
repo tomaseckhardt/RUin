@@ -579,7 +579,7 @@ function ManageEventPage() {
         </>
       }
     >
-      <main className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+      <main className="grid gap-6 xl:flex xl:items-start">
         <section className="panel order-0 xl:hidden">
           <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Řídicí panel</p>
           <div className="mt-3 grid grid-cols-3 gap-2">
@@ -628,7 +628,44 @@ function ManageEventPage() {
           </div>
         </section>
 
-        <aside className="order-1 hidden space-y-6 xl:order-2 xl:block">
+        <div className="order-2 flex flex-col gap-6 xl:order-1 xl:min-w-0 xl:flex-1">
+          <AttendeeList
+            attendees={attendees}
+            summary={summary}
+            showModeration
+            onModerate={handleModeration}
+            busyId={busyId}
+            showPing
+            onPing={handlePing}
+            pingBusyId={pingBusyId}
+            canPing={Boolean(organizerName.trim())}
+            currentName={organizerName}
+            showDelete
+            onDelete={handleDeleteAttendee}
+            deleteBusyId={deleteBusyId}
+            showPhone={Boolean(payload?.event?.requirePhone)}
+          />
+
+          <EventChat
+            eventId={id}
+            currentName={organizerName}
+            canSend={Boolean(organizerName.trim())}
+          />
+
+          {event.enableStops ? <EventStops eventId={id} isOrganizer organizerToken={activeToken} /> : null}
+
+          {event.enableBringList ? (
+            <SignupBoard eventId={id} category="bring" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
+          ) : null}
+
+          {event.enableCarpool ? (
+            <SignupBoard eventId={id} category="ride" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
+          ) : null}
+
+          <PhotoGallery eventId={id} currentName={organizerName} isOrganizer organizerToken={activeToken} />
+        </div>
+
+        <aside className="order-1 hidden xl:order-2 xl:block xl:w-80 xl:shrink-0 xl:sticky xl:top-6">
           <section className="panel">
             <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
               Controls
@@ -665,55 +702,6 @@ function ManageEventPage() {
             </div>
           </section>
         </aside>
-
-        <div className="order-2 xl:order-3 xl:col-span-2">
-          <AttendeeList
-            attendees={attendees}
-            summary={summary}
-            showModeration
-            onModerate={handleModeration}
-            busyId={busyId}
-            showPing
-            onPing={handlePing}
-            pingBusyId={pingBusyId}
-            canPing={Boolean(organizerName.trim())}
-            currentName={organizerName}
-            showDelete
-            onDelete={handleDeleteAttendee}
-            deleteBusyId={deleteBusyId}
-            showPhone={Boolean(payload?.event?.requirePhone)}
-          />
-        </div>
-
-        <div className="order-3 xl:order-4 xl:col-span-2">
-          <EventChat
-            eventId={id}
-            currentName={organizerName}
-            canSend={Boolean(organizerName.trim())}
-          />
-        </div>
-
-        {event.enableStops ? (
-          <div className="order-9 xl:order-5 xl:col-span-2">
-            <EventStops eventId={id} isOrganizer organizerToken={activeToken} />
-          </div>
-        ) : null}
-
-        {event.enableBringList ? (
-          <div className="order-10 xl:order-6 xl:col-span-2">
-            <SignupBoard eventId={id} category="bring" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
-          </div>
-        ) : null}
-
-        {event.enableCarpool ? (
-          <div className="order-11 xl:order-7 xl:col-span-2">
-            <SignupBoard eventId={id} category="ride" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
-          </div>
-        ) : null}
-
-        <div className="order-12 xl:order-8 xl:col-span-2">
-          <PhotoGallery eventId={id} currentName={organizerName} isOrganizer organizerToken={activeToken} />
-        </div>
 
         <ShareInviteModal
           open={showShareModal}
