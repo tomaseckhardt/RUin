@@ -41,6 +41,20 @@ const PING_SEEN_STORAGE_PREFIX = "ruin-event-last-seen-ping";
 const PING_COOLDOWN_STORAGE_PREFIX = "ruin-event-ping-cooldown";
 const PING_COOLDOWN_MS = 10 * 60 * 1000;
 const REFRESH_ERROR_TOAST_ID = "event-refresh-error";
+const MODAL_CARD_CLASS_NAME =
+  "h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6";
+const SUMMARY_STATUS_GROUPS = [
+  "confirmed",
+  "excused",
+  "excused_accepted",
+  "excused_rejected",
+];
+const SUMMARY_STATUS_LABELS = {
+  confirmed: "✅ Přijdou",
+  excused: "⏳ Omluvenky (čeká)",
+  excused_accepted: "❌ Omluvenka přijatá",
+  excused_rejected: "⚪ Omluvenka zamítnutá",
+};
 
 function normalizeName(value) {
   return value.trim().toLocaleLowerCase("cs-CZ");
@@ -616,7 +630,11 @@ function EventPage() {
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
         <>
-          <WeatherWidget location={event.location} datetime={event.datetime} compact />
+          <WeatherWidget
+            location={event.location}
+            datetime={event.datetime}
+            compact
+          />
           <AddToCalendarButton eventData={event} />
           <button
             type="button"
@@ -831,7 +849,7 @@ function EventPage() {
                     : " Načítám tvůj aktuální stav…"}
                 </p>
                 {sessionAttendee?.status === "excused_rejected" ? (
-                  <div className="mt-5 rounded-[1.5rem] border border-amber-200 bg-amber-50/90 p-4 text-sm leading-6 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                  <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50/90 p-4 text-sm leading-6 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
                     Organizátor omluvenku zamítl. Můžeš odpověď upravit a poslat
                     ji znovu.
                   </div>
@@ -926,7 +944,7 @@ function EventPage() {
           open={showManageModal}
           onClose={closeManageModal}
           labelledBy="manage-modal-title">
-          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+          <div className={MODAL_CARD_CLASS_NAME}>
             <div className="mb-5">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
                 Správa akce
@@ -987,7 +1005,7 @@ function EventPage() {
           onClose={closePingModal}
           labelledBy="incoming-ping-title">
           {incomingPing ? (
-            <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+            <div className={MODAL_CARD_CLASS_NAME}>
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
                 Někdo tě šťouchl
               </p>
@@ -1015,7 +1033,7 @@ function EventPage() {
           open={showPingComposerModal}
           onClose={closePingComposerModal}
           labelledBy="ping-composer-title">
-          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
+          <div className={MODAL_CARD_CLASS_NAME}>
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
               Šťouchnout účastníka
             </p>
@@ -1083,7 +1101,7 @@ function EventPage() {
           open={showOverviewModal}
           onClose={() => setShowOverviewModal(false)}
           labelledBy="overview-modal-title">
-          <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
+          <div className={`${MODAL_CARD_CLASS_NAME} sm:max-w-lg`}>
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
@@ -1112,26 +1130,14 @@ function EventPage() {
                   {event.description || "Bez poznámky."}
                 </p>
               </div>
-              {[
-                "confirmed",
-                "excused",
-                "excused_accepted",
-                "excused_rejected",
-              ].map((statusGroup) => {
-                const group = attendees.filter(
-                  (a) => a.status === statusGroup,
-                );
+              {SUMMARY_STATUS_GROUPS.map((statusGroup) => {
+                const group = attendees.filter((a) => a.status === statusGroup);
                 if (group.length === 0) return null;
-                const labels = {
-                  confirmed: "✅ Přijdou",
-                  excused: "⏳ Omluvenky (čeká)",
-                  excused_accepted: "❌ Omluvenka přijatá",
-                  excused_rejected: "⚪ Omluvenka zamítnutá",
-                };
+
                 return (
                   <div key={statusGroup}>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                      {labels[statusGroup]} ({group.length})
+                      {SUMMARY_STATUS_LABELS[statusGroup]} ({group.length})
                     </p>
                     <ul className="space-y-2">
                       {group.map((a) => (

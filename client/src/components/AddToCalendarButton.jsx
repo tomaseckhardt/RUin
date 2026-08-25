@@ -1,5 +1,25 @@
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { buildAbsoluteUrl } from "../lib/format.js";
+
+const MOBILE_BROWSER_RE =
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+const IN_APP_BROWSER_RE = /Instagram|FBAN|FBAV|TikTok|Line|Slack|WhatsApp|Messenger/i;
+const WEBVIEW_RE = /WebView|wv\)|Version\//i;
+const APPLE_DEVICE_RE = /iPhone|iPad|iPod/i;
+const EVENT_TIME_ZONE = "Europe/Prague";
+const NAIVE_DATETIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/;
+const ICS_LINE_LENGTH_LIMIT = 75;
+const ICS_LINE_FOLD_LENGTH = 74;
+const CALENDAR_AUTO_OPEN_DELAY_MS = 150;
+const CALENDAR_DESCRIPTION_TEXT = "Tady to najdeš:";
+const CALENDAR_LINK_TEXT = "Odkaz na akci:";
+const CALENDAR_ERROR_MESSAGE = "Nepodařilo se vytvořit kalendářovou pozvánku.";
+const CALENDAR_SUCCESS_MESSAGE =
+  "Kalendář stažen. Upozornění je nastavené na 2 dny předem.";
+const CALENDAR_OPEN_IN_EXTERNAL_BROWSER_MESSAGE =
+  "Otevírá se externí prohlížeč pro přidání události do kalendáře.";
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -37,7 +57,7 @@ const icsTextEncoder = new TextEncoder();
 // point (not raw string index) keeps multi-byte characters (accents, emoji)
 // intact instead of splitting them across a fold boundary.
 function foldIcsLine(line) {
-  if (icsTextEncoder.encode(line).length <= 75) {
+  if (icsTextEncoder.encode(line).length <= ICS_LINE_LENGTH_LIMIT) {
     return line;
   }
 
@@ -47,7 +67,8 @@ function foldIcsLine(line) {
 
   for (const char of line) {
     const charBytes = icsTextEncoder.encode(char).length;
-    const limit = segments.length === 0 ? 75 : 74;
+    const limit =
+      segments.length === 0 ? ICS_LINE_LENGTH_LIMIT : ICS_LINE_FOLD_LENGTH;
 
     if (currentBytes + charBytes > limit) {
       segments.push(current);
@@ -67,10 +88,6 @@ function foldIcsLine(line) {
 function addHours(date, hours) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
-
-const EVENT_TIME_ZONE = "Europe/Prague";
-const NAIVE_DATETIME_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 function getTimeZoneOffsetMinutes(utcMillis, timeZone) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -135,11 +152,30 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function getCalendarFileName(eventData) {
+  return `${slugify(eventData.name) || "udalost"}.ics`;
+}
+
+function openCalendarUrl(url) {
+  const calendarWindow = window.open(url, "_blank", "noopener,noreferrer");
+
+  if (!calendarWindow) {
+    window.location.href = url;
+  }
+}
+
+function showCalendarDownloadSuccess() {
+  toast.success(CALENDAR_SUCCESS_MESSAGE);
+}
+
+function showCalendarError() {
+  toast.error(CALENDAR_ERROR_MESSAGE);
+}
+
 function downloadIcs(content, fileName) {
   const isMobileBrowser =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent,
-    ) || window.matchMedia("(pointer: coarse)").matches;
+    MOBILE_BROWSER_RE.test(navigator.userAgent) ||
+    window.matchMedia("(pointer: coarse)").matches;
 
   if (isMobileBrowser) {
     // Mobile browsers often block download links or blob URLs, but they do
@@ -182,7 +218,7 @@ function buildGoogleCalendarUrl(eventData) {
   const eventUrl = buildEventUrl(eventData);
   const details = [
     eventData.description || "",
-    eventUrl ? `Odkaz na akci: ${eventUrl}` : "",
+    eventUrl ? `${CALENDAR_LINK_TEXT} ${eventUrl}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -208,7 +244,10 @@ function buildIcs(eventData) {
   const location = escapeIcsText(eventData.location);
   const eventUrl = buildEventUrl(eventData);
   const description = escapeIcsText(
-    [eventData.description || "", eventUrl ? `Tady to najdeš: ${eventUrl}` : ""]
+    [
+      eventData.description || "",
+      eventUrl ? `${CALENDAR_DESCRIPTION_TEXT} ${eventUrl}` : "",
+    ]
       .filter(Boolean)
       .join("\n\n"),
   );
@@ -242,29 +281,100 @@ function buildIcs(eventData) {
     .join("\r\n");
 }
 
+function isInAppBrowser() {
+  const userAgent = navigator.userAgent || "";
+  const isInApp = IN_APP_BROWSER_RE.test(userAgent);
+  const hasWebViewMarker = WEBVIEW_RE.test(userAgent);
+  const isStandaloneIOS =
+    APPLE_DEVICE_RE.test(userAgent) &&
+    "standalone" in window.navigator &&
+    window.navigator.standalone;
+
+  return isInApp || hasWebViewMarker || isStandaloneIOS;
+}
+
+function isAppleDevice() {
+  return APPLE_DEVICE_RE.test(navigator.userAgent);
+}
+
 function AddToCalendarButton({ eventData }) {
+  const eventId = eventData?.id ?? "";
+  const eventDateTime = eventData?.datetime;
+
+  useEffect(() => {
+    if (!eventDateTime) {
+      return undefined;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const shouldAutoOpen =
+      params.get("calendarAutoOpen") === "1" &&
+      params.get("calendarEventId") === eventId;
+
+    if (!shouldAutoOpen) {
+      return undefined;
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("calendarAutoOpen");
+    url.searchParams.delete("calendarEventId");
+    window.history.replaceState({}, "", url);
+
+    const timer = window.setTimeout(() => {
+      try {
+        const googleCalendarUrl = buildGoogleCalendarUrl(eventData);
+        const calendarWindow = window.open(
+          googleCalendarUrl,
+          "_blank",
+          "noopener,noreferrer",
+        );
+
+        if (!calendarWindow) {
+          window.location.href = googleCalendarUrl;
+        }
+      } catch {
+        try {
+          const calendarContent = buildIcs(eventData);
+          const fileName = getCalendarFileName(eventData);
+          downloadIcs(calendarContent, fileName);
+        } catch {
+          showCalendarError();
+        }
+      }
+    }, CALENDAR_AUTO_OPEN_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [eventData, eventId, eventDateTime]);
+
   if (!eventData?.datetime) {
     return null;
   }
 
-  function handleCalendarClick() {
+  function handleInAppBrowserCalendarClick() {
+    const targetUrl = new URL(window.location.href);
+    targetUrl.searchParams.set("calendarAutoOpen", "1");
+    targetUrl.searchParams.set("calendarEventId", eventData.id ?? "");
+
+    toast.info(CALENDAR_OPEN_IN_EXTERNAL_BROWSER_MESSAGE);
+    openCalendarUrl(targetUrl.toString());
+  }
+
+  function handleNormalBrowserCalendarClick() {
+    if (isAppleDevice()) {
+      try {
+        const calendarContent = buildIcs(eventData);
+        const fileName = getCalendarFileName(eventData);
+        downloadIcs(calendarContent, fileName);
+        showCalendarDownloadSuccess();
+      } catch {
+        showCalendarError();
+      }
+      return;
+    }
+
     try {
       const googleCalendarUrl = buildGoogleCalendarUrl(eventData);
-
-      // On mobile/in-app browsers, a direct navigation to the Google Calendar
-      // "render" URL is the most reliable way to open the native add-event
-      // flow. If that is blocked, the ICS fallback below still gives the
-      // system calendar path on iPhone/Android.
-      window.location.href = googleCalendarUrl;
-      setTimeout(() => {
-        try {
-          const calendarContent = buildIcs(eventData);
-          const fileName = `${slugify(eventData.name) || "udalost"}.ics`;
-          downloadIcs(calendarContent, fileName);
-        } catch {
-          // Ignored: the direct Google Calendar navigation is already in flight.
-        }
-      }, 250);
+      openCalendarUrl(googleCalendarUrl);
       return;
     } catch {
       // Fall through to ICS export below.
@@ -272,15 +382,22 @@ function AddToCalendarButton({ eventData }) {
 
     try {
       const calendarContent = buildIcs(eventData);
-      const fileName = `${slugify(eventData.name) || "udalost"}.ics`;
+      const fileName = getCalendarFileName(eventData);
 
       downloadIcs(calendarContent, fileName);
-      toast.success(
-        "Kalendář stažen. Upozornění je nastavené na 2 dny předem.",
-      );
+      showCalendarDownloadSuccess();
     } catch {
-      toast.error("Nepodařilo se vytvořit kalendářovou pozvánku.");
+      showCalendarError();
     }
+  }
+
+  function handleCalendarClick() {
+    if (isInAppBrowser()) {
+      handleInAppBrowserCalendarClick();
+      return;
+    }
+
+    handleNormalBrowserCalendarClick();
   }
 
   return (
