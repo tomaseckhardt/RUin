@@ -628,6 +628,7 @@ function EventPage() {
       eyebrow="live invite page"
       title={event.name}
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
+      mergeNextPanel
       actions={
         <WeatherWidget
           location={event.location}
@@ -636,7 +637,7 @@ function EventPage() {
         />
       }>
       <main className="grid gap-6">
-        <section className="panel order-0 flex flex-wrap items-center gap-2 sm:gap-3">
+        <section className="panel order-0 rounded-t-none border-t-0 flex flex-wrap items-center gap-2 sm:gap-3">
           <AddToCalendarButton eventData={event} />
           <button
             type="button"
@@ -646,9 +647,10 @@ function EventPage() {
           </button>
           <button
             type="button"
-            className="primary-button"
+            className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-bold text-white shadow-[0_10px_28px_-6px_rgba(111,76,255,0.65)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-6px_rgba(111,76,255,0.8)]"
+            style={{ background: 'linear-gradient(135deg, #7a1c3f, #6f4cff)' }}
             onClick={() => setShowShareModal(true)}>
-            Pozvánka
+            📨 Pozvánka
           </button>
           <button
             type="button"

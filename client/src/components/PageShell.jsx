@@ -16,7 +16,7 @@ function getInitialTheme() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-function PageShell({ eyebrow, title, subtitle, children, actions }) {
+function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel = false }) {
   const [theme, setTheme] = useState(getInitialTheme)
   const isOnline = useOnlineStatus()
 
@@ -30,7 +30,9 @@ function PageShell({ eyebrow, title, subtitle, children, actions }) {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.22),transparent_62%)] dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_58%)]" />
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
         <header
-          className="hero-panel mb-6 flex flex-col gap-4 px-4 py-5 sm:mb-8 sm:gap-6 sm:px-8 sm:py-6 lg:flex-row lg:items-end lg:justify-between"
+          className={`hero-panel flex flex-col gap-4 px-4 py-5 sm:gap-6 sm:px-8 sm:py-6 lg:flex-row lg:items-end lg:justify-between ${
+            mergeNextPanel ? 'mb-0 rounded-b-none border-b-0' : 'mb-6 sm:mb-8'
+          }`}
           style={{
             color: 'var(--header-text)',
           }}
