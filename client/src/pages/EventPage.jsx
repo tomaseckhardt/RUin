@@ -461,7 +461,10 @@ function EventPage() {
   }
 
   function getPingCooldownRemainingMs(targetAttendeeId) {
-    return Math.max(0, readPingCooldownUntil(id, targetAttendeeId) - pingCooldownTick);
+    return Math.max(
+      0,
+      readPingCooldownUntil(id, targetAttendeeId) - pingCooldownTick,
+    );
   }
 
   function handlePing(attendeeId) {
@@ -648,9 +651,9 @@ function EventPage() {
           <button
             type="button"
             className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-bold text-white shadow-[0_10px_28px_-6px_rgba(111,76,255,0.65)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-6px_rgba(111,76,255,0.8)]"
-            style={{ background: 'linear-gradient(135deg, #7a1c3f, #6f4cff)' }}
+            style={{ background: "linear-gradient(135deg, #7a1c3f, #6f4cff)" }}
             onClick={() => setShowShareModal(true)}>
-            📨 Pozvánka
+            Pozvánka
           </button>
           <button
             type="button"
@@ -862,7 +865,9 @@ function EventPage() {
                     type="button"
                     className="primary-button mt-5 w-full justify-center"
                     onClick={handleCheckIn}
-                    disabled={isCheckingIn || Boolean(sessionAttendee?.checked_in_at)}>
+                    disabled={
+                      isCheckingIn || Boolean(sessionAttendee?.checked_in_at)
+                    }>
                     {sessionAttendee?.checked_in_at
                       ? "📍 Odbaveno, dorazil/a jsi"
                       : isCheckingIn
@@ -921,13 +926,23 @@ function EventPage() {
 
         {event.enableBringList ? (
           <div className="order-5 lg:order-5">
-            <SignupBoard eventId={id} category="bring" currentName={sessionName} canInteract={isIdentityLocked} />
+            <SignupBoard
+              eventId={id}
+              category="bring"
+              currentName={sessionName}
+              canInteract={isIdentityLocked}
+            />
           </div>
         ) : null}
 
         {event.enableCarpool ? (
           <div className="order-6 lg:order-6">
-            <SignupBoard eventId={id} category="ride" currentName={sessionName} canInteract={isIdentityLocked} />
+            <SignupBoard
+              eventId={id}
+              category="ride"
+              currentName={sessionName}
+              canInteract={isIdentityLocked}
+            />
           </div>
         ) : null}
 
