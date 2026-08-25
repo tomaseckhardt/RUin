@@ -611,8 +611,13 @@ function ManageEventPage() {
             >
               Přehled
             </button>
-            <button type="button" className="primary-button w-full justify-center" onClick={() => setShowShareModal(true)}>
-              Pozvánka
+            <button
+              type="button"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 font-bold text-white shadow-[0_10px_28px_-6px_rgba(111,76,255,0.65)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-6px_rgba(111,76,255,0.8)]"
+              style={{ background: 'linear-gradient(135deg, #7a1c3f, #6f4cff)' }}
+              onClick={() => setShowShareModal(true)}
+            >
+              📨 Pozvánka
             </button>
             <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
               Kdo by měl/a přijít?
@@ -685,8 +690,13 @@ function ManageEventPage() {
               >
                 Přehled
               </button>
-              <button type="button" className="primary-button w-full justify-center" onClick={() => setShowShareModal(true)}>
-                Pozvánka
+              <button
+                type="button"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 font-bold text-white shadow-[0_10px_28px_-6px_rgba(111,76,255,0.65)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-6px_rgba(111,76,255,0.8)]"
+                style={{ background: 'linear-gradient(135deg, #7a1c3f, #6f4cff)' }}
+                onClick={() => setShowShareModal(true)}
+              >
+                📨 Pozvánka
               </button>
               <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
                 Kdo by měl/a přijít?

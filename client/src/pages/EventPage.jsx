@@ -669,7 +669,12 @@ function EventPage() {
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">
               Poznámka k akci
             </p>
-            <p className="mt-3 max-w-3xl text-lg leading-8 text-slate-700 dark:text-slate-300">
+            <p
+              className="mt-4 max-w-3xl rounded-2xl border-l-4 px-5 py-4 text-xl font-semibold leading-8 text-slate-900 shadow-sm dark:text-slate-50"
+              style={{
+                background: 'linear-gradient(135deg, rgba(122,28,63,0.1), rgba(111,76,255,0.08))',
+                borderColor: '#6f4cff',
+              }}>
               {event.description}
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
