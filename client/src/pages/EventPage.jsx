@@ -629,12 +629,14 @@ function EventPage() {
       title={event.name}
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
-        <>
-          <WeatherWidget
-            location={event.location}
-            datetime={event.datetime}
-            compact
-          />
+        <WeatherWidget
+          location={event.location}
+          datetime={event.datetime}
+          compact
+        />
+      }>
+      <main className="grid gap-6">
+        <section className="panel order-0 flex flex-wrap items-center gap-2 sm:gap-3">
           <AddToCalendarButton eventData={event} />
           <button
             type="button"
@@ -644,19 +646,18 @@ function EventPage() {
           </button>
           <button
             type="button"
-            className="secondary-button"
+            className="primary-button"
             onClick={() => setShowShareModal(true)}>
             Pozvánka
           </button>
           <button
             type="button"
-            className="secondary-button"
+            className="secondary-button border-transparent bg-transparent shadow-none hover:bg-slate-100 dark:hover:bg-slate-800"
             onClick={openManageModal}>
             Spravovat akci
           </button>
-        </>
-      }>
-      <main className="grid gap-6">
+        </section>
+
         <section className="panel relative order-1 overflow-hidden">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
           <div className="relative">
