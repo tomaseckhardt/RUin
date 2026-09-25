@@ -11,6 +11,7 @@ const SERVER_MESSAGE_TRANSLATIONS = { en: enServerMessages }
 const INTL_LOCALES = { cs: 'cs-CZ', en: 'en-GB' }
 // Endonyms for the language toggle - always shown in their own language.
 export const LOCALE_NAMES = { cs: 'Čeština', en: 'English' }
+export const LOCALE_SHORT_NAMES = { cs: 'CZ', en: 'EN' }
 export const SUPPORTED_LOCALES = Object.keys(DICTIONARIES)
 const PLACEHOLDER_PATTERN = /\{(\w+)\}/
 

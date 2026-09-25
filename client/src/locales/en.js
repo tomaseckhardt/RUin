@@ -31,7 +31,8 @@ export default {
   shell: {
     lightMode: 'Light mode',
     darkMode: 'Dark mode',
-    switchLanguage: 'Switch language',
+    language: 'Language',
+    theme: 'Theme',
     offline: 'You’re offline - some things won’t be saved until you reconnect.',
   },
 

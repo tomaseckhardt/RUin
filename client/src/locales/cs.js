@@ -34,7 +34,8 @@ export default {
   shell: {
     lightMode: 'Světlý režim',
     darkMode: 'Tmavý režim',
-    switchLanguage: 'Přepnout jazyk',
+    language: 'Jazyk',
+    theme: 'Vzhled',
     offline: 'Jsi offline - některé věci se neuloží, dokud se nepřipojíš.',
   },
 

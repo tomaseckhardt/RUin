@@ -4,39 +4,68 @@ import { MemoryRouter } from 'react-router-dom'
 import PageShell from './PageShell.jsx'
 import { getLocale, setLocale } from '../lib/i18n.js'
 
+function renderShell() {
+  return render(
+    <MemoryRouter>
+      <PageShell eyebrow="Section" title="Main Title" subtitle="Subtitle" />
+    </MemoryRouter>,
+  )
+}
+
 afterEach(() => {
   act(() => setLocale('cs'))
+  document.documentElement.classList.remove('dark')
+  window.localStorage.removeItem('ruin-theme')
 })
 
-describe('PageShell language toggle', () => {
-  it('switches the UI to English and back', async () => {
+describe('PageShell language switch', () => {
+  it('flips between Czech and English on every click', async () => {
     const user = userEvent.setup()
-    render(
-      <MemoryRouter>
-        <PageShell eyebrow="Section" title="Main Title" subtitle="Subtitle" />
-      </MemoryRouter>,
-    )
+    renderShell()
 
-    expect(screen.getByRole('button', { name: 'Tmavý režim' })).toBeInTheDocument()
+    const languageSwitch = screen.getByRole('switch', { name: 'English' })
+    expect(languageSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(languageSwitch).toHaveAttribute('lang', 'en')
 
-    await user.click(screen.getByRole('button', { name: 'English' }))
+    await user.click(languageSwitch)
 
     expect(getLocale()).toBe('en')
-    expect(screen.getByRole('button', { name: 'Dark mode' })).toBeInTheDocument()
+    expect(languageSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', { name: 'Dark mode' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Čeština' }))
+    await user.click(languageSwitch)
 
     expect(getLocale()).toBe('cs')
-    expect(screen.getByRole('button', { name: 'Tmavý režim' })).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Tmavý režim' })).toBeInTheDocument()
   })
 
-  it('labels the toggle in the language it switches to', () => {
-    render(
-      <MemoryRouter>
-        <PageShell eyebrow="Section" title="Main Title" subtitle="Subtitle" />
-      </MemoryRouter>,
-    )
+  it('flips even when the already active side is clicked', async () => {
+    const user = userEvent.setup()
+    renderShell()
 
-    expect(screen.getByRole('button', { name: 'English' })).toHaveAttribute('lang', 'en')
+    await user.click(screen.getByText('CZ'))
+
+    expect(getLocale()).toBe('en')
+  })
+})
+
+describe('PageShell theme switch', () => {
+  it('flips between light and dark mode and remembers the choice', async () => {
+    const user = userEvent.setup()
+    renderShell()
+
+    const themeSwitch = screen.getByRole('switch', { name: 'Tmavý režim' })
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'false')
+
+    await user.click(themeSwitch)
+
+    expect(document.documentElement).toHaveClass('dark')
+    expect(window.localStorage.getItem('ruin-theme')).toBe('dark')
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(themeSwitch)
+
+    expect(document.documentElement).not.toHaveClass('dark')
+    expect(window.localStorage.getItem('ruin-theme')).toBe('light')
   })
 })
