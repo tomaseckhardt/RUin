@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
+import { useI18n } from '../lib/i18n.js'
 
-const WEEKDAY_LABELS = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne']
-const MONTH_LABELS = [
-  'leden', 'únor', 'březen', 'duben', 'květen', 'červen',
-  'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec',
-]
 const DEFAULT_TIME = '18:00'
 
 function startOfMonth(date) {
@@ -74,16 +70,17 @@ function buildPresets() {
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 18, 0, 0, 0)
 
   const presets = [
-    { key: 'today', label: 'Dnes 18:00', date: today },
-    { key: 'tomorrow', label: 'Zítra 18:00', date: tomorrow },
-    { key: 'friday', label: 'Pátek 19:00', date: nextOccurrence(5, 19, 0) },
-    { key: 'saturday', label: 'Sobota 14:00', date: nextOccurrence(6, 14, 0) },
+    { key: 'today', labelKey: 'datePicker.presetToday', date: today },
+    { key: 'tomorrow', labelKey: 'datePicker.presetTomorrow', date: tomorrow },
+    { key: 'friday', labelKey: 'datePicker.presetFriday', date: nextOccurrence(5, 19, 0) },
+    { key: 'saturday', labelKey: 'datePicker.presetSaturday', date: nextOccurrence(6, 14, 0) },
   ]
 
   return presets.filter((preset) => preset.date.getTime() > now.getTime())
 }
 
 function EventDateTimePicker({ value, onChange }) {
+  const { t } = useI18n()
   const selectedDate = parseLocalDateTime(value)
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selectedDate || new Date()))
   const [isOpen, setIsOpen] = useState(false)
@@ -163,7 +160,7 @@ function EventDateTimePicker({ value, onChange }) {
         aria-expanded={isOpen}
         onClick={() => (isOpen ? setIsOpen(false) : openPanel())}
       >
-        {value ? formatDateTime(value) : 'Vyber datum'}
+        {value ? formatDateTime(value) : t('datePicker.placeholder')}
       </button>
 
       {isOpen ? (
@@ -186,7 +183,7 @@ function EventDateTimePicker({ value, onChange }) {
                   onClick={() => handlePresetClick(preset.date)}
                   className={isActive ? 'primary-button px-3 py-1.5 text-xs' : 'secondary-button px-3 py-1.5 text-xs'}
                 >
-                  {preset.label}
+                  {t(preset.labelKey)}
                 </button>
               )
             })}
@@ -199,18 +196,18 @@ function EventDateTimePicker({ value, onChange }) {
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                aria-label="Předchozí měsíc"
+                aria-label={t('datePicker.previousMonth')}
                 className="flex h-8 w-8 items-center justify-center text-base text-slate-500 dark:text-slate-300"
                 onClick={() => goToMonth(-1)}
               >
                 ‹
               </button>
               <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100">
-                {MONTH_LABELS[viewMonth.getMonth()]} {viewMonth.getFullYear()}
+                {t('datePicker.months')[viewMonth.getMonth()]} {viewMonth.getFullYear()}
               </p>
               <button
                 type="button"
-                aria-label="Následující měsíc"
+                aria-label={t('datePicker.nextMonth')}
                 className="flex h-8 w-8 items-center justify-center text-base text-slate-500 dark:text-slate-300"
                 onClick={() => goToMonth(1)}
               >
@@ -219,7 +216,7 @@ function EventDateTimePicker({ value, onChange }) {
             </div>
 
             <div className="mt-1 grid grid-cols-7 text-center text-[8px] font-semibold uppercase text-slate-400 dark:text-slate-500">
-              {WEEKDAY_LABELS.map((label) => (
+              {t('datePicker.weekdays').map((label) => (
                 <span key={label}>{label}</span>
               ))}
             </div>
@@ -264,7 +261,7 @@ function EventDateTimePicker({ value, onChange }) {
 
           <div className="mt-3" style={{ animation: 'fade-up 0.3s ease 0.1s both' }}>
             <label htmlFor="event-datetime-time" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Čas
+              {t('common.time')}
             </label>
             <input
               id="event-datetime-time"
@@ -284,7 +281,7 @@ function EventDateTimePicker({ value, onChange }) {
             }}
             style={{ animation: 'fade-up 0.3s ease 0.15s both' }}
           >
-            Hotovo
+            {t('datePicker.done')}
           </button>
         </div>
       ) : null}

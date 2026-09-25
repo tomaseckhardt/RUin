@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import JSZip from 'jszip'
 import ModalOverlay from './ModalOverlay.jsx'
 import { deleteEventPhoto, getEventPhotoUrl, getEventPhotos, recordEventPhoto, uploadEventPhoto } from '../lib/api.js'
+import { useI18n } from '../lib/i18n.js'
 import { supabase } from '../lib/supabase.js'
 
 function normalizeName(value) {
@@ -10,6 +11,7 @@ function normalizeName(value) {
 }
 
 function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToken = null }) {
+  const { t } = useI18n()
   const [photos, setPhotos] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
@@ -61,7 +63,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     }
 
     if (!currentName?.trim() && !isOrganizer) {
-      toast.error('Napiš svoje jméno v RSVP, ať víme, od koho fotka je.')
+      toast.error(t('photos.nameRequired'))
       return
     }
 
@@ -72,13 +74,13 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     try {
       for (const file of files) {
         if (!file.type.startsWith('image/')) {
-          toast.error('Nahraj prosím obrázek.')
+          toast.error(t('photos.imageOnly'))
           continue
         }
 
         try {
           const storagePath = await uploadEventPhoto(eventId, file)
-          await recordEventPhoto(eventId, storagePath, currentName || 'Organizátor')
+          await recordEventPhoto(eventId, storagePath, currentName || t('common.organizer'))
           successCount += 1
         } catch (error) {
           toast.error(error.message)
@@ -88,7 +90,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
       await loadPhotos()
 
       if (successCount > 0) {
-        toast.success(files.length === 1 ? 'Fotka nahraná.' : `Nahráno ${successCount}/${files.length} fotek.`)
+        toast.success(files.length === 1 ? t('photos.uploadedOne') : t('photos.uploadedMany', { uploaded: successCount, total: files.length }))
       }
     } finally {
       setIsUploading(false)
@@ -96,7 +98,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   }
 
   async function handleDelete(photo) {
-    const confirmed = window.confirm('Opravdu chceš smazat tuto fotku?')
+    const confirmed = window.confirm(t('photos.confirmDelete'))
 
     if (!confirmed) {
       return
@@ -106,7 +108,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
       const { error: storageError } = await supabase.storage.from('event-photos').remove([photo.storage_path])
 
       if (storageError) {
-        toast.warning('Fotku se nepodařilo smazat z úložiště, záznam ale zmizí.')
+        toast.warning(t('photos.storageDeleteFailed'))
       }
 
       await deleteEventPhoto(eventId, organizerToken, photo.id)
@@ -123,7 +125,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     )
 
     if (othersPhotos.length === 0) {
-      toast.error('Není co stáhnout, zbylé fotky jsi nahrál/a ty.')
+      toast.error(t('photos.nothingToDownload'))
       return
     }
 
@@ -137,7 +139,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
           const response = await fetch(getEventPhotoUrl(photo.storage_path))
 
           if (!response.ok) {
-            throw new Error(`Fotku od ${photo.uploaded_by} se nepodařilo stáhnout.`)
+            throw new Error(t('photos.downloadOneFailed', { name: photo.uploaded_by }))
           }
 
           const blob = await response.blob()
@@ -150,15 +152,15 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
       const url = URL.createObjectURL(zipBlob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `fotky-${eventId}.zip`
+      link.download = t('photos.zipFileName', { id: eventId })
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
 
-      toast.success(`Staženo ${othersPhotos.length} fotek.`)
+      toast.success(t('photos.downloaded', { count: othersPhotos.length }))
     } catch (error) {
-      toast.error(error.message || 'Fotky se nepodařilo stáhnout.')
+      toast.error(error.message || t('photos.downloadFailed'))
     } finally {
       setIsDownloading(false)
     }
@@ -172,24 +174,24 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     <section className="panel">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.24em]">Album</p>
-          <h3 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Fotky z akce</h3>
+          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.24em]">{t('photos.eyebrow')}</p>
+          <h3 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{t('photos.title')}</h3>
         </div>
         <div className="flex flex-wrap gap-2">
           {photos.length > 0 ? (
             <button type="button" className="secondary-button" disabled={isDownloading} onClick={handleDownloadAll}>
-              {isDownloading ? 'Stahuju…' : 'Stáhnout fotky'}
+              {isDownloading ? t('photos.downloading') : t('photos.download')}
             </button>
           ) : null}
           <button type="button" className="secondary-button" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
-            {isUploading ? 'Nahrávám…' : '📷 Přidat fotku'}
+            {isUploading ? t('photos.uploading') : t('photos.add')}
           </button>
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
       </div>
 
       {photos.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Zatím žádné fotky. První může přidat kdokoli z účastníků.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('photos.empty')}</p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {photos.map((photo, index) => (
@@ -199,7 +201,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                 onClick={() => setLightboxIndex(index)}
                 className="block h-full w-full cursor-zoom-in"
               >
-                <img src={getEventPhotoUrl(photo.storage_path)} alt={`Fotka od ${photo.uploaded_by}`} className="h-full w-full object-cover" loading="lazy" />
+                <img src={getEventPhotoUrl(photo.storage_path)} alt={t('photos.photoBy', { name: photo.uploaded_by })} className="h-full w-full object-cover" loading="lazy" />
               </button>
               {isOrganizer ? (
                 <button
@@ -210,7 +212,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                   }}
                   className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white transition"
                 >
-                  Smazat
+                  {t('common.delete')}
                 </button>
               ) : null}
             </div>
@@ -223,10 +225,10 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
           <div className="flex max-h-[90dvh] w-full max-w-3xl flex-col items-center gap-4 p-4">
             <div className="flex w-full items-center justify-between gap-3 text-slate-100">
               <p id="photo-lightbox-title" className="text-sm">
-                Fotka od {photos[lightboxIndex].uploaded_by} · {lightboxIndex + 1} / {photos.length}
+                {t('photos.lightboxTitle', { name: photos[lightboxIndex].uploaded_by, index: lightboxIndex + 1, total: photos.length })}
               </p>
               <button type="button" className="secondary-button" onClick={() => setLightboxIndex(null)}>
-                Zavřít
+                {t('common.close')}
               </button>
             </div>
 
@@ -234,7 +236,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
               {photos.length > 1 ? (
                 <button
                   type="button"
-                  aria-label="Předchozí fotka"
+                  aria-label={t('photos.previous')}
                   onClick={() => setLightboxIndex((current) => (current - 1 + photos.length) % photos.length)}
                   className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-left-14"
                 >
@@ -244,14 +246,14 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
 
               <img
                 src={getEventPhotoUrl(photos[lightboxIndex].storage_path)}
-                alt={`Fotka od ${photos[lightboxIndex].uploaded_by}`}
+                alt={t('photos.photoBy', { name: photos[lightboxIndex].uploaded_by })}
                 className="max-h-[70dvh] max-w-full rounded-xl object-contain"
               />
 
               {photos.length > 1 ? (
                 <button
                   type="button"
-                  aria-label="Další fotka"
+                  aria-label={t('photos.next')}
                   onClick={() => setLightboxIndex((current) => (current + 1) % photos.length)}
                   className="absolute right-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-right-14"
                 >

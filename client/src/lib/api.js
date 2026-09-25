@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js'
 import { toast } from 'sonner'
+import { localizeServerMessage, t } from './i18n.js'
 
-const OFFLINE_ERROR_MESSAGE = 'Jsi offline - zkontroluj připojení a zkus to znovu.'
 const RETRY_QUEUE_STORAGE_KEY = 'ruin-retry-queue'
 
 // RPCs that are upsert/delete-by-identity operations under the hood - replaying
@@ -36,6 +36,16 @@ function isOfflineError(error) {
   // Postgres error code and never looks like that.
   const message = typeof error.message === 'string' ? error.message : ''
   return !error.code && /^(TypeError|FetchError|AbortError)\b/.test(message)
+}
+
+// The thrown message is translated for the active UI language, while
+// serverMessage keeps the database's original (Czech) text, so code that
+// branches on a specific backend error keeps working in every language.
+function toRequestError(error, fallbackMessage) {
+  const serverMessage = error?.message || ''
+  const requestError = new Error(serverMessage ? localizeServerMessage(serverMessage) : fallbackMessage)
+  requestError.serverMessage = serverMessage
+  return requestError
 }
 
 function readRetryQueue() {
@@ -105,17 +115,13 @@ async function replayRetryQueue() {
         return
       }
 
-      toast.error(`Odloženou akci se nepodařilo dokončit: ${error.message || 'neznámá chyba'}`)
+      toast.error(t('api.queuedFailed', { error: error.message ? localizeServerMessage(error.message) : t('api.unknownError') }))
     }
 
     writeRetryQueue([])
 
     if (successCount > 0) {
-      toast.success(
-        successCount === 1
-          ? 'Jedna odložená akce se úspěšně odeslala.'
-          : `${successCount} odložených akcí se úspěšně odeslalo.`,
-      )
+      toast.success(t('api.queuedSent', { count: successCount }))
     }
   } finally {
     isReplayingRetryQueue = false
@@ -140,10 +146,10 @@ async function callRpc(name, args, fallbackMessage) {
   if (error) {
     if (isOfflineError(error)) {
       queueRetryableCall(name, args)
-      throw new Error(OFFLINE_ERROR_MESSAGE)
+      throw new Error(t('api.offline'))
     }
 
-    throw new Error(error.message || fallbackMessage || 'Požadavek se nepovedl.')
+    throw toRequestError(error, fallbackMessage || t('api.requestFailed'))
   }
 
   return data
@@ -164,7 +170,7 @@ export function createEvent(data) {
       p_enable_carpool: data.enableCarpool ?? true,
       p_enable_stops: data.enableStops ?? true,
     },
-    'Akci se nepodařilo vytvořit.',
+    t('api.errors.createEvent'),
   )
 }
 
@@ -175,7 +181,7 @@ export function unlockManageWithPin(eventId, pin) {
       p_event_id: eventId,
       p_pin: pin,
     },
-    'Správu akce se nepodařilo odemknout.',
+    t('api.errors.unlockManage'),
   )
 }
 
@@ -183,7 +189,7 @@ export function getEvent(id, organizerToken = null) {
   return callRpc(
     'get_event_payload',
     { p_event_id: id, p_organizer_token: organizerToken },
-    'Akci se nepodařilo načíst.',
+    t('api.errors.getEvent'),
   )
 }
 
@@ -197,7 +203,7 @@ export function submitRsvp(id, data) {
       p_excuse_reason: data.excuseReason ?? null,
       p_phone: data.phone ?? null,
     },
-    'RSVP se nepodařilo uložit.',
+    t('api.errors.submitRsvp'),
   )
 }
 
@@ -210,7 +216,7 @@ export function moderateAttendee(eventId, attendeeId, data) {
       p_token: data.token,
       p_status: data.status,
     },
-    'Omluvenku se nepodařilo upravit.',
+    t('api.errors.moderateAttendee'),
   )
 }
 
@@ -223,7 +229,7 @@ export function pingAttendee(eventId, attendeeId, sourceName, message = null) {
       p_source_name: sourceName,
       p_message: message,
     },
-    'Šťouchnutí se nepodařilo odeslat.',
+    t('api.errors.pingAttendee'),
   )
 }
 
@@ -235,7 +241,7 @@ export function deleteAttendee(eventId, attendeeId, token) {
       p_attendee_id: Number(attendeeId),
       p_token: token,
     },
-    'Účastníka se nepodařilo smazat.',
+    t('api.errors.deleteAttendee'),
   )
 }
 
@@ -246,7 +252,7 @@ export function removeEvent(eventId, token) {
       p_event_id: eventId,
       p_token: token,
     },
-    'Akci se nepodařilo smazat.',
+    t('api.errors.removeEvent'),
   )
 }
 
@@ -265,7 +271,7 @@ export function updateEvent(eventId, data) {
       p_enable_carpool: data.enableCarpool ?? true,
       p_enable_stops: data.enableStops ?? true,
     },
-    'Akci se nepodařilo upravit.',
+    t('api.errors.updateEvent'),
   )
 }
 
@@ -277,7 +283,7 @@ export function inviteAttendees(eventId, token, invitees) {
       p_token: token,
       p_invitees: invitees.map((invitee) => ({ name: invitee.name, phone: invitee.phone || null })),
     },
-    'Pozvánky se nepodařilo uložit.',
+    t('api.errors.inviteAttendees'),
   )
 }
 
@@ -285,7 +291,7 @@ export function accessOwnerAccount(name, phone, code) {
   return callRpc(
     'access_owner_account',
     { p_name: name, p_phone: phone, p_code: code },
-    'Nepodařilo se ověřit přístup ke skupinám a šablonám.',
+    t('api.errors.accessOwnerAccount'),
   )
 }
 
@@ -293,7 +299,7 @@ export function getOwnerPayload(ownerId, token) {
   return callRpc(
     'get_owner_payload',
     { p_owner_id: ownerId, p_token: token },
-    'Skupiny a šablony se nepodařilo načíst.',
+    t('api.errors.getOwnerPayload'),
   )
 }
 
@@ -301,7 +307,7 @@ export function createContactGroup(ownerId, token, name) {
   return callRpc(
     'create_contact_group',
     { p_owner_id: ownerId, p_token: token, p_name: name },
-    'Skupinu se nepodařilo uložit.',
+    t('api.errors.createContactGroup'),
   )
 }
 
@@ -309,7 +315,7 @@ export function renameContactGroup(ownerId, token, groupId, name) {
   return callRpc(
     'rename_contact_group',
     { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_name: name },
-    'Skupinu se nepodařilo přejmenovat.',
+    t('api.errors.renameContactGroup'),
   )
 }
 
@@ -317,7 +323,7 @@ export function deleteContactGroup(ownerId, token, groupId) {
   return callRpc(
     'delete_contact_group',
     { p_owner_id: ownerId, p_token: token, p_group_id: groupId },
-    'Skupinu se nepodařilo smazat.',
+    t('api.errors.deleteContactGroup'),
   )
 }
 
@@ -325,7 +331,7 @@ export function addContactGroupMember(ownerId, token, groupId, member) {
   return callRpc(
     'add_contact_group_member',
     { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_name: member.name, p_phone: member.phone },
-    'Člena se nepodařilo přidat.',
+    t('api.errors.addContactGroupMember'),
   )
 }
 
@@ -333,7 +339,7 @@ export function removeContactGroupMember(ownerId, token, groupId, memberId) {
   return callRpc(
     'remove_contact_group_member',
     { p_owner_id: ownerId, p_token: token, p_group_id: groupId, p_member_id: memberId },
-    'Člena se nepodařilo odebrat.',
+    t('api.errors.removeContactGroupMember'),
   )
 }
 
@@ -350,7 +356,7 @@ export function createEventTemplate(ownerId, token, data) {
       p_require_phone: data.requirePhone ?? false,
       p_default_group_id: data.defaultGroupId ?? null,
     },
-    'Šablonu se nepodařilo uložit.',
+    t('api.errors.createEventTemplate'),
   )
 }
 
@@ -368,7 +374,7 @@ export function updateEventTemplate(ownerId, token, templateId, data) {
       p_require_phone: data.requirePhone ?? false,
       p_default_group_id: data.defaultGroupId ?? null,
     },
-    'Šablonu se nepodařilo upravit.',
+    t('api.errors.updateEventTemplate'),
   )
 }
 
@@ -376,7 +382,7 @@ export function deleteEventTemplate(ownerId, token, templateId) {
   return callRpc(
     'delete_event_template',
     { p_owner_id: ownerId, p_token: token, p_template_id: templateId },
-    'Šablonu se nepodařilo smazat.',
+    t('api.errors.deleteEventTemplate'),
   )
 }
 
@@ -387,7 +393,7 @@ export async function getEventChatMessages(eventId, limit = 120) {
   })
 
   if (error) {
-    throw new Error(error.message || 'Chat se nepodařilo načíst.')
+    throw toRequestError(error, t('api.errors.getChatMessages'))
   }
 
   return (data ?? []).reverse()
@@ -402,7 +408,7 @@ export function registerPushSubscription(eventId, subscription) {
       p_p256dh: subscription.p256dh,
       p_auth: subscription.auth,
     },
-    'Připomínku se nepodařilo zapnout.',
+    t('api.errors.registerPushSubscription'),
   )
 }
 
@@ -410,7 +416,7 @@ export function unregisterPushSubscription(endpoint) {
   return callRpc(
     'unregister_push_subscription',
     { p_endpoint: endpoint },
-    'Připomínku se nepodařilo vypnout.',
+    t('api.errors.unregisterPushSubscription'),
   )
 }
 
@@ -418,7 +424,7 @@ export function checkInAttendee(eventId, attendeeName) {
   return callRpc(
     'check_in_attendee',
     { p_event_id: eventId, p_attendee_name: attendeeName },
-    'Check-in se nepodařil.',
+    t('api.errors.checkIn'),
   )
 }
 
@@ -426,7 +432,7 @@ export function toggleChatReaction(messageId, senderName, emoji) {
   return callRpc(
     'toggle_chat_reaction',
     { p_message_id: messageId, p_sender_name: senderName, p_emoji: emoji },
-    'Reakci se nepodařilo uložit.',
+    t('api.errors.toggleChatReaction'),
   )
 }
 
@@ -441,7 +447,7 @@ export async function getChatReactions(eventId, messageIds) {
   })
 
   if (error) {
-    throw new Error(error.message || 'Reakce se nepodařilo načíst.')
+    throw toRequestError(error, t('api.errors.getChatReactions'))
   }
 
   return data ?? []
@@ -458,7 +464,7 @@ export function addSignupItem(eventId, data) {
       p_note: data.note ?? null,
       p_created_by: data.createdBy,
     },
-    'Položku se nepodařilo přidat.',
+    t('api.errors.addSignupItem'),
   )
 }
 
@@ -466,7 +472,7 @@ export function claimSignupItem(itemId, attendeeName, seats = 1) {
   return callRpc(
     'claim_signup_item',
     { p_item_id: itemId, p_attendee_name: attendeeName, p_seats: seats },
-    'Přihlášení se nepodařilo uložit.',
+    t('api.errors.claimSignupItem'),
   )
 }
 
@@ -474,7 +480,7 @@ export function unclaimSignupItem(itemId, attendeeName) {
   return callRpc(
     'unclaim_signup_item',
     { p_item_id: itemId, p_attendee_name: attendeeName, p_requester_name: attendeeName },
-    'Odhlášení se nepodařilo uložit.',
+    t('api.errors.unclaimSignupItem'),
   )
 }
 
@@ -487,7 +493,7 @@ export function removeSignupClaim(itemId, claimAttendeeName, requesterName, orga
       p_requester_name: requesterName,
       p_organizer_token: organizerToken,
     },
-    'Odebrání se nepodařilo uložit.',
+    t('api.errors.removeSignupClaim'),
   )
 }
 
@@ -495,7 +501,7 @@ export function deleteSignupItem(eventId, itemId, token) {
   return callRpc(
     'delete_signup_item',
     { p_event_id: eventId, p_item_id: itemId, p_token: token },
-    'Položku se nepodařilo smazat.',
+    t('api.errors.deleteSignupItem'),
   )
 }
 
@@ -503,7 +509,7 @@ export async function getSignupItems(eventId) {
   const { data, error } = await supabase.rpc('get_event_signup_items', { p_event_id: eventId })
 
   if (error) {
-    throw new Error(error.message || 'Seznam se nepodařilo načíst.')
+    throw toRequestError(error, t('api.errors.getSignupItems'))
   }
 
   return data ?? []
@@ -519,7 +525,7 @@ export function addEventStop(eventId, token, data) {
       p_location: data.location ?? null,
       p_starts_at_label: data.startsAtLabel ?? null,
     },
-    'Zastávku se nepodařilo přidat.',
+    t('api.errors.addEventStop'),
   )
 }
 
@@ -527,7 +533,7 @@ export function deleteEventStop(eventId, token, stopId) {
   return callRpc(
     'delete_event_stop',
     { p_event_id: eventId, p_token: token, p_stop_id: stopId },
-    'Zastávku se nepodařilo smazat.',
+    t('api.errors.deleteEventStop'),
   )
 }
 
@@ -535,7 +541,7 @@ export async function getEventStops(eventId) {
   const { data, error } = await supabase.rpc('get_event_stops', { p_event_id: eventId })
 
   if (error) {
-    throw new Error(error.message || 'Itinerář se nepodařilo načíst.')
+    throw toRequestError(error, t('api.errors.getEventStops'))
   }
 
   return data ?? []
@@ -550,7 +556,7 @@ export function createEventPoll(data) {
       p_description: data.description ?? null,
       p_options: data.options,
     },
-    'Anketu se nepodařilo vytvořit.',
+    t('api.errors.createEventPoll'),
   )
 }
 
@@ -558,7 +564,7 @@ export function getPollPayload(pollId, token = null) {
   return callRpc(
     'get_poll_payload',
     { p_poll_id: pollId, p_token: token },
-    'Anketu se nepodařilo načíst.',
+    t('api.errors.getPollPayload'),
   )
 }
 
@@ -566,7 +572,7 @@ export function votePoll(pollId, optionId, voterName) {
   return callRpc(
     'vote_event_poll',
     { p_poll_id: pollId, p_option_id: optionId, p_voter_name: voterName },
-    'Hlas se nepodařilo uložit.',
+    t('api.errors.votePoll'),
   )
 }
 
@@ -580,7 +586,7 @@ export function finalizePoll(pollId, token, optionId, organizerPin, description)
       p_organizer_pin: organizerPin,
       p_description: description ?? null,
     },
-    'Anketu se nepodařilo vyhodnotit.',
+    t('api.errors.finalizePoll'),
   )
 }
 
@@ -588,7 +594,7 @@ export function recordEventPhoto(eventId, storagePath, uploadedBy) {
   return callRpc(
     'record_event_photo',
     { p_event_id: eventId, p_storage_path: storagePath, p_uploaded_by: uploadedBy },
-    'Fotku se nepodařilo uložit.',
+    t('api.errors.recordEventPhoto'),
   )
 }
 
@@ -596,7 +602,7 @@ export async function getEventPhotos(eventId) {
   const { data, error } = await supabase.rpc('get_event_photos', { p_event_id: eventId })
 
   if (error) {
-    throw new Error(error.message || 'Fotky se nepodařilo načíst.')
+    throw toRequestError(error, t('api.errors.getEventPhotos'))
   }
 
   return data ?? []
@@ -606,7 +612,7 @@ export function deleteEventPhoto(eventId, token, photoId) {
   return callRpc(
     'delete_event_photo',
     { p_event_id: eventId, p_token: token, p_photo_id: photoId },
-    'Fotku se nepodařilo smazat.',
+    t('api.errors.deleteEventPhoto'),
   )
 }
 
@@ -614,11 +620,11 @@ const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 export async function uploadEventPhoto(eventId, file) {
   if (!file.type.startsWith('image/')) {
-    throw new Error('Nahrát lze jen obrázky.')
+    throw new Error(t('api.imageOnly'))
   }
 
   if (file.size > MAX_PHOTO_BYTES) {
-    throw new Error('Fotka je moc velká (limit je 10 MB).')
+    throw new Error(t('api.photoTooBig'))
   }
 
   const fileExt = file.name.split('.').pop()
@@ -629,7 +635,7 @@ export async function uploadEventPhoto(eventId, file) {
     .upload(storagePath, file)
 
   if (uploadError) {
-    throw new Error(uploadError.message || 'Nahrání fotky selhalo.')
+    throw new Error(uploadError.message || t('api.uploadFailed'))
   }
 
   return storagePath
@@ -645,11 +651,11 @@ export async function sendEventChatMessage(eventId, senderName, message) {
   const cleanMessage = (message || '').trim()
 
   if (!cleanSenderName) {
-    throw new Error('Pro odeslání zprávy vyplň svoje jméno.')
+    throw new Error(t('api.chatNameRequired'))
   }
 
   if (!cleanMessage) {
-    throw new Error('Napiš zprávu do chatu.')
+    throw new Error(t('api.chatMessageRequired'))
   }
 
   const { data, error } = await supabase.rpc('send_event_chat_message', {
@@ -659,7 +665,7 @@ export async function sendEventChatMessage(eventId, senderName, message) {
   })
 
   if (error) {
-    throw new Error(error.message || 'Zprávu se nepodařilo odeslat.')
+    throw toRequestError(error, t('api.errors.sendChatMessage'))
   }
 
   return data?.[0]
@@ -669,7 +675,7 @@ export function submitFeedback(type, name, message) {
   return callRpc(
     'submit_feedback_report',
     { p_type: type, p_name: name, p_message: message },
-    'Hlášení se nepodařilo odeslat.',
+    t('api.errors.submitFeedback'),
   )
 }
 
@@ -677,6 +683,6 @@ export function getFeedbackReports() {
   return callRpc(
     'get_feedback_reports',
     {},
-    'Hlášení se nepodařilo načíst.',
+    t('api.errors.getFeedbackReports'),
   )
 }

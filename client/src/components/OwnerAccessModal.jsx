@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import ModalOverlay from './ModalOverlay.jsx'
 import { accessOwnerAccount } from '../lib/api.js'
+import { useI18n } from '../lib/i18n.js'
 import { saveOwnerIdentity } from '../lib/ownerLinkStorage.js'
 
 function OwnerAccessModal({ open, onClose, onAccessGranted }) {
+  const { t } = useI18n()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
@@ -25,7 +27,7 @@ function OwnerAccessModal({ open, onClose, onAccessGranted }) {
     try {
       const result = await accessOwnerAccount(name, phone, code)
       saveOwnerIdentity(result.ownerId, result.token)
-      toast.success('Hotovo — ke skupinám a šablonám se teď dostaneš odkudkoli přes tenhle telefon a kód.')
+      toast.success(t('ownerAccess.granted'))
       setName('')
       setPhone('')
       setCode('')
@@ -41,42 +43,42 @@ function OwnerAccessModal({ open, onClose, onAccessGranted }) {
     <ModalOverlay open={open} onClose={handleClose} labelledBy="owner-access-title">
       <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
         <div className="mb-5">
-          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Skupiny a šablony</p>
+          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('owner.eyebrow')}</p>
           <h3 id="owner-access-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-            Jméno, telefon a kód
+            {t('ownerAccess.title')}
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            Poprvé tady? Zvol si 6místný kód a účet se založí sám. Už ho máš? Zadej stejný telefon a kód a dostaneš se ke svým skupinám a šablonám z jakéhokoli zařízení.
+            {t('ownerAccess.intro')}
           </p>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Jméno</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('common.name')}</label>
             <input
               className="field"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Např. Tomáš"
+              placeholder={t('common.namePlaceholder')}
               required
               autoFocus
               disabled={isSubmitting}
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Telefonní číslo</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('common.phoneNumber')}</label>
             <input
               className="field"
               type="tel"
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
-              placeholder="Např. 777123456"
+              placeholder={t('common.phonePlaceholder')}
               required
               disabled={isSubmitting}
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">6místný kód</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('ownerAccess.code')}</label>
             <input
               className="field"
               type="password"
@@ -93,10 +95,10 @@ function OwnerAccessModal({ open, onClose, onAccessGranted }) {
 
           <div className="flex gap-3">
             <button type="button" className="secondary-button flex-1 justify-center" onClick={handleClose}>
-              Zrušit
+              {t('common.cancel')}
             </button>
             <button type="submit" className="primary-button flex-1" disabled={isSubmitting}>
-              {isSubmitting ? 'Ověřuji…' : 'Pokračovat'}
+              {isSubmitting ? t('common.verifying') : t('ownerAccess.continue')}
             </button>
           </div>
         </form>

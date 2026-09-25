@@ -1,4 +1,5 @@
 import { summaryText } from '../lib/format.js'
+import { useI18n } from '../lib/i18n.js'
 
 function formatCooldownRemaining(ms) {
   const totalSeconds = Math.ceil(ms / 1000)
@@ -9,31 +10,26 @@ function formatCooldownRemaining(ms) {
 
 const statusConfig = {
   confirmed: {
-    label: 'Potvrzeno',
     tone: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
     accent: 'border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-900/70 dark:bg-emerald-950/20',
     icon: '✅',
   },
   excused: {
-    label: 'Čeká na posouzení',
     tone: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
     accent: 'border-amber-200/80 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20',
     icon: '⏳',
   },
   excused_accepted: {
-    label: 'Omluvenka přijatá',
     tone: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300',
     accent: 'border-rose-200/80 bg-rose-50/70 dark:border-rose-900/70 dark:bg-rose-950/20',
     icon: '❌',
   },
   excused_rejected: {
-    label: 'Omluvenka zamítnutá',
     tone: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
     accent: 'border-slate-200 bg-slate-100/90 dark:border-slate-700 dark:bg-slate-900/50',
     icon: '⚪',
   },
   invited: {
-    label: 'Pozváno',
     tone: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300',
     accent: 'border-sky-200/80 bg-sky-50/70 dark:border-sky-900/70 dark:bg-sky-950/20',
     icon: '📨',
@@ -57,22 +53,23 @@ function AttendeeList({
   showPhone = false,
   getPingCooldownRemainingMs,
 }) {
+  const { t } = useI18n()
   const normalizedCurrentName = currentName.trim().toLocaleLowerCase('cs-CZ')
 
   return (
     <section className="panel">
       <div className="flex flex-col gap-4 border-b border-slate-200/70 pb-5 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.2em]">Guest roster</p>
-          <h2 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Kdo je v tom s tebou</h2>
+          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.2em]">{t('attendees.eyebrow')}</p>
+          <h2 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{t('attendees.title')}</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{summaryText(summary)}</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
-          <span className="status-chip bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✅ {summary.confirmed} přijde</span>
-          <span className="status-chip bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">⏳ {summary.excused} omluvenky</span>
-          <span className="status-chip bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">⚪ {summary.rejected} zamítnuté</span>
+          <span className="status-chip bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">{t('attendees.chipConfirmed', { count: summary.confirmed })}</span>
+          <span className="status-chip bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">{t('attendees.chipExcused', { count: summary.excused })}</span>
+          <span className="status-chip bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{t('attendees.chipRejected', { count: summary.rejected })}</span>
           {summary.invited ? (
-            <span className="status-chip bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">📨 {summary.invited} pozváno</span>
+            <span className="status-chip bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">{t('attendees.chipInvited', { count: summary.invited })}</span>
           ) : null}
         </div>
       </div>
@@ -80,7 +77,7 @@ function AttendeeList({
       <div className="mt-5 space-y-3">
         {attendees.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-slate-300 px-4 py-10 text-center text-slate-500 dark:border-slate-700 dark:text-slate-400">
-            Zatím nikdo neodpověděl. První jméno čeká právě na tebe.
+            {t('attendees.empty')}
           </div>
         ) : null}
 
@@ -107,16 +104,16 @@ function AttendeeList({
                     >
                       {config.icon} {attendee.name}
                     </span>
-                    <span className={`status-chip ${config.tone}`}>{config.label}</span>
+                    <span className={`status-chip ${config.tone}`}>{t(`attendees.status.${attendee.status}`)}</span>
                     {attendee.checked_in_at ? (
                       <span className="status-chip bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950/60 dark:text-fuchsia-300">
-                        📍 Dorazil/a
+                        {t('attendees.checkedIn')}
                       </span>
                     ) : null}
                   </div>
                   {attendee.excuse_reason ? (
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-                      „{attendee.excuse_reason}“
+                      {t('attendees.quote', { text: attendee.excuse_reason })}
                     </p>
                   ) : null}
                   {(showPhone || attendee.status === 'invited') && attendee.phone ? (
@@ -129,18 +126,18 @@ function AttendeeList({
                   ) : null}
                   {pingCount > 0 ? (
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      Šťouchnutí: {pingCount}
+                      {t('attendees.pingCount', { count: pingCount })}
                     </p>
                   ) : null}
 
                   {pingLastMessage ? (
                     <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                      Poslední vzkaz: „{pingLastMessage}“
+                      {t('attendees.lastPingMessage', { message: pingLastMessage })}
                     </p>
                   ) : null}
 
                   {rejected && pingCount > 0 ? (
-                    <p className="mt-2 text-sm font-medium text-rose-700 dark:text-rose-300">Skupina tě šťouchla.</p>
+                    <p className="mt-2 text-sm font-medium text-rose-700 dark:text-rose-300">{t('attendees.groupPinged')}</p>
                   ) : null}
                 </div>
 
@@ -152,7 +149,7 @@ function AttendeeList({
                       disabled={busyId === attendee.id}
                       onClick={() => onModerate(attendee.id, 'excused_accepted')}
                     >
-                      ✅ Schválit
+                      {t('attendees.accept')}
                     </button>
                     <button
                       type="button"
@@ -160,7 +157,7 @@ function AttendeeList({
                       disabled={busyId === attendee.id}
                       onClick={() => onModerate(attendee.id, 'excused_rejected')}
                     >
-                      ❌ Zamítnout
+                      {t('attendees.reject')}
                     </button>
                     {showDelete ? (
                       <button
@@ -169,7 +166,7 @@ function AttendeeList({
                         disabled={deleteBusyId === attendee.id}
                         onClick={() => onDelete(attendee.id, attendee.name)}
                       >
-                        Smazat
+                        {t('common.delete')}
                       </button>
                     ) : null}
                   </div>
@@ -183,7 +180,7 @@ function AttendeeList({
                       disabled={deleteBusyId === attendee.id}
                       onClick={() => onDelete(attendee.id, attendee.name)}
                     >
-                      Smazat
+                      {t('common.delete')}
                     </button>
                   </div>
                 ) : null}
@@ -202,10 +199,10 @@ function AttendeeList({
                           onClick={() => onPing(attendee.id)}
                         >
                           {pingBusyId === attendee.id
-                            ? 'Šťouchám…'
+                            ? t('ping.sending')
                             : onCooldown
-                              ? `Znovu za ${formatCooldownRemaining(cooldownMs)}`
-                              : 'Šťouchnout'}
+                              ? t('attendees.pingAgainIn', { time: formatCooldownRemaining(cooldownMs) })
+                              : t('attendees.ping')}
                         </button>
                       )
                     })()}

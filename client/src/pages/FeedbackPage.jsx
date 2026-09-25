@@ -2,17 +2,10 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import PageShell from '../components/PageShell.jsx'
 import { getFeedbackReports } from '../lib/api.js'
+import { getIntlLocale, useI18n } from '../lib/i18n.js'
 
-const TYPE_LABEL = {
-  bug: '🐛 Chyba',
-  idea: '💡 Nápad',
-}
-
-const FILTERS = [
-  { key: 'all', label: 'Vše' },
-  { key: 'bug', label: '🐛 Chyby' },
-  { key: 'idea', label: '💡 Nápady' },
-]
+const FILTERS = ['all', 'bug', 'idea']
+const REPORT_TYPES = ['bug', 'idea']
 
 function formatReportedAt(value) {
   const date = new Date(value)
@@ -21,10 +14,11 @@ function formatReportedAt(value) {
     return value
   }
 
-  return new Intl.DateTimeFormat('cs-CZ', { dateStyle: 'full', timeStyle: 'short' }).format(date)
+  return new Intl.DateTimeFormat(getIntlLocale(), { dateStyle: 'full', timeStyle: 'short' }).format(date)
 }
 
 function FeedbackPage() {
+  const { t } = useI18n()
   const [reports, setReports] = useState(null)
   const [filter, setFilter] = useState('all')
 
@@ -36,8 +30,8 @@ function FeedbackPage() {
 
   if (!reports) {
     return (
-      <PageShell eyebrow="interní" title="Chyby a nápady" subtitle="Načítám hlášení…">
-        <p className="panel text-sm text-slate-500 dark:text-slate-400">Načítám…</p>
+      <PageShell eyebrow={t('feedback.eyebrow')} title={t('feedback.title')} subtitle={t('feedback.loadingSubtitle')}>
+        <p className="panel text-sm text-slate-500 dark:text-slate-400">{t('common.loading')}</p>
       </PageShell>
     )
   }
@@ -45,27 +39,27 @@ function FeedbackPage() {
   const visibleReports = filter === 'all' ? reports : reports.filter((report) => report.type === filter)
 
   return (
-    <PageShell eyebrow="interní" title="Chyby a nápady" subtitle={`${reports.length} ${reports.length === 1 ? 'hlášení' : 'hlášení celkem'}`}>
+    <PageShell eyebrow={t('feedback.eyebrow')} title={t('feedback.title')} subtitle={t('feedback.count', { count: reports.length })}>
       <div className="mb-4 flex flex-wrap gap-2">
-        {FILTERS.map((item) => (
+        {FILTERS.map((key) => (
           <button
-            key={item.key}
+            key={key}
             type="button"
-            onClick={() => setFilter(item.key)}
-            aria-pressed={filter === item.key}
+            onClick={() => setFilter(key)}
+            aria-pressed={filter === key}
             className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-              filter === item.key
+              filter === key
                 ? 'border-transparent bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                 : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'
             }`}
           >
-            {item.label}
+            {t(`feedback.filters.${key}`)}
           </button>
         ))}
       </div>
 
       {visibleReports.length === 0 ? (
-        <p className="panel text-sm text-slate-500 dark:text-slate-400">Zatím nic v téhle kategorii.</p>
+        <p className="panel text-sm text-slate-500 dark:text-slate-400">{t('feedback.empty')}</p>
       ) : (
         <div className="space-y-4">
           {visibleReports.map((report) => (
@@ -73,7 +67,7 @@ function FeedbackPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {TYPE_LABEL[report.type] ?? report.type}
+                    {REPORT_TYPES.includes(report.type) ? t(`feedback.types.${report.type}`) : report.type}
                   </span>
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{report.name}</p>
                 </div>

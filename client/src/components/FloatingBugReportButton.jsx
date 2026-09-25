@@ -2,31 +2,17 @@ import { useState } from "react";
 import { toast } from "sonner";
 import ModalOverlay from "./ModalOverlay.jsx";
 import { submitFeedback } from "../lib/api.js";
-
-const TYPE_COPY = {
-  bug: {
-    eyebrow: "Našel/a jsi chybu?",
-    title: "Nahlásit chybu",
-    intro: "Popiš, co se stalo a kde - mrknu se na to.",
-    messageLabel: "Co se stalo",
-    messagePlaceholder: "Např. Na stránce akce mi po kliknutí na ‚Potvrdit účast‘ nic nenaskočilo…",
-  },
-  idea: {
-    eyebrow: "Máš nápad na vylepšení?",
-    title: "Navrhnout vylepšení",
-    intro: "Napiš, co by se podle tebe hodilo přidat nebo udělat jinak.",
-    messageLabel: "Tvůj nápad",
-    messagePlaceholder: "Např. Bylo by super, kdyby šlo do kalendáře přidat i afterparty zvlášť…",
-  },
-};
+import { useI18n } from "../lib/i18n.js";
 
 function FloatingBugReportButton() {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState("bug");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const copy = TYPE_COPY[type];
+  // Keys under feedback.bug / feedback.idea, matching the report type.
+  const copy = (field) => t(`feedback.${type}.${field}`);
 
   function close() {
     if (isSubmitting) {
@@ -40,7 +26,7 @@ function FloatingBugReportButton() {
     event.preventDefault();
 
     if (!name.trim() || !message.trim()) {
-      toast.error("Vyplň jméno i text.");
+      toast.error(t("feedback.fillNameAndText"));
       return;
     }
 
@@ -48,7 +34,7 @@ function FloatingBugReportButton() {
 
     try {
       await submitFeedback(type, name, message);
-      toast.success("Díky! Uložil jsem to.");
+      toast.success(t("feedback.thanks"));
       setMessage("");
       setIsOpen(false);
     } catch (error) {
@@ -63,8 +49,8 @@ function FloatingBugReportButton() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        aria-label="Nahlásit chybu nebo navrhnout vylepšení"
-        title="Nahlásit chybu nebo nápad"
+        aria-label={t("feedback.fabLabel")}
+        title={t("feedback.fabTitle")}
         className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-lg transition hover:-translate-y-0.5"
         style={{
           background: "linear-gradient(135deg, #6f4cff, #f472b6)",
@@ -75,15 +61,15 @@ function FloatingBugReportButton() {
 
       <ModalOverlay open={isOpen} onClose={close} labelledBy="feedback-title">
         <div className="w-full max-w-sm rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{copy.eyebrow}</p>
+          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{copy("eyebrow")}</p>
           <h3
             id="feedback-title"
             className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-            {copy.title}
+            {copy("title")}
           </h3>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{copy.intro}</p>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{copy("intro")}</p>
 
-          <div className="mt-4 flex gap-2" role="group" aria-label="Typ hlášení">
+          <div className="mt-4 flex gap-2" role="group" aria-label={t("feedback.typeGroup")}>
             <button
               type="button"
               onClick={() => setType("bug")}
@@ -93,7 +79,7 @@ function FloatingBugReportButton() {
                   ? "border-transparent bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
                   : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"
               }`}>
-              🐛 Chyba
+              {t("feedback.types.bug")}
             </button>
             <button
               type="button"
@@ -104,7 +90,7 @@ function FloatingBugReportButton() {
                   ? "border-transparent bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
                   : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"
               }`}>
-              💡 Nápad
+              {t("feedback.types.idea")}
             </button>
           </div>
 
@@ -113,14 +99,14 @@ function FloatingBugReportButton() {
               <label
                 htmlFor="feedback-name"
                 className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Jméno
+                {t("common.name")}
               </label>
               <input
                 id="feedback-name"
                 className="field"
                 value={name}
                 onChange={(event) => setName(event.target.value.slice(0, 100))}
-                placeholder="Např. Tomáš"
+                placeholder={t("common.namePlaceholder")}
                 required
                 autoFocus
               />
@@ -130,7 +116,7 @@ function FloatingBugReportButton() {
               <label
                 htmlFor="feedback-message"
                 className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {copy.messageLabel}
+                {copy("messageLabel")}
               </label>
               <textarea
                 id="feedback-message"
@@ -139,11 +125,11 @@ function FloatingBugReportButton() {
                 onChange={(event) =>
                   setMessage(event.target.value.slice(0, 2000))
                 }
-                placeholder={copy.messagePlaceholder}
+                placeholder={copy("messagePlaceholder")}
                 required
               />
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                Zbývá {2000 - message.length} znaků
+                {t("common.charactersLeft", { count: 2000 - message.length })}
               </p>
             </div>
 
@@ -153,13 +139,13 @@ function FloatingBugReportButton() {
                 className="secondary-button flex-1 justify-center"
                 onClick={close}
                 disabled={isSubmitting}>
-                Zrušit
+                {t("common.cancel")}
               </button>
               <button
                 type="submit"
                 className="primary-button flex-1"
                 disabled={isSubmitting}>
-                {isSubmitting ? "Odesílám…" : "Odeslat"}
+                {isSubmitting ? t("common.sending") : t("common.send")}
               </button>
             </div>
           </form>

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { buildAbsoluteUrl } from "../lib/format.js";
+import { t, useI18n } from "../lib/i18n.js";
 
 const MOBILE_BROWSER_RE =
   /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
@@ -13,13 +14,6 @@ const NAIVE_DATETIME_PATTERN =
 const ICS_LINE_LENGTH_LIMIT = 75;
 const ICS_LINE_FOLD_LENGTH = 74;
 const CALENDAR_AUTO_OPEN_DELAY_MS = 150;
-const CALENDAR_DESCRIPTION_TEXT = "Tady to najdeš:";
-const CALENDAR_LINK_TEXT = "Odkaz na akci:";
-const CALENDAR_ERROR_MESSAGE = "Nepodařilo se vytvořit kalendářovou pozvánku.";
-const CALENDAR_SUCCESS_MESSAGE =
-  "Kalendář stažen. Upozornění je nastavené na 2 dny předem.";
-const CALENDAR_OPEN_IN_EXTERNAL_BROWSER_MESSAGE =
-  "Otevírá se externí prohlížeč pro přidání události do kalendáře.";
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -144,7 +138,7 @@ function eventStartToUtcDate(input) {
 }
 
 function slugify(value) {
-  return String(value || "udalost")
+  return String(value || t("calendar.fileNameFallback"))
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -153,7 +147,7 @@ function slugify(value) {
 }
 
 function getCalendarFileName(eventData) {
-  return `${slugify(eventData.name) || "udalost"}.ics`;
+  return `${slugify(eventData.name) || t("calendar.fileNameFallback")}.ics`;
 }
 
 function openCalendarUrl(url) {
@@ -165,11 +159,11 @@ function openCalendarUrl(url) {
 }
 
 function showCalendarDownloadSuccess() {
-  toast.success(CALENDAR_SUCCESS_MESSAGE);
+  toast.success(t("calendar.downloaded"));
 }
 
 function showCalendarError() {
-  toast.error(CALENDAR_ERROR_MESSAGE);
+  toast.error(t("calendar.error"));
 }
 
 function downloadIcs(content, fileName) {
@@ -218,7 +212,7 @@ function buildGoogleCalendarUrl(eventData) {
   const eventUrl = buildEventUrl(eventData);
   const details = [
     eventData.description || "",
-    eventUrl ? `${CALENDAR_LINK_TEXT} ${eventUrl}` : "",
+    eventUrl ? `${t("calendar.googleLinkLabel")} ${eventUrl}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -246,12 +240,12 @@ function buildIcs(eventData) {
   const description = escapeIcsText(
     [
       eventData.description || "",
-      eventUrl ? `${CALENDAR_DESCRIPTION_TEXT} ${eventUrl}` : "",
+      eventUrl ? `${t("calendar.descriptionLinkLabel")} ${eventUrl}` : "",
     ]
       .filter(Boolean)
       .join("\n\n"),
   );
-  const reminderText = escapeIcsText(`Připomínka: ${name}`);
+  const reminderText = escapeIcsText(t("calendar.reminder", { name }));
   const uid = `${eventData.id ?? Date.now()}@ruin.app`;
 
   return [
@@ -298,6 +292,9 @@ function isAppleDevice() {
 }
 
 function AddToCalendarButton({ eventData }) {
+  // The helpers above call t() directly when a click builds the calendar
+  // entry; the hook only re-renders the button label on a language switch.
+  useI18n();
   const eventId = eventData?.id ?? "";
   const eventDateTime = eventData?.datetime;
 
@@ -355,7 +352,7 @@ function AddToCalendarButton({ eventData }) {
     targetUrl.searchParams.set("calendarAutoOpen", "1");
     targetUrl.searchParams.set("calendarEventId", eventData.id ?? "");
 
-    toast.info(CALENDAR_OPEN_IN_EXTERNAL_BROWSER_MESSAGE);
+    toast.info(t("calendar.openingExternalBrowser"));
     openCalendarUrl(targetUrl.toString());
   }
 
@@ -405,7 +402,7 @@ function AddToCalendarButton({ eventData }) {
       type="button"
       className="secondary-button"
       onClick={handleCalendarClick}>
-      Přidat do kalendáře
+      {t("calendar.button")}
     </button>
   );
 }

@@ -15,6 +15,7 @@ import SignupBoard from '../components/SignupBoard.jsx'
 import PhotoGallery from '../components/PhotoGallery.jsx'
 import { deleteAttendee, getEvent, getEventPhotos, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
+import { useI18n } from '../lib/i18n.js'
 import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
 import { supabase } from '../lib/supabase.js'
 
@@ -38,15 +39,18 @@ function parseOrganizerTokenFromPath(path) {
   }
 }
 
-function isInvalidOrganizerTokenError(message) {
-  if (typeof message !== 'string') {
+// Matched against the database's original text, not the (possibly
+// translated) error.message - see toRequestError in lib/api.js.
+function isInvalidOrganizerTokenError(error) {
+  if (typeof error?.serverMessage !== 'string') {
     return false
   }
 
-  return message.includes('Neplatný organizátorský odkaz')
+  return error.serverMessage.includes('Neplatný organizátorský odkaz')
 }
 
 function ManageEventPage() {
+  const { t } = useI18n()
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -78,7 +82,8 @@ function ManageEventPage() {
   })
   const [isSavingEvent, setIsSavingEvent] = useState(false)
   const [showUnlockModal, setShowUnlockModal] = useState(false)
-  const [unlockHint, setUnlockHint] = useState('')
+  // A dictionary key rather than text, so the hint follows a language switch.
+  const [unlockHintKey, setUnlockHintKey] = useState('')
   const [managePin, setManagePin] = useState('')
   const [isUnlockingManage, setIsUnlockingManage] = useState(false)
 
@@ -122,7 +127,7 @@ function ManageEventPage() {
     async function hydrateEvent() {
       if (!activeToken) {
         if (!cancelled) {
-          setUnlockHint('Pro vstup do správy akce zadej 4místný správcovský PIN.')
+          setUnlockHintKey('pin.hint')
           setShowUnlockModal(true)
           setIsLoading(false)
         }
@@ -153,11 +158,11 @@ function ManageEventPage() {
           return
         }
 
-        if (isInvalidOrganizerTokenError(loadError.message)) {
+        if (isInvalidOrganizerTokenError(loadError)) {
           clearSavedOrganizerToken(id)
           refreshStoredToken()
           setShowUnlockModal(true)
-          setUnlockHint('Správa vyžaduje nové odemčení PINem.')
+          setUnlockHintKey('manage.unlockAgain')
           return
         }
 
@@ -281,7 +286,7 @@ function ManageEventPage() {
   async function handleModeration(attendeeId, status) {
     if (!activeToken) {
       setShowUnlockModal(true)
-      toast.error('Správa vyžaduje odemčení PINem.')
+      toast.error(t('manage.unlockRequired'))
       return
     }
 
@@ -289,7 +294,7 @@ function ManageEventPage() {
 
     try {
       await moderateAttendee(id, attendeeId, { token: activeToken, status })
-      toast.success(status === 'excused_accepted' ? 'Omluvenka schválená.' : 'Omluvenka zamítnutá.')
+      toast.success(status === 'excused_accepted' ? t('manage.excuseAccepted') : t('manage.excuseRejected'))
       await loadEvent()
     } catch (actionError) {
       toast.error(actionError.message)
@@ -301,11 +306,11 @@ function ManageEventPage() {
   async function handleDelete() {
     if (!activeToken) {
       setShowUnlockModal(true)
-      toast.error('Správa vyžaduje odemčení PINem.')
+      toast.error(t('manage.unlockRequired'))
       return
     }
 
-    const confirmed = window.confirm('Opravdu chceš tuhle akci smazat? Tohle nejde vrátit zpět.')
+    const confirmed = window.confirm(t('manage.confirmDeleteEvent'))
 
     if (!confirmed) {
       return
@@ -322,13 +327,13 @@ function ManageEventPage() {
           .remove(photos.map((photo) => photo.storage_path))
 
         if (storageError) {
-          toast.warning('Fotky se nepodařilo smazat z úložiště, akce ale zmizí.')
+          toast.warning(t('manage.photosNotDeleted'))
         }
       }
 
       await removeEvent(id, activeToken)
       clearSavedOrganizerToken(id)
-      toast.success('Akce byla smazaná.')
+      toast.success(t('manage.eventDeleted'))
       navigate('/')
     } catch (actionError) {
       toast.error(actionError.message)
@@ -371,12 +376,12 @@ function ManageEventPage() {
     if (!activeToken) {
       setShowEditEventModal(false)
       setShowUnlockModal(true)
-      toast.error('Správa vyžaduje odemčení PINem.')
+      toast.error(t('manage.unlockRequired'))
       return
     }
 
     if (!eventForm.datetime) {
-      toast.error('Vyber datum a čas akce.')
+      toast.error(t('eventForm.pickDateTime'))
       return
     }
 
@@ -394,7 +399,7 @@ function ManageEventPage() {
         enableCarpool: eventForm.enableCarpool,
         enableStops: eventForm.enableStops,
       })
-      toast.success('Detaily akce jsou upravené.')
+      toast.success(t('manage.eventUpdated'))
       setShowEditEventModal(false)
       await loadEvent()
     } catch (updateError) {
@@ -407,11 +412,11 @@ function ManageEventPage() {
   async function handleDeleteAttendee(attendeeId, attendeeName) {
     if (!activeToken) {
       setShowUnlockModal(true)
-      toast.error('Správa vyžaduje odemčení PINem.')
+      toast.error(t('manage.unlockRequired'))
       return
     }
 
-    const confirmed = window.confirm(`Opravdu chceš smazat účastníka ${attendeeName}?`)
+    const confirmed = window.confirm(t('manage.confirmDeleteAttendee', { name: attendeeName }))
 
     if (!confirmed) {
       return
@@ -421,7 +426,7 @@ function ManageEventPage() {
 
     try {
       await deleteAttendee(id, attendeeId, activeToken)
-      toast.success('Účastník byl smazaný.')
+      toast.success(t('manage.attendeeDeleted'))
       await loadEvent()
     } catch (deleteError) {
       toast.error(deleteError.message)
@@ -457,7 +462,7 @@ function ManageEventPage() {
 
     try {
       await pingAttendee(id, pingTargetId, organizerName, pingMessageInput)
-      toast.success('Šťouchnutí odeslané.')
+      toast.success(t('ping.sent'))
       setShowPingComposerModal(false)
       setPingTargetId(null)
       setPingMessageInput('')
@@ -487,7 +492,7 @@ function ManageEventPage() {
       const nextToken = parseOrganizerTokenFromPath(response.organizerPath)
 
       if (!nextToken) {
-        throw new Error('Nepodařilo se uložit přihlášení organizátora.')
+        throw new Error(t('manage.loginSaveFailed'))
       }
 
       saveOrganizerToken(id, nextToken)
@@ -495,8 +500,8 @@ function ManageEventPage() {
       setShowUnlockModal(false)
       setManagePin('')
       setError('')
-      setUnlockHint('')
-      toast.success('Správa odemčená. Přihlášení je uložené pro příště.')
+      setUnlockHintKey('')
+      toast.success(t('manage.unlockedAndSaved'))
       await loadEvent()
     } catch (unlockError) {
       toast.error(unlockError.message)
@@ -507,16 +512,16 @@ function ManageEventPage() {
 
   if (isLoading) {
     return (
-      <PageShell eyebrow="Organizátor" title="Načítám přehled akce…" subtitle="Chvilka, sbírám všechna RSVP na jedno místo." />
+      <PageShell eyebrow={t('common.organizer')} title={t('manage.loadingTitle')} subtitle={t('manage.loadingSubtitle')} />
     )
   }
 
   if (showUnlockModal && !payload) {
     return (
       <PageShell
-        eyebrow="Organizátor"
-        title="Zadej PIN pro správu akce"
-        subtitle={unlockHint || 'Pro vstup do správy akce zadej 4místný správcovský PIN.'}
+        eyebrow={t('common.organizer')}
+        title={t('manage.unlockTitle')}
+        subtitle={t(unlockHintKey || 'pin.hint')}
       >
         <main className="grid gap-6">
           <section className="panel mx-auto w-full max-w-md">
@@ -526,7 +531,7 @@ function ManageEventPage() {
                   htmlFor="manage-pin-standalone"
                   className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300"
                 >
-                  Správcovský PIN
+                  {t('pin.label')}
                 </label>
                 <input
                   id="manage-pin-standalone"
@@ -543,13 +548,13 @@ function ManageEventPage() {
                 />
               </div>
               <button type="submit" className="primary-button w-full" disabled={isUnlockingManage}>
-                {isUnlockingManage ? 'Ověřuji…' : 'Vstoupit'}
+                {isUnlockingManage ? t('common.verifying') : t('pin.enter')}
               </button>
               <Link
                 to={`/event/${id}`}
                 className="block text-center text-sm font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
               >
-                Neznám PIN, pokračovat jako host
+                {t('manage.continueAsGuest')}
               </Link>
             </form>
           </section>
@@ -560,7 +565,7 @@ function ManageEventPage() {
 
   if (error || !payload) {
     return (
-      <PageShell eyebrow="Organizátor" title="Správa akce není dostupná" subtitle={error || 'Akce nebo odkaz už neexistuje.'} />
+      <PageShell eyebrow={t('common.organizer')} title={t('manage.unavailableTitle')} subtitle={error || t('manage.unavailableSubtitle')} />
     )
   }
 
@@ -569,7 +574,7 @@ function ManageEventPage() {
 
   return (
     <PageShell
-      eyebrow="host control room"
+      eyebrow={t('manage.eyebrow')}
       title={event.name}
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
@@ -581,18 +586,18 @@ function ManageEventPage() {
     >
       <main className="grid gap-6 xl:flex xl:items-start">
         <section className="panel order-0 xl:hidden">
-          <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Řídicí panel</p>
+          <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('manage.controlPanel')}</p>
           <div className="mt-3 grid grid-cols-3 gap-2">
             <div className="stat-tile p-3 text-slate-900 dark:text-slate-100">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em]">Potvrzeno</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em]">{t('manage.statConfirmed')}</div>
               <div className="mt-1 text-2xl font-black tracking-[-0.03em]">{summary.confirmed}</div>
             </div>
             <div className="stat-tile p-3 text-slate-900 dark:text-slate-100">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em]">Čeká / oml.</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em]">{t('manage.statPending')}</div>
               <div className="mt-1 text-2xl font-black tracking-[-0.03em]">{summary.excused}</div>
             </div>
             <div className="stat-tile p-3 text-slate-900 dark:text-slate-100">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em]">Zamítnuto</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em]">{t('manage.statRejected')}</div>
               <div className="mt-1 text-2xl font-black tracking-[-0.03em]">{summary.rejected}</div>
             </div>
           </div>
@@ -602,14 +607,14 @@ function ManageEventPage() {
               className="secondary-button w-full justify-center"
               onClick={openEditEventModal}
             >
-              Upravit akci
+              {t('manage.editEvent')}
             </button>
             <button
               type="button"
               className="secondary-button w-full justify-center"
               onClick={() => setShowOverviewModal(true)}
             >
-              Přehled
+              {t('overview.title')}
             </button>
             <button
               type="button"
@@ -617,10 +622,10 @@ function ManageEventPage() {
               style={{ background: 'linear-gradient(135deg, #7a1c3f, #6f4cff)' }}
               onClick={() => setShowShareModal(true)}
             >
-              📨 Pozvánka
+              {t('manage.invite')}
             </button>
             <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
-              Kdo by měl/a přijít?
+              {t('manage.whoShouldCome')}
             </button>
             <button
               type="button"
@@ -628,7 +633,7 @@ function ManageEventPage() {
               onClick={handleDelete}
               disabled={isDeleting}
             >
-              {isDeleting ? 'Mažu akci…' : 'Smazat akci'}
+              {isDeleting ? t('manage.deleting') : t('manage.deleteEvent')}
             </button>
           </div>
         </section>
@@ -673,7 +678,7 @@ function ManageEventPage() {
         <aside className="order-1 hidden xl:order-2 xl:block xl:w-80 xl:shrink-0 xl:sticky xl:top-6">
           <section className="panel">
             <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-              Controls
+              {t('manage.controls')}
             </p>
             <div className="mt-4 space-y-3">
               <button
@@ -681,14 +686,14 @@ function ManageEventPage() {
                 className="secondary-button w-full justify-center"
                 onClick={openEditEventModal}
               >
-                Upravit akci
+                {t('manage.editEvent')}
               </button>
               <button
                 type="button"
                 className="secondary-button w-full justify-center"
                 onClick={() => setShowOverviewModal(true)}
               >
-                Přehled
+                {t('overview.title')}
               </button>
               <button
                 type="button"
@@ -696,10 +701,10 @@ function ManageEventPage() {
                 style={{ background: 'linear-gradient(135deg, #7a1c3f, #6f4cff)' }}
                 onClick={() => setShowShareModal(true)}
               >
-                📨 Pozvánka
+                {t('manage.invite')}
               </button>
               <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
-                Kdo by měl/a přijít?
+                {t('manage.whoShouldCome')}
               </button>
               <button
                 type="button"
@@ -707,7 +712,7 @@ function ManageEventPage() {
                 onClick={handleDelete}
                 disabled={isDeleting}
               >
-                {isDeleting ? 'Mažu akci…' : 'Smazat akci'}
+                {isDeleting ? t('manage.deleting') : t('manage.deleteEvent')}
               </button>
             </div>
           </section>
@@ -732,30 +737,30 @@ function ManageEventPage() {
 
         <ModalOverlay open={showPingComposerModal} onClose={closePingComposerModal} labelledBy="manage-ping-composer-title">
           <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
-            <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Šťouchnout účastníka</p>
-            <h3 id="manage-ping-composer-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Přidej zprávu</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.</p>
+            <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('ping.composerEyebrow')}</p>
+            <h3 id="manage-ping-composer-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{t('ping.composerTitle')}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('ping.composerHint')}</p>
 
             <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Zpráva</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('ping.messageLabel')}</label>
                 <textarea
                   className="field min-h-24"
                   value={pingMessageInput}
                   onChange={(event) => setPingMessageInput(event.target.value.slice(0, 280))}
-                  placeholder="Hej, pojď s náma!"
+                  placeholder={t('ping.messagePlaceholder')}
                   disabled={pingBusyId !== null}
                   autoFocus
                 />
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Zbývá {280 - pingMessageInput.length} znaků</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('common.charactersLeft', { count: 280 - pingMessageInput.length })}</p>
               </div>
 
               <div className="flex gap-3">
                 <button type="button" className="secondary-button flex-1 justify-center" onClick={closePingComposerModal}>
-                  Zrušit
+                  {t('common.cancel')}
                 </button>
                 <button type="submit" className="primary-button flex-1" disabled={pingBusyId !== null}>
-                  {pingBusyId !== null ? 'Šťouchám…' : 'Odeslat'}
+                  {pingBusyId !== null ? t('ping.sending') : t('common.send')}
                 </button>
               </div>
             </form>
@@ -765,37 +770,37 @@ function ManageEventPage() {
         <ModalOverlay open={showEditEventModal} onClose={closeEditEventModal} labelledBy="manage-edit-event-title">
           <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
             <div className="mb-5">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Upravit akci</p>
-              <h3 id="manage-edit-event-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Změň základní údaje</h3>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Můžeš přepsat název, místo i termín. Změna se hned promítne do pozvánky.</p>
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('manage.editEvent')}</p>
+              <h3 id="manage-edit-event-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{t('manage.editTitle')}</h3>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('manage.editHint')}</p>
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmitEventEdit}>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Název akce</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('eventForm.name')}</label>
                 <input
                   className="field"
                   value={eventForm.name}
                   onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
-                  placeholder="Např. Letní gril"
+                  placeholder={t('manage.editNamePlaceholder')}
                   required
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Místo</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('eventForm.location')}</label>
                 <input
                   className="field"
                   value={eventForm.location}
                   onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
-                  placeholder="Např. Stromovka"
+                  placeholder={t('manage.editLocationPlaceholder')}
                   required
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Datum a čas</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('eventForm.dateTime')}</label>
                 <EventDateTimePicker
                   value={eventForm.datetime}
                   onChange={(nextValue) => setEventForm((current) => ({ ...current, datetime: nextValue }))}
@@ -803,12 +808,12 @@ function ManageEventPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Popis</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('eventForm.description')}</label>
                 <textarea
                   className="field min-h-32"
                   value={eventForm.description}
                   onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
-                  placeholder="Co se děje, co vzít s sebou a jestli hrozí dress code."
+                  placeholder={t('eventForm.descriptionPlaceholder')}
                   required
                 />
               </div>
@@ -821,8 +826,8 @@ function ManageEventPage() {
                   onChange={(event) => setEventForm((current) => ({ ...current, requirePhone: event.target.checked }))}
                 />
                 <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Vyžadovat telefonní číslo</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Učastníci budou muset vyplnit telefon. Z organizátorské stránky pak můžeš na každého přímo zavolat.</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.requirePhone')}</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.requirePhoneHint')}</p>
                 </div>
               </label>
 
@@ -834,7 +839,7 @@ function ManageEventPage() {
                     checked={eventForm.enableBringList}
                     onChange={(event) => setEventForm((current) => ({ ...current, enableBringList: event.target.checked }))}
                   />
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Kdo co bere</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.bringList')}</p>
                 </label>
                 <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
                   <input
@@ -843,7 +848,7 @@ function ManageEventPage() {
                     checked={eventForm.enableCarpool}
                     onChange={(event) => setEventForm((current) => ({ ...current, enableCarpool: event.target.checked }))}
                   />
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Spolujízda</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.carpool')}</p>
                 </label>
                 <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
                   <input
@@ -852,16 +857,16 @@ function ManageEventPage() {
                     checked={eventForm.enableStops}
                     onChange={(event) => setEventForm((current) => ({ ...current, enableStops: event.target.checked }))}
                   />
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Itinerář / zastávky</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.stops')}</p>
                 </label>
               </div>
 
               <div className="flex gap-3">
                 <button type="button" className="secondary-button flex-1 justify-center" onClick={closeEditEventModal}>
-                  Zrušit
+                  {t('common.cancel')}
                 </button>
                 <button type="submit" className="primary-button flex-1" disabled={isSavingEvent}>
-                  {isSavingEvent ? 'Ukládám…' : 'Uložit změny'}
+                  {isSavingEvent ? t('common.saving') : t('manage.saveChanges')}
                 </button>
               </div>
             </form>
@@ -871,14 +876,14 @@ function ManageEventPage() {
         <ModalOverlay open={showUnlockModal} onClose={closeUnlockModal} labelledBy="manage-unlock-title">
           <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
             <div className="mb-5">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Správa akce</p>
-              <h3 id="manage-unlock-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">Zadej PIN</h3>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">PIN zadáš jednou. Přihlášení se uloží na tomto zařízení.</p>
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('pin.eyebrow')}</p>
+              <h3 id="manage-unlock-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{t('pin.title')}</h3>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('manage.unlockModalHint')}</p>
             </div>
 
             <form className="space-y-4" onSubmit={handleUnlockManage}>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Správcovský PIN</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('pin.label')}</label>
                 <input
                   type="password"
                   inputMode="numeric"
@@ -895,10 +900,10 @@ function ManageEventPage() {
 
               <div className="flex gap-3">
                 <button type="button" className="secondary-button flex-1 justify-center" onClick={closeUnlockModal}>
-                  Zrušit
+                  {t('common.cancel')}
                 </button>
                 <button type="submit" className="primary-button flex-1" disabled={isUnlockingManage}>
-                  {isUnlockingManage ? 'Ověřuji…' : 'Vstoupit'}
+                  {isUnlockingManage ? t('common.verifying') : t('pin.enter')}
                 </button>
               </div>
             </form>
@@ -909,7 +914,7 @@ function ManageEventPage() {
           <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Přehled</p>
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('overview.title')}</p>
                 <h3 id="manage-overview-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{event.name}</h3>
               </div>
               <button
@@ -917,32 +922,25 @@ function ManageEventPage() {
                 className="secondary-button shrink-0"
                 onClick={() => setShowOverviewModal(false)}
               >
-                Zavřít
+                {t('common.close')}
               </button>
             </div>
 
             <div className="max-h-[60vh] space-y-5 overflow-y-auto">
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Poznámka akce</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('overview.note')}</p>
                 <p className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
-                  {event.description || 'Bez poznámky.'}
+                  {event.description || t('overview.noNote')}
                 </p>
               </div>
               {['invited', 'confirmed', 'excused', 'excused_accepted', 'excused_rejected'].map((statusGroup) => {
                 const group = attendees.filter((a) => a.status === statusGroup)
                 if (group.length === 0) return null
-                const labels = {
-                  invited: '📨 Pozváno (čeká)',
-                  confirmed: '✅ Přijdou',
-                  excused: '⏳ Omluvenky (čeká)',
-                  excused_accepted: '❌ Omluvenka přijatá',
-                  excused_rejected: '⚪ Omluvenka zamítnutá',
-                }
 
                 return (
                   <div key={statusGroup}>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                      {labels[statusGroup]} ({group.length})
+                      {t(`overview.groups.${statusGroup}`)} ({group.length})
                     </p>
                     <ul className="space-y-2">
                       {group.map((a) => (

@@ -1,5 +1,7 @@
 # RUin
 
+**Čeština** · [English](README.en.md)
+
 Webová RSVP aplikace pro domlouvání akcí ve skupině přátel.
 
 Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Supabase (Postgres, RPC funkce, RLS, Realtime).
@@ -19,6 +21,7 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
 - [Push notifikace a service worker](#push-notifikace-a-service-worker)
   - [Automatické připomínky před akcí](#automaticke-pripominky-pred-akci-den-predem--hodinu-predem)
   - [Automatický úklid expirovaných akcí](#automaticky-uklid-expirovanych-akci-fotky-ze-storage)
+- [Lokalizace (čeština / angličtina)](#lokalizace-cestina--anglictina)
 - [Pravidla pro contributory](#pravidla-pro-contributory)
 - [Community standards](#community-standards)
 - [Troubleshooting](#troubleshooting)
@@ -39,6 +42,7 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
 - sdílení pozvánky (odkaz, QR kód, QR plakátek ke stažení)
 - push připomínky den a hodinu předem akcí
 - plovoucí tlačítko na každé stránce pro nahlášení chyby nebo nápadu na vylepšení; přehled všech hlášení je na `/feedback` (veřejná stránka, bez PINu)
+- čeština a angličtina - jazyk se vybere podle prohlížeče a jde přepnout přepínačem v hlavičce (viz [Lokalizace](#lokalizace-cestina--anglictina))
 
 ## Technologický stack
 
@@ -53,7 +57,8 @@ Frontend běží jako statická aplikace (React + Vite), data a logika jsou v Su
 - `client/` - frontend aplikace ve Vite
   - `src/pages/` - hlavní obrazovky (vytvoření akce, RSVP detail, správa akce, vytvoření/detail ankety)
   - `src/components/` - znovupoužitelné UI komponenty
-  - `src/lib/` - API vrstva, Supabase klient, helpery
+  - `src/lib/` - API vrstva, Supabase klient, helpery (včetně `i18n.js` pro překlady)
+  - `src/locales/` - slovníky textů UI (`cs.js`, `en.js`) a anglické znění chybových hlášek z databáze
   - `src/test/` - sdílené testovací helpery a Jest setup
   - `public/sw.js` - service worker (PWA/push)
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
@@ -270,6 +275,16 @@ select cron.schedule(
 ```
 
 Bez tohohle kroku se expirované akce (a jejich DB řádky) po 7 dnech pořád smažou normálně - jen jejich fotky zůstanou ležet ve Storage bez reference. Ruční mazání (organizátor smaže akci/fotku z appky) funguje bez závislosti na téhle Edge Function - to jde přes klientské Storage API rovnou (`client/src/lib/supabase.js`).
+
+## Lokalizace (čeština / angličtina)
+
+UI je ve dvou jazycích. Čeština je zdrojový jazyk, angličtina má stejné klíče.
+
+- Jazyk se při první návštěvě vybere podle prohlížeče (`cs` a `sk` -> čeština, cokoliv jiného -> angličtina) a přepíná se přepínačem CZ | EN v pravém horním rohu hlavičky každé stránky. Volba se ukládá do `localStorage` (`ruin-locale`), nastavuje se i `<html lang>`.
+- Texty žijí v `client/src/locales/cs.js` a `client/src/locales/en.js`. V komponentě: `const { t } = useI18n()` a `t('sekce.klic', { parametr })`; mimo React (`lib/`) stačí importovat `t` z `client/src/lib/i18n.js`. Plurály jsou objekty podle `Intl.PluralRules` (`{ one, few, other }`), chybějící tvar spadne na `other`.
+- Nový text přidej do obou slovníků - `client/src/lib/i18n.test.js` hlídá, že mají stejné klíče i stejné `{placeholdery}`.
+- Chybové hlášky z databáze (`raise exception` v `all-phases.sql`) zůstávají česky; klient je pro anglické UI přeloží podle přesného textu v `client/src/locales/serverMessages.en.js`. Když v SQL přidáš nebo přeformuluješ hlášku, doplň ji tam taky - stejný test jinak spadne. Kód, který se rozhoduje podle konkrétní hlášky, porovnává původní text z `error.serverMessage`, ne přeložené `error.message`.
+- Zatím česky zůstávají push připomínky: jejich text skládá Edge Function `send-event-reminders` a u odběru se jazyk neukládá.
 
 ## Pravidla pro contributory
 

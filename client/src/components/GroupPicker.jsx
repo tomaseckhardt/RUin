@@ -1,4 +1,8 @@
+import { useI18n } from '../lib/i18n.js'
+
 function GroupPicker({ groups, onPick, disabled = false }) {
+  const { t } = useI18n()
+
   if (!groups.length) {
     return null
   }
@@ -13,7 +17,7 @@ function GroupPicker({ groups, onPick, disabled = false }) {
           onClick={() => onPick(group)}
           disabled={disabled}
         >
-          Naplnit ze skupiny „{group.name}“ ({group.members.length})
+          {t('groupPicker.fillFromGroup', { name: group.name, count: group.members.length })}
         </button>
       ))}
     </div>

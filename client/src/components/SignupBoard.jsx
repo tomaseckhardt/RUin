@@ -2,33 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import CollapsibleCard from './CollapsibleCard.jsx'
 import { addSignupItem, claimSignupItem, deleteSignupItem, getSignupItems, removeSignupClaim, unclaimSignupItem } from '../lib/api.js'
+import { useI18n } from '../lib/i18n.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
 
 function normalizeName(value) {
   return (value || '').trim().toLocaleLowerCase('cs-CZ')
 }
 
-const CATEGORY_CONFIG = {
-  bring: {
-    title: 'Kdo co nese',
-    eyebrow: 'Bring list',
-    addLabel: 'Přidat věc',
-    placeholder: 'Např. Pivo, led, reproduktor…',
-    emptyText: 'Zatím nic. Klidně přidej první věc, ale není to povinné.',
-    capacityLabel: 'Kolik kusů/lidí stačí',
-  },
-  ride: {
-    title: 'Kdo jede autem',
-    eyebrow: 'Spolujízda',
-    addLabel: 'Nabídnout odvoz',
-    placeholder: 'Např. Auto z Prahy 6, odjezd 17:30',
-    emptyText: 'Zatím nikdo nenabídl odvoz. Klidně to napiš, ale není to povinné.',
-    capacityLabel: 'Kolik volných míst',
-  },
-}
-
 function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer = false, organizerToken = null }) {
-  const config = CATEGORY_CONFIG[category]
+  const { t } = useI18n()
+  // Keys under signup.bring / signup.ride, matching the category.
+  const copy = (field) => t(`signup.${category}.${field}`)
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAdding, setIsAdding] = useState(false)
@@ -90,7 +74,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
         label,
         capacity,
         note,
-        createdBy: currentName || 'Organizátor',
+        createdBy: currentName || t('common.organizer'),
       })
       setLabel('')
       setCapacity(1)
@@ -106,7 +90,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
 
   async function handleClaim(item) {
     if (!currentName?.trim()) {
-      toast.error('Napiš svoje jméno v RSVP, ať víme, kdo se hlásí.')
+      toast.error(t('signup.nameRequired'))
       return
     }
 
@@ -170,7 +154,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
       return
     }
 
-    const confirmed = window.confirm(`Opravdu chceš smazat položku ${item.label}?`)
+    const confirmed = window.confirm(t('signup.confirmDelete', { label: item.label }))
 
     if (!confirmed) {
       return
@@ -194,11 +178,11 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
 
   return (
     <CollapsibleCard
-      eyebrow={config.eyebrow}
-      title={config.title}
+      eyebrow={copy('eyebrow')}
+      title={copy('title')}
       headerActions={
         <button type="button" className="secondary-button" onClick={() => setShowAddForm((current) => !current)}>
-          {showAddForm ? 'Zavřít' : config.addLabel}
+          {showAddForm ? t('common.close') : copy('addLabel')}
         </button>
       }
     >
@@ -208,12 +192,12 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
             className="field"
             value={label}
             onChange={(event) => setLabel(event.target.value)}
-            placeholder={config.placeholder}
+            placeholder={copy('placeholder')}
             required
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">{config.capacityLabel}</label>
+              <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">{copy('capacityLabel')}</label>
               <input
                 type="number"
                 min={1}
@@ -224,18 +208,18 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">Poznámka (nepovinné)</label>
-              <input className="field" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Odjíždím v 17:30" />
+              <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('common.noteOptional')}</label>
+              <input className="field" value={note} onChange={(event) => setNote(event.target.value)} placeholder={t('signup.notePlaceholder')} />
             </div>
           </div>
           <button type="submit" className="primary-button w-full justify-center" disabled={isAdding}>
-            {isAdding ? 'Přidávám…' : 'Přidat'}
+            {isAdding ? t('signup.adding') : t('common.add')}
           </button>
         </form>
       ) : null}
 
       {items.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">{config.emptyText}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{copy('emptyText')}</p>
       ) : (
         <div className="space-y-2">
           {items.map((item) => {
@@ -266,7 +250,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                                 disabled={busyItemId === item.id}
                                 onClick={() => handleRemoveClaim(item, claim)}
                               >
-                                Nabídnout výměnu
+                                {t('signup.offerSwap')}
                               </button>
                             </span>
                           ))}
@@ -286,7 +270,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                                 disabled={busyItemId === item.id}
                                 onClick={() => handleRemoveClaimAsOrganizer(item, claim)}
                               >
-                                Odebrat
+                                {t('common.remove')}
                               </button>
                             </span>
                           ))}
@@ -298,12 +282,12 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                         </p>
                       )
                     ) : (
-                      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Zatím nikdo ({item.capacity} volných)</p>
+                      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{t('signup.nobodyYet', { count: item.capacity })}</p>
                     )}
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {isOwnRide ? (
-                      <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">Tvoje nabídka</span>
+                      <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{t('signup.yourOffer')}</span>
                     ) : myClaim ? (
                       <button
                         type="button"
@@ -311,7 +295,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                         disabled={busyItemId === item.id}
                         onClick={() => handleUnclaim(item)}
                       >
-                        Odhlásit se
+                        {t('signup.unclaim')}
                       </button>
                     ) : (
                       <button
@@ -320,7 +304,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                         disabled={!canInteract || isFull || busyItemId === item.id}
                         onClick={() => handleClaim(item)}
                       >
-                        {isFull ? 'Obsazeno' : 'Přihlásit se'}
+                        {isFull ? t('signup.full') : t('signup.claim')}
                       </button>
                     )}
                     {isOrganizer ? (
@@ -330,7 +314,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                         disabled={busyItemId === item.id}
                         onClick={() => handleDelete(item)}
                       >
-                        Smazat
+                        {t('common.delete')}
                       </button>
                     ) : null}
                   </div>

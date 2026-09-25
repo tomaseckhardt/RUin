@@ -1,7 +1,14 @@
 // Bump this whenever the caching strategy below changes so the "activate"
 // handler below cleans up the previous version's cache instead of leaving it
 // around forever.
-const APP_SHELL_CACHE = "ruin-app-shell-v1";
+const APP_SHELL_CACHE = "ruin-app-shell-v2";
+
+// Paths (relative to the worker's scope) that only exist on the Vite dev
+// server. Its modules aren't content-hashed like a build's assets/, so the
+// cache-first strategy below would keep serving the old code after every
+// change - the app looked stuck on an old version until its site data was
+// cleared by hand.
+const DEV_SERVER_PATH_PREFIXES = ["src/", "node_modules/", "@vite/", "@react-refresh", "@id/", "@fs/"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -43,6 +50,13 @@ function isCacheableAppShellRequest(request) {
   // Belt-and-braces: never cache anything under a supabase.co host, even if
   // it somehow shared this origin (e.g. a same-origin dev proxy rewrite).
   if (url.hostname.endsWith("supabase.co")) {
+    return false;
+  }
+
+  const scopePath = new URL(self.registration.scope).pathname;
+  const relativePath = url.pathname.startsWith(scopePath) ? url.pathname.slice(scopePath.length) : url.pathname;
+
+  if (DEV_SERVER_PATH_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) {
     return false;
   }
 

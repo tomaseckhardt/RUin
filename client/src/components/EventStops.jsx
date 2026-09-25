@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import CollapsibleCard from './CollapsibleCard.jsx'
 import { addEventStop, deleteEventStop, getEventStops } from '../lib/api.js'
+import { useI18n } from '../lib/i18n.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
 
 function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
+  const { t } = useI18n()
   const [stops, setStops] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -61,7 +63,7 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
   }
 
   async function handleDelete(stop) {
-    const confirmed = window.confirm(`Opravdu chceš smazat zastávku ${stop.name}?`)
+    const confirmed = window.confirm(t('stops.confirmDelete', { name: stop.name }))
 
     if (!confirmed) {
       return
@@ -81,31 +83,31 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
 
   return (
     <CollapsibleCard
-      eyebrow="Program večera"
-      title="Zastávky"
+      eyebrow={t('stops.eyebrow')}
+      title={t('stops.title')}
       headerActions={
         isOrganizer ? (
           <button type="button" className="secondary-button" onClick={() => setShowAddForm((current) => !current)}>
-            {showAddForm ? 'Zavřít' : 'Přidat zastávku'}
+            {showAddForm ? t('common.close') : t('stops.add')}
           </button>
         ) : null
       }
     >
       {showAddForm ? (
         <form className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-3" onSubmit={handleAdd}>
-          <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Např. Hospoda U Fleků" required />
-          <input className="field" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Místo (nepovinné)" />
+          <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder={t('stops.namePlaceholder')} required />
+          <input className="field" value={location} onChange={(event) => setLocation(event.target.value)} placeholder={t('stops.locationPlaceholder')} />
           <div className="flex gap-2">
             <input className="field" value={startsAtLabel} onChange={(event) => setStartsAtLabel(event.target.value)} placeholder="18:00" />
             <button type="submit" className="primary-button shrink-0" disabled={isSaving}>
-              {isSaving ? '…' : 'Přidat'}
+              {isSaving ? '…' : t('common.add')}
             </button>
           </div>
         </form>
       ) : null}
 
       {stops.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Zatím žádná zastávka. Klidně přidej itinerář na celý večer.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('stops.empty')}</p>
       ) : (
         <ol className="space-y-3">
           {stops.map((stop, index) => (
@@ -122,7 +124,7 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
               </div>
               {isOrganizer ? (
                 <button type="button" className="text-xs text-rose-600 hover:underline dark:text-rose-300" onClick={() => handleDelete(stop)}>
-                  Smazat
+                  {t('common.delete')}
                 </button>
               ) : null}
             </li>

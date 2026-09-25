@@ -23,6 +23,11 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
   })
 }
 
+// Existing tests assert the Czech copy; pin the UI language (read by
+// src/lib/i18n.js when it first loads) so they don't follow jsdom's
+// navigator.language, which is en-US.
+window.localStorage.setItem('ruin-locale', 'cs')
+
 // Stand-in for Vite's `import.meta.env` (rewritten to this global by
 // babel-plugin-import-meta-env.cjs) so modules reading it don't throw in Jest.
 globalThis.__vite_import_meta__ = {

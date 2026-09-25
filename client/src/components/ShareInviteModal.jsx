@@ -3,11 +3,15 @@ import { toast } from 'sonner'
 import ModalOverlay from './ModalOverlay.jsx'
 import { createQrPosterDataUrl, dataUrlToFile } from '../lib/qrPoster.js'
 import { formatDateTime, shouldShowPastEventBadge } from '../lib/format.js'
+import { useI18n } from '../lib/i18n.js'
 
 function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, datetime }) {
+  const { locale, t } = useI18n()
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [isGeneratingQr, setIsGeneratingQr] = useState(false)
 
+  // Depends on locale too: the poster's own text is drawn in the active
+  // language, so it has to be regenerated after a language switch.
   useEffect(() => {
     if (!open) {
       return
@@ -31,7 +35,7 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
         }
       } catch {
         if (!cancelled) {
-          toast.error('QR kód se nepodařilo vygenerovat.')
+          toast.error(t('share.qrFailed'))
         }
       } finally {
         if (!cancelled) {
@@ -45,16 +49,16 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
     return () => {
       cancelled = true
     }
-  }, [open, inviteUrl, eventName, datetime])
+  }, [open, inviteUrl, eventName, datetime, locale, t])
 
   const isPastEvent = datetime ? shouldShowPastEventBadge(datetime) : false
 
   async function handleCopyLink() {
     try {
       await navigator.clipboard.writeText(inviteUrl)
-      toast.success('Pozvánka zkopírovaná do schránky.')
+      toast.success(t('share.copied'))
     } catch {
-      toast.error('Odkaz se nepodařilo zkopírovat.')
+      toast.error(t('share.copyFailed'))
     }
   }
 
@@ -63,7 +67,7 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
       try {
         await navigator.share({
           title: eventName || 'RUin?',
-          text: `Jsi na akci? ${eventName || ''}`,
+          text: t('share.shareText', { name: eventName || '' }),
           url: inviteUrl,
         })
         return
@@ -84,7 +88,7 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
 
     const link = document.createElement('a')
     link.href = qrDataUrl
-    link.download = `pozvanka-${eventId || 'ruin'}.png`
+    link.download = t('share.qrFileName', { id: eventId || 'ruin' })
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -95,13 +99,13 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
       return
     }
 
-    const file = dataUrlToFile(qrDataUrl, `pozvanka-${eventId || 'ruin'}.png`)
+    const file = dataUrlToFile(qrDataUrl, t('share.qrFileName', { id: eventId || 'ruin' }))
 
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({
-          title: `Pozvánka: ${eventName || ''}`,
-          text: `Pozvánka na akci ${eventName || ''}`,
+          title: t('share.qrShareTitle', { name: eventName || '' }),
+          text: t('share.qrShareText', { name: eventName || '' }),
           files: [file],
         })
         return
@@ -113,7 +117,7 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
     }
 
     handleDownloadQr()
-    toast.success('PNG bylo staženo. Sdílej ho z galerie/souborů.')
+    toast.success(t('share.pngDownloaded'))
   }
 
   return (
@@ -124,22 +128,22 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
       >
         <div className="mb-3 flex items-start justify-between gap-4 sm:mb-5" style={{ animation: 'fade-up 0.3s ease both' }}>
           <div>
-            <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em] sm:text-base">Pozvánka</p>
+            <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em] sm:text-base">{t('share.invite')}</p>
             <h3
               id="share-invite-title"
               className="mt-1 text-xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50 sm:mt-2 sm:text-3xl"
             >
-              Sdílej nebo naskenuj
+              {t('share.title')}
             </h3>
           </div>
           <button type="button" className="secondary-button shrink-0 sm:text-base" onClick={onClose}>
-            Zavřít
+            {t('common.close')}
           </button>
         </div>
 
         {isPastEvent ? (
           <p className="mb-2 inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700 dark:bg-rose-950/40 dark:text-rose-200 sm:text-sm">
-            Akce proběhla
+            {t('share.eventOver')}
           </p>
         ) : null}
 
@@ -148,9 +152,9 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
           style={{ animation: 'scale-in 0.35s ease 0.05s both' }}
         >
           {isGeneratingQr ? (
-            <p className="py-16 text-center text-sm text-slate-500 dark:text-slate-300 sm:py-20 sm:text-base">Generuji QR kód…</p>
+            <p className="py-16 text-center text-sm text-slate-500 dark:text-slate-300 sm:py-20 sm:text-base">{t('share.generatingQr')}</p>
           ) : (
-            <img src={qrDataUrl} alt="QR kód pozvánky" className="mx-auto w-full max-w-[200px] sm:max-w-[340px]" />
+            <img src={qrDataUrl} alt={t('share.qrAlt')} className="mx-auto w-full max-w-[200px] sm:max-w-[340px]" />
           )}
         </div>
 
@@ -158,16 +162,16 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-4" style={{ animation: 'fade-up 0.3s ease 0.1s both' }}>
           <button type="button" className="secondary-button justify-center sm:py-4 sm:text-base" onClick={handleCopyLink}>
-            Zkopírovat link
+            {t('share.copyLink')}
           </button>
           <button type="button" className="primary-button justify-center sm:py-4 sm:text-base" onClick={handleShareLink}>
-            Sdílet link
+            {t('share.shareLink')}
           </button>
           <button type="button" className="secondary-button justify-center sm:py-4 sm:text-base" onClick={handleDownloadQr} disabled={!qrDataUrl}>
-            Stáhnout QR
+            {t('share.downloadQr')}
           </button>
           <button type="button" className="secondary-button justify-center sm:py-4 sm:text-base" onClick={handleShareQrPng} disabled={!qrDataUrl}>
-            Sdílet QR obrázek
+            {t('share.shareQrImage')}
           </button>
         </div>
       </div>

@@ -1,3 +1,5 @@
+import { useI18n } from "../lib/i18n.js";
+
 const CONFETTI_DOTS = [
   {
     left: "20%",
@@ -56,6 +58,8 @@ const SAD_PARTICLES = [
 ];
 
 export function ConfirmCelebration({ name }) {
+  const { t } = useI18n();
+
   return (
     <section
       className="panel relative overflow-hidden py-12 text-center"
@@ -113,12 +117,12 @@ export function ConfirmCelebration({ name }) {
         <h3
           className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50"
           style={{ animation: "float-up 0.4s ease 0.5s both", opacity: 0 }}>
-          {name ? `${name}, Jdeš do toho!` : "Jdeš do toho!"}
+          {name ? t("celebration.confirmTitleWithName", { name }) : t("celebration.confirmTitle")}
         </h3>
         <p
           className="mt-1 text-sm text-slate-500 dark:text-slate-300"
           style={{ animation: "float-up 0.4s ease 0.65s both", opacity: 0 }}>
-          Účast potvrzená. Těšíme se na tebe.
+          {t("celebration.confirmText")}
         </p>
       </div>
     </section>
@@ -126,6 +130,8 @@ export function ConfirmCelebration({ name }) {
 }
 
 export function DeclineCelebration({ name }) {
+  const { t } = useI18n();
+
   return (
     <section
       className="panel relative overflow-hidden py-12 text-center"
@@ -160,12 +166,12 @@ export function DeclineCelebration({ name }) {
         <h3
           className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50"
           style={{ animation: "float-up 0.4s ease 0.5s both", opacity: 0 }}>
-          {name ? `Škoda, ${name}!` : "Škoda!"}
+          {name ? t("celebration.declineTitleWithName", { name }) : t("celebration.declineTitle")}
         </h3>
         <p
           className="mt-1 mb-3 text-sm text-slate-500 dark:text-slate-300"
           style={{ animation: "float-up 0.4s ease 0.65s both", opacity: 0 }}>
-          Omluvenka odeslaná. Snad příště.
+          {t("celebration.declineText")}
         </p>
         <span
           className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold"
@@ -176,7 +182,7 @@ export function DeclineCelebration({ name }) {
             animation: "float-up 0.4s ease 0.8s both",
             opacity: 0,
           }}>
-          Omluveno
+          {t("celebration.excusedBadge")}
         </span>
       </div>
     </section>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { useI18n } from '../lib/i18n.js'
 
 const MOBILE_QUERY = '(max-width: 767px)'
 
@@ -32,6 +33,7 @@ function AddToHomeButton() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [isMobile, setIsMobile] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
+  const { t } = useI18n()
 
   const iosInstall = useMemo(() => isIosLikeDevice(), [])
 
@@ -79,7 +81,7 @@ function AddToHomeButton() {
     }
 
     if (iosInstall) {
-      toast.info('V Safari klepni na Sdílet, poté na Zobrazit další a poté zvol Přidat na plochu.')
+      toast.info(t('addToHome.iosHint'))
     }
   }
 
@@ -91,7 +93,7 @@ function AddToHomeButton() {
 
   return (
     <button type="button" className="secondary-button" onClick={handleClick}>
-      Přidat na plochu
+      {t('addToHome.button')}
     </button>
   )
 }

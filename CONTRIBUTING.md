@@ -1,5 +1,7 @@
 # Jak prispivat do projektu RUin
 
+**Čeština** · [English](CONTRIBUTING.en.md)
+
 Diky, ze chces prispet. Tenhle dokument popisuje doporuceny postup, aby review probehlo rychle a bez zbytecnych vratek.
 
 ## Typy prispevku
