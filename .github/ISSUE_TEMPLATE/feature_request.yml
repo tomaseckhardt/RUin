@@ -1,36 +1,36 @@
-name: Feature request
-description: Navrh na vylepseni funkcionality
+name: Návrh na vylepšení (česky)
+description: Navrhnout vylepšení funkcionality
 labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        Mas napad, jak RUin zlepsit? Super, sem s nim.
+        Máš nápad, jak RUin zlepšit? Super, sem s ním.
 
   - type: textarea
     id: problem
     attributes:
-      label: Jaky problem to resi?
-      description: Co je dnes neprijemne, pomale nebo nejasne.
+      label: Jaký problém to řeší?
+      description: Co je dnes nepříjemné, pomalé nebo nejasné.
     validations:
       required: true
 
   - type: textarea
     id: proposal
     attributes:
-      label: Navrzene reseni
-      description: Jak by podle tebe mela fungovat nova funkcionalita.
+      label: Navržené řešení
+      description: Jak by podle tebe měla nová funkcionalita fungovat.
     validations:
       required: true
 
   - type: textarea
     id: alternatives
     attributes:
-      label: Zvažene alternativy
-      description: Pokud jsi zvazil(a) jine cesty, popis je.
+      label: Zvážené alternativy
+      description: Pokud jsi zvážil(a) jiné cesty, popiš je.
 
   - type: textarea
     id: impact
     attributes:
-      label: Dopad na uzivatele
-      description: Komu to pomuze a proc je to dulezite.
+      label: Dopad na uživatele
+      description: Komu to pomůže a proč je to důležité.

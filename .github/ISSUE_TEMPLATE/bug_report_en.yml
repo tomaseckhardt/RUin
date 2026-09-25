@@ -1,0 +1,62 @@
+name: Bug report (English)
+description: Report a bug that can be reproduced
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The more precisely you describe the problem, the faster we can fix it.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Short description of the bug
+      description: What's broken and what you expected to happen.
+      placeholder: After sending an RSVP, the guest list doesn't show up...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Write down the steps one by one.
+      placeholder: |
+        1. I open the event detail
+        2. I fill in the form
+        3. I click "I'm coming"
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / version
+      placeholder: Chrome 137, Firefox 131, Safari...
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Local, GitHub Pages, another instance...
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Paste a stack trace, console output or an image.

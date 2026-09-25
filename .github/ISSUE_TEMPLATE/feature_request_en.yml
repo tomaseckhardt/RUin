@@ -1,0 +1,36 @@
+name: Feature request (English)
+description: Suggest an improvement to the app
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea for making RUin better? Great, let's hear it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve?
+      description: What's annoying, slow or unclear today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How you think the new feature should work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: If you considered other approaches, describe them.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact on users
+      description: Who it helps and why it matters.
