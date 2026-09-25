@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -14,6 +15,19 @@ export default defineConfig({
   // netransformovaný JSX zdroj místo zkompilovaného JS.
   resolve: {
     preserveSymlinks: true,
+  },
+  build: {
+    rolldownOptions: {
+      // Název vstupu se propíše do názvů souborů: assets/ruin.<hash>.js a .css
+      input: { ruin: fileURLToPath(new URL('./index.html', import.meta.url)) },
+      // Hash zůstává kvůli cache (mění se s obsahem), jen hexadecimální a za tečkou
+      output: {
+        hashCharacters: 'hex',
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash][extname]',
+      },
+    },
   },
   server: {
     proxy: {
