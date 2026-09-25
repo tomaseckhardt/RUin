@@ -1,18 +1,18 @@
-name: Bug report
-description: Nahlasit chybu, ktera se da reprodukovat
+name: Nahlášení chyby (česky)
+description: Nahlásit chybu, která se dá reprodukovat
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Dekujeme za report. Cim presneji problem popises, tim rychleji ho opravime.
+        Děkujeme za report. Čím přesněji problém popíšeš, tím rychleji ho opravíme.
 
   - type: textarea
     id: summary
     attributes:
-      label: Strucny popis chyby
-      description: Co je rozbite a co jsi cekal(a), ze se stane.
-      placeholder: Po odeslani RSVP se nezobrazi seznam ucastniku...
+      label: Stručný popis chyby
+      description: Co je rozbité a co jsi čekal(a), že se stane.
+      placeholder: Po odeslání RSVP se nezobrazí seznam účastníků...
     validations:
       required: true
 
@@ -20,11 +20,11 @@ body:
     id: steps
     attributes:
       label: Kroky k reprodukci
-      description: Napis postup krok za krokem.
+      description: Napiš postup krok za krokem.
       placeholder: |
-        1. Otevru detail akce
-        2. Vyplnim formular
-        3. Kliknu na "Potvrdit"
+        1. Otevřu detail akce
+        2. Vyplním formulář
+        3. Kliknu na "Potvrzuji účast"
         4. ...
     validations:
       required: true
@@ -32,31 +32,31 @@ body:
   - type: textarea
     id: expected
     attributes:
-      label: Ocekavane chovani
+      label: Očekávané chování
     validations:
       required: true
 
   - type: textarea
     id: actual
     attributes:
-      label: Aktualni chovani
+      label: Aktuální chování
     validations:
       required: true
 
   - type: input
     id: browser
     attributes:
-      label: Prohlizec / verze
+      label: Prohlížeč / verze
       placeholder: Chrome 137, Firefox 131, Safari...
 
   - type: input
     id: environment
     attributes:
-      label: Prostredi
-      description: Lokal, GitHub Pages, jina instance...
+      label: Prostředí
+      description: Lokál, GitHub Pages, jiná instance...
 
   - type: textarea
     id: logs
     attributes:
       label: Logy / screenshoty
-      description: Vloz stack trace, konzoli nebo obrazek.
+      description: Vlož stack trace, konzoli nebo obrázek.

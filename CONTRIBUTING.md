@@ -1,29 +1,31 @@
-# Jak prispivat do projektu RUin
+# Jak přispívat do projektu RUin
 
 **Čeština** · [English](CONTRIBUTING.en.md)
 
-Diky, ze chces prispet. Tenhle dokument popisuje doporuceny postup, aby review probehlo rychle a bez zbytecnych vratek.
+Díky, že chceš přispět. Tenhle dokument popisuje doporučený postup, aby review proběhlo rychle a bez zbytečných vratek.
 
-## Typy prispevku
+## Typy příspěvků
 
-- opravy bugu
-- zlepseni UX/UI
-- zlepseni pristupnosti
+- opravy bugů
+- zlepšení UX/UI
+- zlepšení přístupnosti
+- překlady a lokalizace
 - testy a dokumentace
-- refaktoring bez zmeny funkcniho chovani
+- refaktoring beze změny funkčního chování
 
-## Nez zacnes
+## Než začneš
 
-1. Zkontroluj existujici issue a pull requesty, jestli uz nekdo stejnou vec neresi.
-2. U vetsich zmen otevri nejdriv issue s navrhem reseni.
-3. Domluv se na scope zmeny, aby se minimalizovaly konflikty.
+1. Zkontroluj existující issues a pull requesty, jestli už někdo stejnou věc neřeší.
+2. U větších změn otevři nejdřív issue s návrhem řešení.
+3. Domluv se na scope změny, aby se minimalizovaly konflikty.
 
-## Lokální vyvoj
+## Lokální vývoj
 
-Pozadavky:
+Požadavky:
 
 - Node.js 22+
 - npm 10+
+- `client/.env.local` se Supabase URL a klíčem (viz [README](README.md#konfigurace-prostředí))
 
 Instalace a start:
 
@@ -35,79 +37,85 @@ npm run dev
 Testy a kontrola:
 
 ```bash
+npm --prefix client run lint
 npm test
 npm run audit:a11y
 npm run build
 ```
 
-## Koderske zvyklosti
+Lint a testy spouští i CI u každého pull requestu do `main` - PR s chybou v lintu nebo v testech neprojde.
 
-- Drz zmeny male a tematicky jednotne.
-- Pojmenovani promennych a funkci udrzuj citelne a konzistentni.
-- Neformatuj nesouvisejici casti souboru.
-- Kdyz menis UI, over desktop i mobile.
-- Kdyz menis pristupnost, dopln nebo uprav testy.
+## Kodérské zvyklosti
 
-## Konvence commitu
+- Drž změny malé a tematicky jednotné.
+- Pojmenování proměnných a funkcí udržuj čitelné a konzistentní.
+- Neformátuj nesouvisející části souborů.
+- Když měníš UI, ověř desktop i mobil, světlý i tmavý režim a češtinu i angličtinu.
+- Když měníš přístupnost, doplň nebo uprav testy.
+- Texty v UI nepiš natvrdo do komponent - přidej klíč do `client/src/locales/cs.js` i `en.js` a použij `t()` (viz [Lokalizace v README](README.md#lokalizace-čeština-a-angličtina)).
+- Změny databáze patří přímo do `supabase/sql/all-phases.sql`, psané idempotentně. Každou novou `raise exception` hlášku doplň do `client/src/locales/serverMessages.en.js`, jinak spadne test.
 
-Doporucene prefixy:
+## Konvence commitů
 
-- `feat:` nova funkcionalita
+Doporučené prefixy:
+
+- `feat:` nová funkcionalita
 - `fix:` oprava bugu
 - `docs:` dokumentace
 - `test:` testy
-- `refactor:` zmena struktury bez zmeny chovani
-- `chore:` technicka udrzba
+- `refactor:` změna struktury beze změny chování
+- `chore:` technická údržba
 
-Priklad:
+Příklad:
 
 ```text
-fix: oprav validaci duplicitniho telefonu v RSVP flow
+fix: oprav validaci duplicitního telefonu v RSVP flow
 ```
 
-## Branch workflow (dulezite)
+## Branch workflow (důležité)
 
-Pro cizi contributory plati:
+Pro cizí contributory platí:
 
-- nikdy nepushuj zmeny primo do `main`
-- vzdy si vytvor vlastni branch a posli zmenu pres Pull Request
+- nikdy nepushuj změny přímo do `main`
+- vždy si vytvoř vlastní branch a pošli změnu přes Pull Request
 
-Doporuceny postup:
+Doporučený postup:
 
 ```bash
 git checkout -b feat/kratky-popis-zmeny
-# proved zmeny
+# proveď změny
 git add .
-git commit -m "feat: kratky popis"
+git commit -m "feat: krátký popis"
 git push -u origin feat/kratky-popis-zmeny
 ```
 
-Pak otevri Pull Request z tve branche do `main`.
+Pak otevři Pull Request z tvé branche do `main`.
 
 ## Pull request checklist
 
-Pred odeslanim PR over:
+Před odesláním PR ověř:
 
-- [ ] zmena je pokryta testy (nebo je jasne vysvetleno proc ne)
-- [ ] lokalne prosel build
-- [ ] lokalne prosly testy relevantni pro zmenu
-- [ ] aktualizovana dokumentace (README nebo jina)
-- [ ] PR popisuje co, proc a jak bylo overeno
+- [ ] změna je pokrytá testy (nebo je jasně vysvětlené, proč ne)
+- [ ] lokálně prošel lint i build
+- [ ] lokálně prošly testy relevantní pro změnu
+- [ ] nové texty v UI jsou v češtině i angličtině
+- [ ] aktualizovaná dokumentace (README nebo jiná, v obou jazycích)
+- [ ] PR popisuje co, proč a jak bylo ověřeno
 
-## Jak ma vypadat PR popis
+## Jak má vypadat popis PR
 
-- Strucne shrnuti zmeny.
+- Stručné shrnutí změny.
 - Motivace a kontext.
-- Krokovy postup testovani.
-- Screenshoty/videa u zmen UI (pokud dava smysl).
+- Krokový postup testování.
+- Screenshoty/videa u změn UI (pokud to dává smysl).
 
-## Bezpecnost
+## Bezpečnost
 
-Nalezene zranitelnosti nehlas verejne v issue. Pouzij postup v [SECURITY.md](SECURITY.md).
+Nalezené zranitelnosti nehlas veřejně v issue. Použij postup v [SECURITY.md](SECURITY.md).
 
-Pred zmenou RLS politik, RPC funkci nebo pridanim nove tabulky si prectete
-[SECURITY_MODEL.md](SECURITY_MODEL.md) - popisuje, jak appka resi (a neresi)
-identitu a autorizaci (zadna autentizace, `organizer_token` jako jediny bearer
-credential, proc musi RLS defaultne vse zamitat a autorizaci overuje az RPC
-funkce). Bez tohohle kontextu je snadne nevedomky zopakovat chybu, ktera uz
-v projektu jednou byla a je zdokumentovana v [CODE_REVIEW.md](CODE_REVIEW.md).
+Před změnou RLS politik, RPC funkcí nebo přidáním nové tabulky si přečti
+[SECURITY_MODEL.md](SECURITY_MODEL.md) - popisuje, jak appka řeší (a neřeší)
+identitu a autorizaci (žádná autentizace, tokeny v odkazech jako jediná
+oprávnění, proč musí RLS defaultně vše zamítat a autorizaci ověřuje až RPC
+funkce). Bez tohohle kontextu je snadné nevědomky zopakovat chybu, která už
+v projektu jednou byla a je zdokumentovaná v [CODE_REVIEW.md](CODE_REVIEW.md).

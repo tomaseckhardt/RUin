@@ -1,32 +1,36 @@
-# Security Policy
+# Bezpečnostní politika
 
-## Supported Versions
+**Čeština** · [English](SECURITY.en.md)
 
-Projekt aktualne aktivne udrzuje pouze vyvojovou vetev `main`.
+## Podporované verze
 
-| Version      | Supported          |
+Projekt aktuálně aktivně udržuje pouze vývojovou větev `main`.
+
+| Verze        | Podporovaná        |
 | ------------ | ------------------ |
 | main         | :white_check_mark: |
-| starsi vetve | :x:                |
+| starší větve | :x:                |
 
-## Reporting a Vulnerability
+## Hlášení zranitelnosti
 
-Bezpecnostni problem prosim nehlas verejne pres GitHub Issues.
+Bezpečnostní problém prosím nehlas veřejně přes GitHub Issues.
 
-Pouzij soukromou cestu:
+Použij soukromou cestu:
 
-1. Vytvor **private security advisory** v repozitari (GitHub Security tab), pokud je dostupny.
-2. Pokud advisory neni dostupny, kontaktuj maintainery napric domluvenym soukromym kanalem a posli:
+1. Vytvoř **private security advisory** v repozitáři (záložka Security na GitHubu), pokud je dostupný.
+2. Pokud advisory dostupný není, kontaktuj maintainery přes předem domluvený soukromý kanál a pošli:
    - popis chyby,
    - dopad,
    - reprodukci nebo PoC,
-   - navrh mitigace (pokud mas).
+   - návrh mitigace (pokud máš).
 
-## What to Expect
+Jak aplikace řeší identitu a oprávnění (a co vědomě neřeší), popisuje [SECURITY_MODEL.md](SECURITY_MODEL.md).
 
-- Potvrzeni prijeti reportu obvykle do 72 hodin.
-- Prubezne info o stavu reseni, pokud bude reprodukce potvrzena.
-- Snaha o vydani opravy v rozumnem case podle zavaznosti.
-- Po nasazeni opravy muze byt zverejneno shrnuti dopadu.
+## Co můžeš čekat
 
-Dekujeme za zodpovedne hlaseni.
+- Potvrzení přijetí reportu obvykle do 72 hodin.
+- Průběžné informace o stavu řešení, pokud se problém podaří reprodukovat.
+- Snahu vydat opravu v rozumném čase podle závažnosti.
+- Po nasazení opravy může být zveřejněné shrnutí dopadu.
+
+Děkujeme za zodpovědné hlášení.
