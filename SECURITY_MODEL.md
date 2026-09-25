@@ -178,7 +178,7 @@ Když přidáváš novou tabulku nebo RPC funkci:
    Postgres chyba. Pro anglické UI je klient překládá podle přesného textu,
    takže každou novou hlášku doplň i do
    `client/src/locales/serverMessages.en.js` (hlídá to
-   `client/src/lib/i18n.test.js`). Když se klient podle konkrétní hlášky
+   `client/src/test/i18n.test.js`). Když se klient podle konkrétní hlášky
    rozhoduje, musí porovnávat `error.serverMessage` (původní text), ne
    přeložené `error.message`.
 

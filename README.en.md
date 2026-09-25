@@ -78,7 +78,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasts), `qrcode` (QR codes), `jszip` (photo ZIPs)
 - Backend: Supabase - Postgres + RPC functions (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - External services: Open-Meteo (geocoding and weather forecast), Google Fonts (Space Grotesk)
-- Tests: Jest + Testing Library (`client/src/**/*.test.js`), `jest-axe` for a11y assertions in tests, Puppeteer + `axe-puppeteer` for `npm run audit:a11y` against the build
+- Tests: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` for a11y assertions in tests, Puppeteer + `axe-puppeteer` for `npm run audit:a11y` against the build
 - Deploy: GitHub Actions -> GitHub Pages (custom domain `ruin.eckhardt.cz`)
 
 ## Repository structure
@@ -88,7 +88,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
   - `src/components/` - reusable UI components
   - `src/lib/` - the API layer (`api.js` is the only place that calls Supabase RPCs), the Supabase client, translations (`i18n.js`) and helpers (formatting, weather, push, QR poster, localStorage)
   - `src/locales/` - UI text dictionaries (`cs.js`, `en.js`) and the English wording of the database error messages (`serverMessages.en.js`)
-  - `src/test/` - shared test helpers and the Jest setup
+  - `src/test/` - the tests (`*.test.js`), shared test helpers and the Jest setup
   - `public/` - service worker (`sw.js`), icons and the manifest
   - `scripts/run-vite-safe.mjs` - runs Vite from a temporary copy of the project (see [NPM scripts](#npm-scripts))
 - `supabase/sql/all-phases.sql` - the whole database schema, a single SQL file
@@ -345,7 +345,7 @@ The UI comes in two languages. Czech is the source language; English has the sam
 - On the first visit, the language is picked from the browser (`cs` and `sk` -> Czech, anything else -> English), and it's switched with the CZ | EN toggle in the top-right corner of every page's header. The choice is saved in `localStorage` (`ruin-locale`), and `<html lang>` is set as well.
 - Dates and times are formatted for the language (`cs-CZ`; in English `en-GB` with a 24-hour clock).
 - The texts live in `client/src/locales/cs.js` and `client/src/locales/en.js`. In a component: `const { t } = useI18n()` and `t('section.key', { param })`; outside React (`lib/`), just import `t` from `client/src/lib/i18n.js`. Plurals are objects keyed by `Intl.PluralRules` category (`{ one, few, other }`); a missing form falls back to `other`.
-- Add every new text to both dictionaries - `client/src/lib/i18n.test.js` checks that they have the same keys and the same `{placeholders}`.
+- Add every new text to both dictionaries - `client/src/test/i18n.test.js` checks that they have the same keys and the same `{placeholders}`.
 - Database error messages (`raise exception` in `all-phases.sql`) stay in Czech; for the English UI, the client translates them by their exact text using `client/src/locales/serverMessages.en.js`. When you add or reword a message in the SQL, add it there too - otherwise the same test fails. Code that branches on a specific message compares the original text from `error.serverMessage`, not the translated `error.message`.
 - Push reminders are still in Czech for now: their text is put together by the `send-event-reminders` Edge Function, and the language isn't stored with the subscription.
 

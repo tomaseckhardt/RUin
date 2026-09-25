@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import SignupBoard from './SignupBoard.jsx'
+import SignupBoard from '../components/SignupBoard.jsx'
 import { claimSignupItem, getSignupItems, unclaimSignupItem } from '../lib/api.js'
 
 jest.mock('../lib/api.js', () => ({

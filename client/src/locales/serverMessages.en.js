@@ -1,6 +1,6 @@
 // English for the Czech error messages the database raises (`raise exception`
 // in supabase/sql/all-phases.sql), keyed by their exact text - see
-// localizeServerMessage in src/lib/i18n.js. src/lib/i18n.test.js fails when a
+// localizeServerMessage in src/lib/i18n.js. src/test/i18n.test.js fails when a
 // message raised there has no entry here, so a new or reworded message needs
 // its translation added in the same change.
 export default {

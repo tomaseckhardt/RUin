@@ -1,5 +1,5 @@
-import { supabase } from './supabase.js'
-import { setLocale } from './i18n.js'
+import { supabase } from '../lib/supabase.js'
+import { setLocale } from '../lib/i18n.js'
 import {
   claimSignupItem,
   createEvent,
@@ -14,9 +14,9 @@ import {
   submitRsvp,
   unclaimSignupItem,
   uploadEventPhoto,
-} from './api.js'
+} from '../lib/api.js'
 
-jest.mock('./supabase.js', () => ({
+jest.mock('../lib/supabase.js', () => ({
   supabase: {
     rpc: jest.fn(),
     storage: {

@@ -5,8 +5,8 @@ import { render, screen } from '@testing-library/react'
 import cs from '../locales/cs.js'
 import en from '../locales/en.js'
 import enServerMessages from '../locales/serverMessages.en.js'
-import { formatDateTime } from './format.js'
-import { detectLocale, getLocale, localizeServerMessage, setLocale, t } from './i18n.js'
+import { formatDateTime } from '../lib/format.js'
+import { detectLocale, getLocale, localizeServerMessage, setLocale, t } from '../lib/i18n.js'
 
 const SQL_PATH = path.resolve(__dirname, '../../../supabase/sql/all-phases.sql')
 
