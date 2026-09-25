@@ -49,7 +49,7 @@ Lint a testy spouští i CI u každého pull requestu do `main` - PR s chybou v 
 
 - Drž změny malé a tematicky jednotné.
 - Pojmenování proměnných a funkcí udržuj čitelné a konzistentní.
-- Neformátuj nesouvisející části souborů.
+- Kód formátuje Prettier podle [`.prettierrc`](.prettierrc) (jednoduché uvozovky, bez středníků, řádky do 150 znaků). Ve VS Code stačí rozšíření Prettier s formátováním při uložení, jinak `npx prettier --write <soubor>`. Markdown Prettier vynechává (viz [`.prettierignore`](.prettierignore)), v dokumentaci proto neformátuj nesouvisející části.
 - Když měníš UI, ověř desktop i mobil, světlý i tmavý režim a češtinu i angličtinu.
 - Když měníš přístupnost, doplň nebo uprav testy.
 - Texty v UI nepiš natvrdo do komponent - přidej klíč do `client/src/locales/cs.js` i `en.js` a použij `t()` (viz [Lokalizace v README](README.md#lokalizace-čeština-a-angličtina)).
