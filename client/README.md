@@ -39,7 +39,7 @@ Dev server běží na http://localhost:5173/. `dev`, `build` i `preview` jdou p�
 - `src/components/` - UI komponenty
 - `src/lib/` - API vrstva (`api.js`), Supabase klient, překlady (`i18n.js`) a helpery
 - `src/locales/` - české a anglické texty UI
-- `src/test/` - Jest setup a testovací helpery
+- `src/test/` - testy (`*.test.js`), Jest setup a testovací helpery
 - `public/` - service worker, ikony a manifest
 
 ## Důležité pro contributory

@@ -78,7 +78,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasty), `qrcode` (QR kódy), `jszip` (ZIP s fotkami)
 - Backend: Supabase - Postgres + RPC funkce (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - Externí služby: Open-Meteo (geokódování a předpověď počasí), Google Fonts (Space Grotesk)
-- Testy: Jest + Testing Library (`client/src/**/*.test.js`), `jest-axe` pro a11y assertions v testech, Puppeteer + `axe-puppeteer` pro `npm run audit:a11y` proti buildu
+- Testy: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` pro a11y assertions v testech, Puppeteer + `axe-puppeteer` pro `npm run audit:a11y` proti buildu
 - Deploy: GitHub Actions -> GitHub Pages (vlastní doména `ruin.eckhardt.cz`)
 
 ## Struktura repozitáře
@@ -88,7 +88,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
   - `src/components/` - znovupoužitelné UI komponenty
   - `src/lib/` - API vrstva (`api.js` je jediné místo, které volá Supabase RPC), Supabase klient, překlady (`i18n.js`) a helpery (formátování, počasí, push, QR plakátek, localStorage)
   - `src/locales/` - slovníky textů UI (`cs.js`, `en.js`) a anglické znění chybových hlášek z databáze (`serverMessages.en.js`)
-  - `src/test/` - sdílené testovací helpery a Jest setup
+  - `src/test/` - testy (`*.test.js`), sdílené testovací helpery a Jest setup
   - `public/` - service worker (`sw.js`), ikony a manifest
   - `scripts/run-vite-safe.mjs` - spouští Vite z dočasné kopie projektu (viz [NPM skripty](#npm-skripty))
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
@@ -345,7 +345,7 @@ UI je ve dvou jazycích. Čeština je zdrojový jazyk, angličtina má stejné k
 - Jazyk se při první návštěvě vybere podle prohlížeče (`cs` a `sk` -> čeština, cokoliv jiného -> angličtina) a přepíná se přepínačem CZ | EN v pravém horním rohu hlavičky každé stránky. Volba se ukládá do `localStorage` (`ruin-locale`), nastavuje se i `<html lang>`.
 - Datum a čas se formátují podle jazyka (`cs-CZ`, v angličtině `en-GB` s 24hodinovým časem).
 - Texty žijí v `client/src/locales/cs.js` a `client/src/locales/en.js`. V komponentě: `const { t } = useI18n()` a `t('sekce.klic', { parametr })`; mimo React (`lib/`) stačí importovat `t` z `client/src/lib/i18n.js`. Plurály jsou objekty podle `Intl.PluralRules` (`{ one, few, other }`), chybějící tvar spadne na `other`.
-- Nový text přidej do obou slovníků - `client/src/lib/i18n.test.js` hlídá, že mají stejné klíče i stejné `{placeholdery}`.
+- Nový text přidej do obou slovníků - `client/src/test/i18n.test.js` hlídá, že mají stejné klíče i stejné `{placeholdery}`.
 - Chybové hlášky z databáze (`raise exception` v `all-phases.sql`) zůstávají česky; klient je pro anglické UI přeloží podle přesného textu v `client/src/locales/serverMessages.en.js`. Když v SQL přidáš nebo přeformuluješ hlášku, doplň ji tam taky - stejný test jinak spadne. Kód, který se rozhoduje podle konkrétní hlášky, porovnává původní text z `error.serverMessage`, ne přeložené `error.message`.
 - Zatím česky zůstávají push připomínky: jejich text skládá Edge Function `send-event-reminders` a u odběru se jazyk neukládá.
 

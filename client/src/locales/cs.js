@@ -1,5 +1,5 @@
 // Czech is the app's source language. Every key here must also exist in
-// en.js (enforced by src/lib/i18n.test.js). Plural entries are objects keyed
+// en.js (enforced by src/test/i18n.test.js). Plural entries are objects keyed
 // by Intl.PluralRules category ({ one, few, many, other }) - a category that
 // isn't listed falls back to `other`.
 export default {

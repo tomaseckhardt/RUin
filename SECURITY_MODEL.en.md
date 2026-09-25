@@ -188,7 +188,7 @@ When you add a new table or RPC function:
    Postgres error. For the English UI, the client translates them by their
    exact text, so add every new message to
    `client/src/locales/serverMessages.en.js` as well (enforced by
-   `client/src/lib/i18n.test.js`). When the client decides something based on
+   `client/src/test/i18n.test.js`). When the client decides something based on
    a specific message, it has to compare `error.serverMessage` (the original
    text), not the translated `error.message`.
 
