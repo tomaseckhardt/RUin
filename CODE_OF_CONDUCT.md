@@ -1,53 +1,55 @@
-# Kodex chovani
+# Kodex chování
 
-Chceme, aby komunita kolem projektu RUin byla bezpecna, respektujici a otevrena.
+**Čeština** · [English](CODE_OF_CONDUCT.en.md)
 
-## Nase zavazky
+Chceme, aby komunita kolem projektu RUin byla bezpečná, respektující a otevřená.
 
-Jako prispivatelé a maintainers se zavazujeme vytvaret prostredi bez obtezovani, kde je kazdy vitan bez ohledu na vek, telesne ci mentalni odlisnosti, etnicitu, pohlavi, genderovou identitu a vyjadreni, uroven zkusenosti, narodnost, vzhled, rasu, nabozenstvi nebo sexualni orientaci.
+## Naše závazky
 
-Zavazujeme se jednat profesionalne, slusne a s respektem.
+Jako přispěvatelé a maintaineři se zavazujeme vytvářet prostředí bez obtěžování, kde je každý vítán bez ohledu na věk, tělesné či mentální odlišnosti, etnicitu, pohlaví, genderovou identitu a vyjádření, úroveň zkušeností, národnost, vzhled, rasu, náboženství nebo sexuální orientaci.
 
-## Ocekavane chovani
+Zavazujeme se jednat profesionálně, slušně a s respektem.
 
-- Pouzivej vecny a respektujici jazyk.
-- Prijimej i davej konstruktivni zpetnou vazbu.
-- Predpokladej dobry umysl a ptej se na upresneni drive, nez budes hodnotit.
-- Respektuj odlisne nazory a zkusenosti.
-- Zamer se na to, co je nejlepsi pro projekt a komunitu.
+## Očekávané chování
 
-## Neprijatelne chovani
+- Používej věcný a respektující jazyk.
+- Přijímej i dávej konstruktivní zpětnou vazbu.
+- Předpokládej dobrý úmysl a ptej se na upřesnění dřív, než budeš hodnotit.
+- Respektuj odlišné názory a zkušenosti.
+- Zaměř se na to, co je nejlepší pro projekt a komunitu.
 
-- Urazky, ponizovani, trolling, osobni utoky.
-- Sexisticke, rasisticke, homofobni nebo jinak diskriminacni projevy.
-- Obtezovani, vyhruzky nebo zastrasovani.
-- Zverejneni cizich osobnich udaju bez svoleni.
-- Jine chovani, ktere by rozumna osoba vyhodnotila jako neprofesionalni nebo skodlive.
+## Nepřijatelné chování
 
-## Odpovednost maintaineru
+- Urážky, ponižování, trolling, osobní útoky.
+- Sexistické, rasistické, homofobní nebo jinak diskriminační projevy.
+- Obtěžování, výhrůžky nebo zastrašování.
+- Zveřejnění cizích osobních údajů bez svolení.
+- Jiné chování, které by rozumný člověk vyhodnotil jako neprofesionální nebo škodlivé.
 
-Maintaineri jsou odpovedni za jasne standardy chovani a za primerene a ferove reakce na poruseni tohoto kodexu.
+## Odpovědnost maintainerů
 
-Mohou mazat, upravovat nebo odmitnout komentare, commity, issue, pull requesty a dalsi prispevky, ktere nejsou v souladu s timto kodexem.
+Maintaineři odpovídají za jasné standardy chování a za přiměřené a férové reakce na porušení tohoto kodexu.
 
-## Nahlaseni problemu
+Mohou mazat, upravovat nebo odmítnout komentáře, commity, issues, pull requesty a další příspěvky, které nejsou v souladu s tímto kodexem.
 
-Pokud zazijes nebo uvidis poruseni kodexu, napis maintainerum projektu:
+## Nahlášení problému
 
-- otevri issue s oznacenim `conduct` (pokud je to bezpecne a vhodne), nebo
-- kontaktuj maintainery pres bezpecnostni kanal popsany v [SECURITY.md](SECURITY.md).
+Pokud zažiješ nebo uvidíš porušení kodexu, napiš maintainerům projektu:
 
-Kazde nahlaseni bude posouzeno duverne a s primerenou peci.
+- otevři issue s označením `conduct` (pokud je to bezpečné a vhodné), nebo
+- kontaktuj maintainery přes bezpečnostní kanál popsaný v [SECURITY.md](SECURITY.md).
 
-## Prosazovani
+Každé nahlášení bude posouzeno důvěrně a s přiměřenou péčí.
 
-U zavaznych nebo opakovanych poruseni muze dojit k:
+## Prosazování
 
-- upozorneni,
-- docasnemu omezeni interakce,
-- zamceni diskuze,
-- odebrani moznosti prispivat do projektu.
+U závažných nebo opakovaných porušení může dojít k:
+
+- upozornění,
+- dočasnému omezení interakce,
+- zamčení diskuze,
+- odebrání možnosti přispívat do projektu.
 
 ## Zdroj inspirace
 
-Tento kodex je inspirovan principy Contributor Covenant 2.1, upraveny pro potreby tohoto projektu.
+Tento kodex je inspirovaný principy Contributor Covenant 2.1, upravenými pro potřeby tohoto projektu.

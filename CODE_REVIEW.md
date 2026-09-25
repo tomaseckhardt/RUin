@@ -1,5 +1,7 @@
 # Code review – RUin
 
+**Čeština** · [English](CODE_REVIEW.en.md)
+
 Datum: 2026-07-30
 Metoda: automatizovaný multi-agent review přes 12 tematických oblastí (RLS/autorizace, RPC logika, edge funkce, frontend lib, jednotlivé stránky, komponenty, accessibility, testy/CI, build shell). Každý nález se závažností medium a výš byl nezávisle ověřen druhým agentem, který se ho aktivně snažil vyvrátit.
 
