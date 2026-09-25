@@ -205,36 +205,22 @@ function OwnerDashboardPage() {
 
   if (!owner) {
     return (
-      <PageShell
-        eyebrow={t('owner.eyebrow')}
-        title={t('owner.signInTitle')}
-        subtitle={t('owner.signInSubtitle')}
-        actions={backButton}
-      >
+      <PageShell eyebrow={t('owner.eyebrow')} title={t('owner.signInTitle')} subtitle={t('owner.signInSubtitle')} actions={backButton}>
         <OwnerAccessModal open onClose={() => navigate('/')} onAccessGranted={handleAccessGranted} />
       </PageShell>
     )
   }
 
   if (isLoading) {
-    return (
-      <PageShell eyebrow={t('owner.eyebrow')} title={t('common.loading')} subtitle={t('owner.loadingSubtitle')} actions={backButton} />
-    )
+    return <PageShell eyebrow={t('owner.eyebrow')} title={t('common.loading')} subtitle={t('owner.loadingSubtitle')} actions={backButton} />
   }
 
   if (error || !payload) {
-    return (
-      <PageShell eyebrow={t('owner.eyebrow')} title={t('owner.loadFailedTitle')} subtitle={error || t('owner.tryAgain')} actions={backButton} />
-    )
+    return <PageShell eyebrow={t('owner.eyebrow')} title={t('owner.loadFailedTitle')} subtitle={error || t('owner.tryAgain')} actions={backButton} />
   }
 
   return (
-    <PageShell
-      eyebrow={t('owner.eyebrow')}
-      title={t('owner.title')}
-      subtitle={t('owner.subtitle')}
-      actions={backButton}
-    >
+    <PageShell eyebrow={t('owner.eyebrow')} title={t('owner.title')} subtitle={t('owner.subtitle')} actions={backButton}>
       <main className="grid gap-6">
         <section className="panel">
           <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('owner.newGroup')}</p>
@@ -254,9 +240,7 @@ function OwnerDashboardPage() {
 
         {payload.groups.length === 0 ? (
           <section className="panel">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {t('owner.noGroups')}
-            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('owner.noGroups')}</p>
           </section>
         ) : (
           payload.groups.map((group) => {
@@ -271,24 +255,18 @@ function OwnerDashboardPage() {
                   <button
                     type="button"
                     className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
-                    onClick={() => handleDeleteGroup(group.id, group.name)}
-                  >
+                    onClick={() => handleDeleteGroup(group.id, group.name)}>
                     {t('owner.deleteGroup')}
                   </button>
-                }
-              >
+                }>
                 <ul className="space-y-2">
                   {group.members.map((member) => (
                     <li
                       key={member.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60"
-                    >
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60">
                       <div>
                         <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{member.name}</span>{' '}
-                        <a
-                          href={`tel:${member.phone}`}
-                          className="text-sm text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"
-                        >
+                        <a href={`tel:${member.phone}`} className="text-sm text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300">
                           {member.phone}
                         </a>
                       </div>
@@ -296,21 +274,15 @@ function OwnerDashboardPage() {
                         type="button"
                         className="text-xs text-rose-600 hover:underline dark:text-rose-300"
                         disabled={busyMemberId === member.id}
-                        onClick={() => handleRemoveMember(group.id, member.id)}
-                      >
+                        onClick={() => handleRemoveMember(group.id, member.id)}>
                         {t('common.delete')}
                       </button>
                     </li>
                   ))}
-                  {group.members.length === 0 ? (
-                    <li className="text-sm text-slate-500 dark:text-slate-400">{t('owner.nobodyYet')}</li>
-                  ) : null}
+                  {group.members.length === 0 ? <li className="text-sm text-slate-500 dark:text-slate-400">{t('owner.nobodyYet')}</li> : null}
                 </ul>
 
-                <form
-                  className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
-                  onSubmit={(event) => handleAddMember(event, group.id)}
-                >
+                <form className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={(event) => handleAddMember(event, group.id)}>
                   <input
                     className="field"
                     value={memberForm.name}
@@ -336,16 +308,13 @@ function OwnerDashboardPage() {
         <section className="panel">
           <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('owner.templatesTitle')}</p>
           {payload.templates.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-              {t('owner.noTemplates')}
-            </p>
+            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{t('owner.noTemplates')}</p>
           ) : (
             <ul className="mt-3 space-y-3">
               {payload.templates.map((template) => (
                 <li
                   key={template.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60"
-                >
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
                   <div>
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{template.name}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -356,8 +325,7 @@ function OwnerDashboardPage() {
                   <button
                     type="button"
                     className="text-xs text-rose-600 hover:underline dark:text-rose-300"
-                    onClick={() => handleDeleteTemplate(template.id, template.name)}
-                  >
+                    onClick={() => handleDeleteTemplate(template.id, template.name)}>
                     {t('common.delete')}
                   </button>
                 </li>

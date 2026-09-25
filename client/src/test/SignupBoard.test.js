@@ -59,9 +59,7 @@ describe('SignupBoard claim/unclaim flow', () => {
 
   it('lets the claim owner unclaim their own claim', async () => {
     const user = userEvent.setup()
-    getSignupItems.mockResolvedValue([
-      bringItem({ claims: [{ id: 10, attendee_name: 'Alice', seats: 1 }] }),
-    ])
+    getSignupItems.mockResolvedValue([bringItem({ claims: [{ id: 10, attendee_name: 'Alice', seats: 1 }] })])
 
     render(<SignupBoard eventId="event-1" category="bring" currentName="Alice" canInteract />)
     await expandCard(user)

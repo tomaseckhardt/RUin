@@ -65,11 +65,19 @@ function AttendeeList({
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{summaryText(summary)}</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
-          <span className="status-chip bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">{t('attendees.chipConfirmed', { count: summary.confirmed })}</span>
-          <span className="status-chip bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">{t('attendees.chipExcused', { count: summary.excused })}</span>
-          <span className="status-chip bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{t('attendees.chipRejected', { count: summary.rejected })}</span>
+          <span className="status-chip bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+            {t('attendees.chipConfirmed', { count: summary.confirmed })}
+          </span>
+          <span className="status-chip bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+            {t('attendees.chipExcused', { count: summary.excused })}
+          </span>
+          <span className="status-chip bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            {t('attendees.chipRejected', { count: summary.rejected })}
+          </span>
           {summary.invited ? (
-            <span className="status-chip bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">{t('attendees.chipInvited', { count: summary.invited })}</span>
+            <span className="status-chip bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">
+              {t('attendees.chipInvited', { count: summary.invited })}
+            </span>
           ) : null}
         </div>
       </div>
@@ -92,16 +100,12 @@ function AttendeeList({
           const showPingAction = showPing && pingable && !isSelf
 
           return (
-            <article
-              key={attendee.id}
-              className={`rounded-[1.75rem] border p-4 shadow-sm transition hover:-translate-y-0.5 ${config.accent}`}
-            >
+            <article key={attendee.id} className={`rounded-[1.75rem] border p-4 shadow-sm transition hover:-translate-y-0.5 ${config.accent}`}>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
                     <span
-                      className={`text-lg font-semibold ${acceptedExcuse ? 'text-rose-700 line-through dark:text-rose-300' : ''} ${rejected ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-slate-50'}`}
-                    >
+                      className={`text-lg font-semibold ${acceptedExcuse ? 'text-rose-700 line-through dark:text-rose-300' : ''} ${rejected ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-slate-50'}`}>
                       {config.icon} {attendee.name}
                     </span>
                     <span className={`status-chip ${config.tone}`}>{t(`attendees.status.${attendee.status}`)}</span>
@@ -119,8 +123,7 @@ function AttendeeList({
                   {(showPhone || attendee.status === 'invited') && attendee.phone ? (
                     <a
                       href={`tel:${attendee.phone}`}
-                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"
-                    >
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300">
                       📞 {attendee.phone}
                     </a>
                   ) : null}
@@ -131,9 +134,7 @@ function AttendeeList({
                   ) : null}
 
                   {pingLastMessage ? (
-                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                      {t('attendees.lastPingMessage', { message: pingLastMessage })}
-                    </p>
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('attendees.lastPingMessage', { message: pingLastMessage })}</p>
                   ) : null}
 
                   {rejected && pingCount > 0 ? (
@@ -147,16 +148,14 @@ function AttendeeList({
                       type="button"
                       className="secondary-button border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
                       disabled={busyId === attendee.id}
-                      onClick={() => onModerate(attendee.id, 'excused_accepted')}
-                    >
+                      onClick={() => onModerate(attendee.id, 'excused_accepted')}>
                       {t('attendees.accept')}
                     </button>
                     <button
                       type="button"
                       className="secondary-button border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                       disabled={busyId === attendee.id}
-                      onClick={() => onModerate(attendee.id, 'excused_rejected')}
-                    >
+                      onClick={() => onModerate(attendee.id, 'excused_rejected')}>
                       {t('attendees.reject')}
                     </button>
                     {showDelete ? (
@@ -164,8 +163,7 @@ function AttendeeList({
                         type="button"
                         className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
                         disabled={deleteBusyId === attendee.id}
-                        onClick={() => onDelete(attendee.id, attendee.name)}
-                      >
+                        onClick={() => onDelete(attendee.id, attendee.name)}>
                         {t('common.delete')}
                       </button>
                     ) : null}
@@ -178,8 +176,7 @@ function AttendeeList({
                       type="button"
                       className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
                       disabled={deleteBusyId === attendee.id}
-                      onClick={() => onDelete(attendee.id, attendee.name)}
-                    >
+                      onClick={() => onDelete(attendee.id, attendee.name)}>
                       {t('common.delete')}
                     </button>
                   </div>
@@ -196,8 +193,7 @@ function AttendeeList({
                           type="button"
                           className="secondary-button border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 hover:bg-fuchsia-100 dark:border-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200"
                           disabled={!canPing || pingBusyId === attendee.id || onCooldown}
-                          onClick={() => onPing(attendee.id)}
-                        >
+                          onClick={() => onPing(attendee.id)}>
                           {pingBusyId === attendee.id
                             ? t('ping.sending')
                             : onCooldown

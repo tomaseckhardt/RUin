@@ -93,7 +93,8 @@ export default {
     subtitle: 'An invite that looks fresh, works fast and won’t let the group chat sink into three days of silence and six excuses.',
     heroEyebrow: 'Organizer',
     heroTitle: 'Create an event people actually want to open',
-    heroText: 'One good-looking page instead of endless retyping in the chat. Drop in a name, place and time, send the link and instantly see who’s coming.',
+    heroText:
+      'One good-looking page instead of endless retyping in the chat. Drop in a name, place and time, send the link and instantly see who’s coming.',
     startCreating: 'Start creating',
     pollFirst: 'Vote on the date first',
     noSignup: 'No sign-up, no hold-up',
@@ -279,7 +280,8 @@ export default {
 
   ownerAccess: {
     title: 'Name, phone and code',
-    intro: 'First time here? Pick a 6-digit code and your account is created automatically. Already have one? Enter the same phone and code to get to your groups and templates from any device.',
+    intro:
+      'First time here? Pick a 6-digit code and your account is created automatically. Already have one? Enter the same phone and code to get to your groups and templates from any device.',
     code: '6-digit code',
     continue: 'Continue',
     granted: 'Done — you can now get to your groups and templates from anywhere with this phone and code.',
@@ -405,10 +407,7 @@ export default {
 
   datePicker: {
     weekdays: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
-    months: [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ],
+    months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
     presetToday: 'Today 18:00',
     presetTomorrow: 'Tomorrow 18:00',
     presetFriday: 'Friday 19:00',

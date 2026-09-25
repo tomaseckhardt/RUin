@@ -21,9 +21,7 @@ export function getFilledInvitees(invitees) {
 // picking the same group twice - or picking two overlapping groups - doesn't
 // create duplicate rows.
 export function mergeInvitees(existing, incoming) {
-  const seen = new Set(
-    existing.map((invitee) => normalizeForDedupe(invitee.phone) || normalizeForDedupe(invitee.name)),
-  )
+  const seen = new Set(existing.map((invitee) => normalizeForDedupe(invitee.phone) || normalizeForDedupe(invitee.name)))
   const merged = [...existing]
 
   for (const member of incoming) {

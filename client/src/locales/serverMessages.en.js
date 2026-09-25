@@ -12,8 +12,10 @@ export default {
   'Chybí jméno pro reakci.': 'A name is needed to react.',
   'Chybí jméno účastníka k odebrání.': 'The name of the person to remove is missing.',
   'Chybí jméno.': 'The name is missing.',
-  'Duplicitní telefonní čísla v rámci stejné akce už existují. Nejdřív je oprav a pak spusť migraci znovu.': 'Duplicate phone numbers already exist within the same event. Fix them first, then run the migration again.',
-  'Jako řidič už místo v autě máš, nemůžeš se přihlásit na vlastní nabídku odvozu.': 'As the driver you already have a seat in the car - you can’t sign up for your own ride offer.',
+  'Duplicitní telefonní čísla v rámci stejné akce už existují. Nejdřív je oprav a pak spusť migraci znovu.':
+    'Duplicate phone numbers already exist within the same event. Fix them first, then run the migration again.',
+  'Jako řidič už místo v autě máš, nemůžeš se přihlásit na vlastní nabídku odvozu.':
+    'As the driver you already have a seat in the car - you can’t sign up for your own ride offer.',
   'Jen ten, kdo nabídku odvozu založil, může někoho odebrat.': 'Only the person who offered the ride can remove someone.',
   'Jméno je moc dlouhé.': 'The name is too long.',
   'Kód je dočasně zablokovaný. Zkus to později.': 'The code is temporarily locked. Try again later.',

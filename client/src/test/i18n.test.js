@@ -63,9 +63,7 @@ describe('locale dictionaries', () => {
 })
 
 describe('database error messages', () => {
-  const raisedMessages = new Set(
-    [...fs.readFileSync(SQL_PATH, 'utf8').matchAll(/raise exception '([^']*)'/g)].map((match) => match[1]),
-  )
+  const raisedMessages = new Set([...fs.readFileSync(SQL_PATH, 'utf8').matchAll(/raise exception '([^']*)'/g)].map((match) => match[1]))
 
   it('has an English translation for every message all-phases.sql raises', () => {
     const untranslated = [...raisedMessages].filter((message) => !(message in enServerMessages))

@@ -76,26 +76,39 @@ function CreatePollPage() {
   }
 
   return (
-    <PageShell
-      eyebrow={t('createPoll.eyebrow')}
-      title={t('createPoll.title')}
-      subtitle={t('createPoll.subtitle')}
-    >
+    <PageShell eyebrow={t('createPoll.eyebrow')} title={t('createPoll.title')} subtitle={t('createPoll.subtitle')}>
       <main className="grid gap-6">
         <form className="panel space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('common.yourName')}</label>
-              <input className="field" value={creatorName} onChange={(event) => setCreatorName(event.target.value)} placeholder={t('common.namePlaceholder')} required />
+              <input
+                className="field"
+                value={creatorName}
+                onChange={(event) => setCreatorName(event.target.value)}
+                placeholder={t('common.namePlaceholder')}
+                required
+              />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createPoll.name')}</label>
-              <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder={t('createPoll.namePlaceholder')} required />
+              <input
+                className="field"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={t('createPoll.namePlaceholder')}
+                required
+              />
             </div>
           </div>
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createPoll.description')}</label>
-            <textarea className="field min-h-24" value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t('createPoll.descriptionPlaceholder')} />
+            <textarea
+              className="field min-h-24"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder={t('createPoll.descriptionPlaceholder')}
+            />
           </div>
 
           <div className="space-y-4">
@@ -117,12 +130,22 @@ function CreatePollPage() {
                   </div>
                   <div>
                     <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('eventForm.location')}</label>
-                    <input className="field" value={option.location} onChange={(event) => updateOption(index, { location: event.target.value })} placeholder={t('createPoll.locationPlaceholder')} />
+                    <input
+                      className="field"
+                      value={option.location}
+                      onChange={(event) => updateOption(index, { location: event.target.value })}
+                      placeholder={t('createPoll.locationPlaceholder')}
+                    />
                   </div>
                 </div>
                 <div className="mt-3">
                   <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('common.noteOptional')}</label>
-                  <input className="field" value={option.note} onChange={(event) => updateOption(index, { note: event.target.value })} placeholder={t('createPoll.notePlaceholder')} />
+                  <input
+                    className="field"
+                    value={option.note}
+                    onChange={(event) => updateOption(index, { note: event.target.value })}
+                    placeholder={t('createPoll.notePlaceholder')}
+                  />
                 </div>
               </div>
             ))}
@@ -135,8 +158,7 @@ function CreatePollPage() {
                 style={{
                   background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
                   animation: 'party-pulse 1.8s ease-in-out infinite',
-                }}
-              >
+                }}>
                 {t('createPoll.addOption')}
               </button>
             ) : null}

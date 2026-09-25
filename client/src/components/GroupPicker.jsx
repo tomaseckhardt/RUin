@@ -15,8 +15,7 @@ function GroupPicker({ groups, onPick, disabled = false }) {
           type="button"
           className="status-chip bg-fuchsia-100 text-fuchsia-800 transition hover:bg-fuchsia-200 disabled:opacity-60 dark:bg-fuchsia-950/60 dark:text-fuchsia-300"
           onClick={() => onPick(group)}
-          disabled={disabled}
-        >
+          disabled={disabled}>
           {t('groupPicker.fillFromGroup', { name: group.name, count: group.members.length })}
         </button>
       ))}

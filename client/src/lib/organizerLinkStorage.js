@@ -141,6 +141,5 @@ export function clearSavedOrganizerToken(eventId) {
 export function getSavedOrganizerEventIds() {
   const map = readOrganizerTokensMap()
 
-  return Object.keys(map)
-    .filter((key) => typeof key === 'string' && key.trim() !== '')
+  return Object.keys(map).filter((key) => typeof key === 'string' && key.trim() !== '')
 }

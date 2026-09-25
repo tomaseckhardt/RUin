@@ -13,7 +13,16 @@ import EventStops from '../components/EventStops.jsx'
 import InvitePeopleModal from '../components/InvitePeopleModal.jsx'
 import SignupBoard from '../components/SignupBoard.jsx'
 import PhotoGallery from '../components/PhotoGallery.jsx'
-import { deleteAttendee, getEvent, getEventPhotos, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
+import {
+  deleteAttendee,
+  getEvent,
+  getEventPhotos,
+  moderateAttendee,
+  pingAttendee,
+  removeEvent,
+  unlockManageWithPin,
+  updateEvent,
+} from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
@@ -322,9 +331,7 @@ function ManageEventPage() {
       const photos = await getEventPhotos(id).catch(() => [])
 
       if (photos.length > 0) {
-        const { error: storageError } = await supabase.storage
-          .from('event-photos')
-          .remove(photos.map((photo) => photo.storage_path))
+        const { error: storageError } = await supabase.storage.from('event-photos').remove(photos.map((photo) => photo.storage_path))
 
         if (storageError) {
           toast.warning(t('manage.photosNotDeleted'))
@@ -511,26 +518,17 @@ function ManageEventPage() {
   }
 
   if (isLoading) {
-    return (
-      <PageShell eyebrow={t('common.organizer')} title={t('manage.loadingTitle')} subtitle={t('manage.loadingSubtitle')} />
-    )
+    return <PageShell eyebrow={t('common.organizer')} title={t('manage.loadingTitle')} subtitle={t('manage.loadingSubtitle')} />
   }
 
   if (showUnlockModal && !payload) {
     return (
-      <PageShell
-        eyebrow={t('common.organizer')}
-        title={t('manage.unlockTitle')}
-        subtitle={t(unlockHintKey || 'pin.hint')}
-      >
+      <PageShell eyebrow={t('common.organizer')} title={t('manage.unlockTitle')} subtitle={t(unlockHintKey || 'pin.hint')}>
         <main className="grid gap-6">
           <section className="panel mx-auto w-full max-w-md">
             <form className="space-y-4" onSubmit={handleUnlockManage}>
               <div>
-                <label
-                  htmlFor="manage-pin-standalone"
-                  className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300"
-                >
+                <label htmlFor="manage-pin-standalone" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   {t('pin.label')}
                 </label>
                 <input
@@ -552,8 +550,7 @@ function ManageEventPage() {
               </button>
               <Link
                 to={`/event/${id}`}
-                className="block text-center text-sm font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-              >
+                className="block text-center text-sm font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
                 {t('manage.continueAsGuest')}
               </Link>
             </form>
@@ -564,9 +561,7 @@ function ManageEventPage() {
   }
 
   if (error || !payload) {
-    return (
-      <PageShell eyebrow={t('common.organizer')} title={t('manage.unavailableTitle')} subtitle={error || t('manage.unavailableSubtitle')} />
-    )
+    return <PageShell eyebrow={t('common.organizer')} title={t('manage.unavailableTitle')} subtitle={error || t('manage.unavailableSubtitle')} />
   }
 
   const { event, attendees, summary } = payload
@@ -582,8 +577,7 @@ function ManageEventPage() {
           <WeatherWidget location={event.location} datetime={event.datetime} compact />
           <AddToCalendarButton eventData={event} />
         </>
-      }
-    >
+      }>
       <main className="grid gap-6 xl:flex xl:items-start">
         <section className="panel order-0 xl:hidden">
           <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('manage.controlPanel')}</p>
@@ -602,26 +596,17 @@ function ManageEventPage() {
             </div>
           </div>
           <div className="mt-4 space-y-3">
-            <button
-              type="button"
-              className="secondary-button w-full justify-center"
-              onClick={openEditEventModal}
-            >
+            <button type="button" className="secondary-button w-full justify-center" onClick={openEditEventModal}>
               {t('manage.editEvent')}
             </button>
-            <button
-              type="button"
-              className="secondary-button w-full justify-center"
-              onClick={() => setShowOverviewModal(true)}
-            >
+            <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowOverviewModal(true)}>
               {t('overview.title')}
             </button>
             <button
               type="button"
               className="inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 font-bold text-white shadow-[0_10px_28px_-6px_rgba(111,76,255,0.65)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-6px_rgba(111,76,255,0.8)]"
               style={{ background: 'linear-gradient(135deg, #7a1c3f, #6f4cff)' }}
-              onClick={() => setShowShareModal(true)}
-            >
+              onClick={() => setShowShareModal(true)}>
               {t('manage.invite')}
             </button>
             <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
@@ -631,8 +616,7 @@ function ManageEventPage() {
               type="button"
               className="secondary-button w-full justify-center border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
               onClick={handleDelete}
-              disabled={isDeleting}
-            >
+              disabled={isDeleting}>
               {isDeleting ? t('manage.deleting') : t('manage.deleteEvent')}
             </button>
           </div>
@@ -656,20 +640,30 @@ function ManageEventPage() {
             showPhone={Boolean(payload?.event?.requirePhone)}
           />
 
-          <EventChat
-            eventId={id}
-            currentName={organizerName}
-            canSend={Boolean(organizerName.trim())}
-          />
+          <EventChat eventId={id} currentName={organizerName} canSend={Boolean(organizerName.trim())} />
 
           {event.enableStops ? <EventStops eventId={id} isOrganizer organizerToken={activeToken} /> : null}
 
           {event.enableBringList ? (
-            <SignupBoard eventId={id} category="bring" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
+            <SignupBoard
+              eventId={id}
+              category="bring"
+              currentName={organizerName}
+              canInteract={Boolean(organizerName.trim())}
+              isOrganizer
+              organizerToken={activeToken}
+            />
           ) : null}
 
           {event.enableCarpool ? (
-            <SignupBoard eventId={id} category="ride" currentName={organizerName} canInteract={Boolean(organizerName.trim())} isOrganizer organizerToken={activeToken} />
+            <SignupBoard
+              eventId={id}
+              category="ride"
+              currentName={organizerName}
+              canInteract={Boolean(organizerName.trim())}
+              isOrganizer
+              organizerToken={activeToken}
+            />
           ) : null}
 
           <PhotoGallery eventId={id} currentName={organizerName} isOrganizer organizerToken={activeToken} />
@@ -677,30 +671,19 @@ function ManageEventPage() {
 
         <aside className="order-1 hidden xl:order-2 xl:block xl:w-80 xl:shrink-0 xl:sticky xl:top-6">
           <section className="panel">
-            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-              {t('manage.controls')}
-            </p>
+            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('manage.controls')}</p>
             <div className="mt-4 space-y-3">
-              <button
-                type="button"
-                className="secondary-button w-full justify-center"
-                onClick={openEditEventModal}
-              >
+              <button type="button" className="secondary-button w-full justify-center" onClick={openEditEventModal}>
                 {t('manage.editEvent')}
               </button>
-              <button
-                type="button"
-                className="secondary-button w-full justify-center"
-                onClick={() => setShowOverviewModal(true)}
-              >
+              <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowOverviewModal(true)}>
                 {t('overview.title')}
               </button>
               <button
                 type="button"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 font-bold text-white shadow-[0_10px_28px_-6px_rgba(111,76,255,0.65)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-6px_rgba(111,76,255,0.8)]"
                 style={{ background: 'linear-gradient(135deg, #7a1c3f, #6f4cff)' }}
-                onClick={() => setShowShareModal(true)}
-              >
+                onClick={() => setShowShareModal(true)}>
                 {t('manage.invite')}
               </button>
               <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
@@ -710,8 +693,7 @@ function ManageEventPage() {
                 type="button"
                 className="secondary-button w-full justify-center border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
                 onClick={handleDelete}
-                disabled={isDeleting}
-              >
+                disabled={isDeleting}>
                 {isDeleting ? t('manage.deleting') : t('manage.deleteEvent')}
               </button>
             </div>
@@ -738,7 +720,9 @@ function ManageEventPage() {
         <ModalOverlay open={showPingComposerModal} onClose={closePingComposerModal} labelledBy="manage-ping-composer-title">
           <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('ping.composerEyebrow')}</p>
-            <h3 id="manage-ping-composer-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{t('ping.composerTitle')}</h3>
+            <h3 id="manage-ping-composer-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+              {t('ping.composerTitle')}
+            </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('ping.composerHint')}</p>
 
             <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
@@ -752,7 +736,9 @@ function ManageEventPage() {
                   disabled={pingBusyId !== null}
                   autoFocus
                 />
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('common.charactersLeft', { count: 280 - pingMessageInput.length })}</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {t('common.charactersLeft', { count: 280 - pingMessageInput.length })}
+                </p>
               </div>
 
               <div className="flex gap-3">
@@ -771,7 +757,9 @@ function ManageEventPage() {
           <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
             <div className="mb-5">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('manage.editEvent')}</p>
-              <h3 id="manage-edit-event-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{t('manage.editTitle')}</h3>
+              <h3 id="manage-edit-event-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+                {t('manage.editTitle')}
+              </h3>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('manage.editHint')}</p>
             </div>
 
@@ -877,7 +865,9 @@ function ManageEventPage() {
           <div className="h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6">
             <div className="mb-5">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('pin.eyebrow')}</p>
-              <h3 id="manage-unlock-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{t('pin.title')}</h3>
+              <h3 id="manage-unlock-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+                {t('pin.title')}
+              </h3>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('manage.unlockModalHint')}</p>
             </div>
 
@@ -915,13 +905,11 @@ function ManageEventPage() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('overview.title')}</p>
-                <h3 id="manage-overview-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">{event.name}</h3>
+                <h3 id="manage-overview-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
+                  {event.name}
+                </h3>
               </div>
-              <button
-                type="button"
-                className="secondary-button shrink-0"
-                onClick={() => setShowOverviewModal(false)}
-              >
+              <button type="button" className="secondary-button shrink-0" onClick={() => setShowOverviewModal(false)}>
                 {t('common.close')}
               </button>
             </div>
@@ -946,15 +934,13 @@ function ManageEventPage() {
                       {group.map((a) => (
                         <li
                           key={a.id}
-                          className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60"
-                        >
+                          className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60">
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{a.name}</span>
                             {(event.requirePhone || a.status === 'invited') && a.phone ? (
                               <a
                                 href={`tel:${a.phone}`}
-                                className="text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300"
-                              >
+                                className="text-sm font-medium text-fuchsia-700 underline underline-offset-2 dark:text-fuchsia-300">
                                 {a.phone}
                               </a>
                             ) : null}

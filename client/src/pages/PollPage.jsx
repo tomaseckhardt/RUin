@@ -55,9 +55,10 @@ function PollPage() {
   }, [id, token])
 
   const normalizedVoterName = voterName.trim() ? normalizeName(voterName) : ''
-  const myExistingVoteOption = payload && normalizedVoterName
-    ? payload.options.find((option) => option.votes.some((voterEntry) => normalizeName(voterEntry) === normalizedVoterName))
-    : null
+  const myExistingVoteOption =
+    payload && normalizedVoterName
+      ? payload.options.find((option) => option.votes.some((voterEntry) => normalizeName(voterEntry) === normalizedVoterName))
+      : null
 
   if (!hasSelectedManually && myExistingVoteOption && myExistingVoteOption.id !== lastAutoSelectedId) {
     setLastAutoSelectedId(myExistingVoteOption.id)
@@ -122,9 +123,7 @@ function PollPage() {
       <PageShell eyebrow={t('poll.eyebrow')} title={poll.name} subtitle={t('poll.finalizedSubtitle')}>
         <main className="grid gap-6">
           <section className="panel">
-            <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-              {t('poll.finalizedText')}
-            </p>
+            <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{t('poll.finalizedText')}</p>
             <a className="primary-button mt-4 inline-flex" href={`#/event/${poll.finalizedEventId}`}>
               {t('common.openInvite')}
             </a>
@@ -135,7 +134,10 @@ function PollPage() {
   }
 
   return (
-    <PageShell eyebrow={isCreator ? t('poll.creatorEyebrow') : t('poll.voterEyebrow')} title={poll.name} subtitle={poll.description || t('poll.createdBy', { name: poll.creatorName })}>
+    <PageShell
+      eyebrow={isCreator ? t('poll.creatorEyebrow') : t('poll.voterEyebrow')}
+      title={poll.name}
+      subtitle={poll.description || t('poll.createdBy', { name: poll.creatorName })}>
       <main className="grid gap-6">
         <section className="panel">
           <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('poll.options')}</p>
@@ -144,46 +146,42 @@ function PollPage() {
               const isHighlighted = isCreator ? finalizingOptionId === option.id : selectedOptionId === option.id
 
               return (
-              <label
-                key={option.id}
-                className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-4 transition sm:flex-row sm:items-center sm:justify-between ${isHighlighted ? 'border-fuchsia-300 bg-fuchsia-50/60 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/20' : 'border-slate-200 dark:border-slate-700'}`}
-              >
-                <div className="flex items-center gap-3">
-                  {!isCreator ? (
-                    <input
-                      type="radio"
-                      name="poll-option"
-                      className="h-4 w-4 accent-fuchsia-600"
-                      checked={selectedOptionId === option.id}
-                      onChange={() => {
-                        setHasSelectedManually(true)
-                        setSelectedOptionId(option.id)
-                      }}
-                    />
-                  ) : null}
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{formatDateTime(option.datetime)}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{option.location}{option.note ? ` · ${option.note}` : ''}</p>
+                <label
+                  key={option.id}
+                  className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-4 transition sm:flex-row sm:items-center sm:justify-between ${isHighlighted ? 'border-fuchsia-300 bg-fuchsia-50/60 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/20' : 'border-slate-200 dark:border-slate-700'}`}>
+                  <div className="flex items-center gap-3">
+                    {!isCreator ? (
+                      <input
+                        type="radio"
+                        name="poll-option"
+                        className="h-4 w-4 accent-fuchsia-600"
+                        checked={selectedOptionId === option.id}
+                        onChange={() => {
+                          setHasSelectedManually(true)
+                          setSelectedOptionId(option.id)
+                        }}
+                      />
+                    ) : null}
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{formatDateTime(option.datetime)}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {option.location}
+                        {option.note ? ` · ${option.note}` : ''}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {t('poll.votes', { count: option.votes.length })}
-                  </span>
-                  {option.votes.length > 0 ? (
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{option.votes.join(', ')}</span>
-                  ) : null}
-                  {isCreator ? (
-                    <button
-                      type="button"
-                      className="secondary-button px-3 py-1.5 text-xs"
-                      onClick={() => setFinalizingOptionId(option.id)}
-                    >
-                      {t('poll.pick')}
-                    </button>
-                  ) : null}
-                </div>
-              </label>
+                  <div className="flex items-center gap-3">
+                    <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {t('poll.votes', { count: option.votes.length })}
+                    </span>
+                    {option.votes.length > 0 ? <span className="text-xs text-slate-500 dark:text-slate-400">{option.votes.join(', ')}</span> : null}
+                    {isCreator ? (
+                      <button type="button" className="secondary-button px-3 py-1.5 text-xs" onClick={() => setFinalizingOptionId(option.id)}>
+                        {t('poll.pick')}
+                      </button>
+                    ) : null}
+                  </div>
+                </label>
               )
             })}
           </div>
@@ -193,11 +191,23 @@ function PollPage() {
           <form className="panel space-y-4" onSubmit={handleVote}>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('common.yourName')}</label>
-              <input className="field" value={voterName} onChange={(event) => setVoterName(event.target.value)} placeholder={t('common.guestNamePlaceholder')} required />
+              <input
+                className="field"
+                value={voterName}
+                onChange={(event) => setVoterName(event.target.value)}
+                placeholder={t('common.guestNamePlaceholder')}
+                required
+              />
             </div>
             {myExistingVoteOption ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                {t('poll.currentVote', { option: <strong>{formatDateTime(myExistingVoteOption.datetime)} · {myExistingVoteOption.location}</strong> })}
+                {t('poll.currentVote', {
+                  option: (
+                    <strong>
+                      {formatDateTime(myExistingVoteOption.datetime)} · {myExistingVoteOption.location}
+                    </strong>
+                  ),
+                })}
               </p>
             ) : null}
             <button type="submit" className="primary-button w-full" disabled={isVoting}>
@@ -210,18 +220,25 @@ function PollPage() {
           <form className="panel space-y-4" onSubmit={handleFinalize}>
             <div className="flex items-start justify-between gap-4">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('poll.finalizeTitle')}</p>
-              <button type="button" className="text-xs text-slate-500 hover:underline dark:text-slate-400" onClick={() => setFinalizingOptionId(null)}>
+              <button
+                type="button"
+                className="text-xs text-slate-500 hover:underline dark:text-slate-400"
+                onClick={() => setFinalizingOptionId(null)}>
                 {t('poll.clearSelection')}
               </button>
             </div>
             {chosenOption ? (
               <div className="rounded-2xl border border-fuchsia-200 bg-fuchsia-50/60 p-3 text-sm dark:border-fuchsia-500/50 dark:bg-fuchsia-950/20">
-                {t('poll.creatingFor', { option: <strong>{formatDateTime(chosenOption.datetime)} · {chosenOption.location}</strong> })}
+                {t('poll.creatingFor', {
+                  option: (
+                    <strong>
+                      {formatDateTime(chosenOption.datetime)} · {chosenOption.location}
+                    </strong>
+                  ),
+                })}
               </div>
             ) : null}
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              {t('poll.finalizeHint')}
-            </p>
+            <p className="text-sm text-slate-600 dark:text-slate-300">{t('poll.finalizeHint')}</p>
             <input
               type="password"
               inputMode="numeric"

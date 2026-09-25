@@ -23,10 +23,7 @@ function isStandaloneMode() {
     return false
   }
 
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    window.navigator.standalone === true
-  )
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
 }
 
 function AddToHomeButton() {

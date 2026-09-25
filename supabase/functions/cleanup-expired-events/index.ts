@@ -43,9 +43,7 @@ async function listAllPhotoNames(eventId) {
   let offset = 0
 
   while (true) {
-    const { data: page, error: listError } = await supabase.storage
-      .from('event-photos')
-      .list(eventId, { limit: STORAGE_LIST_PAGE_SIZE, offset })
+    const { data: page, error: listError } = await supabase.storage.from('event-photos').list(eventId, { limit: STORAGE_LIST_PAGE_SIZE, offset })
 
     if (listError) {
       throw new Error(`Failed to list photos for event ${eventId}: ${listError.message}`)
@@ -96,26 +94,20 @@ async function removeEventPhotos(eventId) {
 
 Deno.serve(async (req) => {
   if (!supabase) {
-    return new Response(
-      JSON.stringify({ error: 'Server misconfigured: missing secrets.' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    )
+    return new Response(JSON.stringify({ error: 'Server misconfigured: missing secrets.' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   if (req.headers.get('authorization') !== `Bearer ${serviceRoleKey}`) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized.' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } },
-    )
+    return new Response(JSON.stringify({ error: 'Unauthorized.' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
   }
 
   const { data: expiredIds, error: expiredIdsError } = await supabase.rpc('get_expired_event_ids')
 
   if (expiredIdsError) {
-    return new Response(
-      JSON.stringify({ error: expiredIdsError.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    )
+    return new Response(JSON.stringify({ error: expiredIdsError.message }), { status: 500, headers: { 'Content-Type': 'application/json' } })
   }
 
   let removedPhotoCount = 0
@@ -138,10 +130,10 @@ Deno.serve(async (req) => {
     })
 
     if (deleteError) {
-      return new Response(
-        JSON.stringify({ error: deleteError.message, removedPhotoCount }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } },
-      )
+      return new Response(JSON.stringify({ error: deleteError.message, removedPhotoCount }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
 
     deletedEventCount = data ?? 0

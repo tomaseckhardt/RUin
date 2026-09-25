@@ -9,16 +9,13 @@ function TemplatesPanel({ templates, isLoading, onUseTemplate }) {
       {isLoading ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">{t('templates.loading')}</p>
       ) : templates.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          {t('templates.empty')}
-        </p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('templates.empty')}</p>
       ) : (
         <ul className="space-y-3">
           {templates.map((template) => (
             <li
               key={template.id}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/60 p-3 dark:border-slate-700 dark:bg-slate-950/30"
-            >
+              className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/60 p-3 dark:border-slate-700 dark:bg-slate-950/30">
               <div>
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{template.name}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">

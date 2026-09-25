@@ -100,8 +100,7 @@ function ModalOverlay({ open, onClose, labelledBy, children }) {
         if (event.target === event.currentTarget) {
           onCloseRef.current()
         }
-      }}
-    >
+      }}>
       {children}
     </section>
   )

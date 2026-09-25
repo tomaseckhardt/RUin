@@ -14,7 +14,7 @@ describe('PageShell - Accessibility', () => {
     const { container } = renderWithRouter(
       <PageShell eyebrow="Section" title="Main Title" subtitle="Subtitle">
         <p>Content</p>
-      </PageShell>
+      </PageShell>,
     )
 
     const results = await axe(container)
@@ -25,7 +25,7 @@ describe('PageShell - Accessibility', () => {
     renderWithRouter(
       <PageShell eyebrow="Section" title="Main Title" subtitle="Subtitle">
         <p>Content</p>
-      </PageShell>
+      </PageShell>,
     )
 
     const h1 = screen.getByRole('heading', { level: 1, name: 'Main Title' })
@@ -36,7 +36,7 @@ describe('PageShell - Accessibility', () => {
     const { container } = renderWithRouter(
       <PageShell eyebrow="Section" title="Main Title" subtitle="Subtitle">
         <p>Content goes here</p>
-      </PageShell>
+      </PageShell>,
     )
 
     // Should have main landmark
@@ -48,7 +48,7 @@ describe('PageShell - Accessibility', () => {
     renderWithRouter(
       <PageShell eyebrow="Important Section" title="Title" subtitle="Subtitle">
         <p>Content</p>
-      </PageShell>
+      </PageShell>,
     )
 
     const eyebrow = screen.getByText('Important Section')
