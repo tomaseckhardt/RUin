@@ -50,9 +50,7 @@ function buildNotificationPayload(reminder) {
 
   return {
     title: isHourBefore ? `Za hodinu: ${reminder.name}` : `Zítra: ${reminder.name}`,
-    body: isHourBefore
-      ? `Akce začíná už za hodinu — ${reminder.location}`
-      : `Akce je zítra v plánu — ${reminder.location}`,
+    body: isHourBefore ? `Akce začíná už za hodinu — ${reminder.location}` : `Akce je zítra v plánu — ${reminder.location}`,
     url: `#/event/${reminder.event_id}`,
     tag: `reminder-${reminder.event_id}-${reminder.reminder_type}`,
   }
@@ -61,10 +59,7 @@ function buildNotificationPayload(reminder) {
 // Sends one reminder's notification to every subscriber of its event, then
 // marks the reminder as sent. Returns per-reminder sent/failed counts.
 async function processReminder(reminder) {
-  const { data: subscriptions, error: subscriptionsError } = await supabase.rpc(
-    'get_push_subscriptions_for_event',
-    { p_event_id: reminder.event_id },
-  )
+  const { data: subscriptions, error: subscriptionsError } = await supabase.rpc('get_push_subscriptions_for_event', { p_event_id: reminder.event_id })
 
   if (subscriptionsError) {
     console.error(`Failed to load subscriptions for event ${reminder.event_id}:`, subscriptionsError.message)
@@ -118,26 +113,20 @@ async function processReminder(reminder) {
 
 Deno.serve(async (req) => {
   if (!supabase) {
-    return new Response(
-      JSON.stringify({ error: 'Server misconfigured: missing secrets.' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    )
+    return new Response(JSON.stringify({ error: 'Server misconfigured: missing secrets.' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   if (req.headers.get('authorization') !== `Bearer ${serviceRoleKey}`) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized.' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } },
-    )
+    return new Response(JSON.stringify({ error: 'Unauthorized.' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
   }
 
   const { data: reminders, error: remindersError } = await supabase.rpc('get_pending_event_reminders')
 
   if (remindersError) {
-    return new Response(
-      JSON.stringify({ error: remindersError.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    )
+    return new Response(JSON.stringify({ error: remindersError.message }), { status: 500, headers: { 'Content-Type': 'application/json' } })
   }
 
   let sentCount = 0
@@ -149,8 +138,7 @@ Deno.serve(async (req) => {
     failedCount += result.failedCount
   }
 
-  return new Response(
-    JSON.stringify({ processedReminders: reminders?.length ?? 0, sentCount, failedCount }),
-    { headers: { 'Content-Type': 'application/json' } },
-  )
+  return new Response(JSON.stringify({ processedReminders: reminders?.length ?? 0, sentCount, failedCount }), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 })

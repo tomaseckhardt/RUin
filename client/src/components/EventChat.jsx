@@ -102,7 +102,10 @@ function EventChat({ eventId, currentName, canSend }) {
 
       setMessages((previousMessages) => mergeMessages(previousMessages, nextMessages))
 
-      const reactions = await getChatReactions(eventId, nextMessages.map((message) => message.id))
+      const reactions = await getChatReactions(
+        eventId,
+        nextMessages.map((message) => message.id),
+      )
 
       if (requestId !== latestRequestIdRef.current) {
         return
@@ -185,10 +188,7 @@ function EventChat({ eventId, currentName, canSend }) {
     }
   }
 
-  const remainingCharacters = useMemo(
-    () => CHAT_MESSAGE_MAX - messageInput.length,
-    [messageInput.length],
-  )
+  const remainingCharacters = useMemo(() => CHAT_MESSAGE_MAX - messageInput.length, [messageInput.length])
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -227,23 +227,16 @@ function EventChat({ eventId, currentName, canSend }) {
           <p className="accent-copy text-sm font-semibold uppercase tracking-[0.24em]">{t('chat.eyebrow')}</p>
           <h3 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{t('chat.title')}</h3>
         </div>
-        <p className="text-sm text-slate-500 dark:text-slate-300">
-          {canSend ? t('chat.canSendHint') : t('chat.cannotSendHint')}
-        </p>
+        <p className="text-sm text-slate-500 dark:text-slate-300">{canSend ? t('chat.canSendHint') : t('chat.cannotSendHint')}</p>
       </div>
 
       <div
         ref={scrollContainerRef}
         onScroll={handleMessagesScroll}
-        className="max-h-80 space-y-3 overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/45"
-      >
-        {isLoading ? (
-          <p className="text-sm text-slate-500 dark:text-slate-300">{t('chat.loading')}</p>
-        ) : null}
+        className="max-h-80 space-y-3 overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/45">
+        {isLoading ? <p className="text-sm text-slate-500 dark:text-slate-300">{t('chat.loading')}</p> : null}
 
-        {!isLoading && messages.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-300">{t('chat.empty')}</p>
-        ) : null}
+        {!isLoading && messages.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-300">{t('chat.empty')}</p> : null}
 
         {messages.map((message) => {
           const isOwnMessage = currentName && normalizeName(message.sender_name) === normalizeName(currentName)
@@ -253,8 +246,7 @@ function EventChat({ eventId, currentName, canSend }) {
           return (
             <article
               key={message.id}
-              className={`rounded-2xl border p-3 ${isOwnMessage ? 'border-fuchsia-300/60 bg-fuchsia-50/80 dark:border-fuchsia-500/50 dark:bg-fuchsia-950/35' : 'border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/55'}`}
-            >
+              className={`rounded-2xl border p-3 ${isOwnMessage ? 'border-fuchsia-300/60 bg-fuchsia-50/80 dark:border-fuchsia-500/50 dark:bg-fuchsia-950/35' : 'border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/55'}`}>
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{message.sender_name}</p>
                 <time className="text-xs text-slate-500 dark:text-slate-300">{toTimeLabel(message.created_at)}</time>
@@ -272,8 +264,7 @@ function EventChat({ eventId, currentName, canSend }) {
                       onClick={() => handleToggleReaction(message.id, group.emoji)}
                       disabled={pendingReactions.has(`${message.id}:${group.emoji}`)}
                       title={group.senderNames.join(', ')}
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${reactedByMe ? 'border-fuchsia-300 bg-fuchsia-100 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/50' : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'}`}
-                    >
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${reactedByMe ? 'border-fuchsia-300 bg-fuchsia-100 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/50' : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
                       <span>{group.emoji}</span>
                       <span className="text-slate-600 dark:text-slate-300">{group.senderNames.length}</span>
                     </button>
@@ -283,8 +274,7 @@ function EventChat({ eventId, currentName, canSend }) {
                 <button
                   type="button"
                   onClick={() => setOpenPickerFor((current) => (current === message.id ? null : message.id))}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-xs text-slate-400 hover:text-slate-700 dark:border-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
-                >
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-xs text-slate-400 hover:text-slate-700 dark:border-slate-700 dark:text-slate-500 dark:hover:text-slate-200">
                   +
                 </button>
 
@@ -296,8 +286,7 @@ function EventChat({ eventId, currentName, canSend }) {
                         type="button"
                         onClick={() => handleToggleReaction(message.id, emoji)}
                         disabled={pendingReactions.has(`${message.id}:${emoji}`)}
-                        className="rounded-full px-1.5 py-0.5 text-base hover:bg-slate-100 dark:hover:bg-slate-800"
-                      >
+                        className="rounded-full px-1.5 py-0.5 text-base hover:bg-slate-100 dark:hover:bg-slate-800">
                         {emoji}
                       </button>
                     ))}

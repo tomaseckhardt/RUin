@@ -49,7 +49,7 @@ CI also runs lint and tests on every pull request to `main` - a PR with a lint o
 
 - Keep changes small and focused on a single topic.
 - Keep variable and function names readable and consistent.
-- Don't reformat unrelated parts of a file.
+- Code is formatted by Prettier according to [`.prettierrc`](.prettierrc) (single quotes, no semicolons, lines up to 150 characters). In VS Code, the Prettier extension with format on save is enough; otherwise run `npx prettier --write <file>`. Prettier skips Markdown (see [`.prettierignore`](.prettierignore)), so don't reformat unrelated parts of the docs.
 - When you change the UI, check desktop and mobile, light and dark mode, and both Czech and English.
 - When you change accessibility, add or update the tests.
 - Don't hardcode UI texts in components - add a key to both `client/src/locales/cs.js` and `en.js` and use `t()` (see [Localization in the README](README.en.md#localization-czech-and-english)).

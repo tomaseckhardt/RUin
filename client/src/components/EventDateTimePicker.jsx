@@ -39,10 +39,7 @@ function getMonthMatrix(year, month) {
 }
 
 function isSameDay(a, b) {
-  return Boolean(a) && Boolean(b)
-    && a.getFullYear() === b.getFullYear()
-    && a.getMonth() === b.getMonth()
-    && a.getDate() === b.getDate()
+  return Boolean(a) && Boolean(b) && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
 function combineDateAndTime(date, timeStr) {
@@ -158,8 +155,7 @@ function EventDateTimePicker({ value, onChange }) {
         className="field inline-block w-auto text-left"
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        onClick={() => (isOpen ? setIsOpen(false) : openPanel())}
-      >
+        onClick={() => (isOpen ? setIsOpen(false) : openPanel())}>
         {value ? formatDateTime(value) : t('datePicker.placeholder')}
       </button>
 
@@ -168,21 +164,20 @@ function EventDateTimePicker({ value, onChange }) {
           role="dialog"
           aria-labelledby="event-datetime-trigger"
           className="mt-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30"
-          style={{ animation: 'scale-in 0.25s ease both' }}
-        >
+          style={{ animation: 'scale-in 0.25s ease both' }}>
           <div className="flex flex-wrap gap-2" style={{ animation: 'fade-up 0.3s ease both' }}>
             {presets.map((preset) => {
-              const isActive = isSameDay(selectedDate, preset.date)
-                && selectedDate?.getHours() === preset.date.getHours()
-                && selectedDate?.getMinutes() === preset.date.getMinutes()
+              const isActive =
+                isSameDay(selectedDate, preset.date) &&
+                selectedDate?.getHours() === preset.date.getHours() &&
+                selectedDate?.getMinutes() === preset.date.getMinutes()
 
               return (
                 <button
                   key={preset.key}
                   type="button"
                   onClick={() => handlePresetClick(preset.date)}
-                  className={isActive ? 'primary-button px-3 py-1.5 text-xs' : 'secondary-button px-3 py-1.5 text-xs'}
-                >
+                  className={isActive ? 'primary-button px-3 py-1.5 text-xs' : 'secondary-button px-3 py-1.5 text-xs'}>
                   {t(preset.labelKey)}
                 </button>
               )
@@ -191,15 +186,13 @@ function EventDateTimePicker({ value, onChange }) {
 
           <div
             className="mx-auto mt-3 flex flex-col rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-950/40"
-            style={{ width: '6cm', height: '6cm', animation: 'scale-in 0.3s ease 0.05s both' }}
-          >
+            style={{ width: '6cm', height: '6cm', animation: 'scale-in 0.3s ease 0.05s both' }}>
             <div className="flex items-center justify-between">
               <button
                 type="button"
                 aria-label={t('datePicker.previousMonth')}
                 className="flex h-8 w-8 items-center justify-center text-base text-slate-500 dark:text-slate-300"
-                onClick={() => goToMonth(-1)}
-              >
+                onClick={() => goToMonth(-1)}>
                 ‹
               </button>
               <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100">
@@ -209,8 +202,7 @@ function EventDateTimePicker({ value, onChange }) {
                 type="button"
                 aria-label={t('datePicker.nextMonth')}
                 className="flex h-8 w-8 items-center justify-center text-base text-slate-500 dark:text-slate-300"
-                onClick={() => goToMonth(1)}
-              >
+                onClick={() => goToMonth(1)}>
                 ›
               </button>
             </div>
@@ -221,41 +213,39 @@ function EventDateTimePicker({ value, onChange }) {
               ))}
             </div>
 
-            <div
-              className="mt-0.5 grid flex-1 grid-cols-7 gap-0.5"
-              style={{ gridTemplateRows: `repeat(${weeks.length}, 1fr)` }}
-            >
-              {weeks.flatMap((week, weekIndex) => week.map((date, dayIndex) => {
-                if (!date) {
-                  return <span key={`${weekIndex}-${dayIndex}`} />
-                }
+            <div className="mt-0.5 grid flex-1 grid-cols-7 gap-0.5" style={{ gridTemplateRows: `repeat(${weeks.length}, 1fr)` }}>
+              {weeks.flatMap((week, weekIndex) =>
+                week.map((date, dayIndex) => {
+                  if (!date) {
+                    return <span key={`${weekIndex}-${dayIndex}`} />
+                  }
 
-                const isSelected = isSameDay(date, selectedDate)
-                const isToday = isSameDay(date, today)
-                const isPast = startOfDay(date) < todayStart
+                  const isSelected = isSameDay(date, selectedDate)
+                  const isToday = isSameDay(date, today)
+                  const isPast = startOfDay(date) < todayStart
 
-                return (
-                  <button
-                    key={date.toISOString()}
-                    type="button"
-                    disabled={isPast}
-                    aria-current={isToday ? 'date' : undefined}
-                    aria-pressed={isSelected}
-                    onClick={() => handleDayClick(date)}
-                    className={`flex items-center justify-center rounded text-[10px] font-medium transition ${
-                      isPast
-                        ? 'cursor-not-allowed text-slate-300 dark:text-slate-700'
-                        : isSelected
-                          ? 'primary-button'
-                          : isToday
-                            ? 'border border-[--accent-text] text-slate-800 dark:text-slate-100'
-                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
-                    }`}
-                  >
-                    {date.getDate()}
-                  </button>
-                )
-              }))}
+                  return (
+                    <button
+                      key={date.toISOString()}
+                      type="button"
+                      disabled={isPast}
+                      aria-current={isToday ? 'date' : undefined}
+                      aria-pressed={isSelected}
+                      onClick={() => handleDayClick(date)}
+                      className={`flex items-center justify-center rounded text-[10px] font-medium transition ${
+                        isPast
+                          ? 'cursor-not-allowed text-slate-300 dark:text-slate-700'
+                          : isSelected
+                            ? 'primary-button'
+                            : isToday
+                              ? 'border border-[--accent-text] text-slate-800 dark:text-slate-100'
+                              : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
+                      }`}>
+                      {date.getDate()}
+                    </button>
+                  )
+                }),
+              )}
             </div>
           </div>
 
@@ -263,13 +253,7 @@ function EventDateTimePicker({ value, onChange }) {
             <label htmlFor="event-datetime-time" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
               {t('common.time')}
             </label>
-            <input
-              id="event-datetime-time"
-              type="time"
-              className="field"
-              value={timeValue}
-              onChange={handleTimeChange}
-            />
+            <input id="event-datetime-time" type="time" className="field" value={timeValue} onChange={handleTimeChange} />
           </div>
 
           <button
@@ -279,8 +263,7 @@ function EventDateTimePicker({ value, onChange }) {
               setIsOpen(false)
               triggerRef.current?.focus()
             }}
-            style={{ animation: 'fade-up 0.3s ease 0.15s both' }}
-          >
+            style={{ animation: 'fade-up 0.3s ease 0.15s both' }}>
             {t('datePicker.done')}
           </button>
         </div>

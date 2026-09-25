@@ -47,9 +47,7 @@ function OwnerAccessModal({ open, onClose, onAccessGranted }) {
           <h3 id="owner-access-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
             {t('ownerAccess.title')}
           </h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            {t('ownerAccess.intro')}
-          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('ownerAccess.intro')}</p>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>

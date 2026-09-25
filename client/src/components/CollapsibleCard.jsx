@@ -10,13 +10,11 @@ function CollapsibleCard({ eyebrow, title, headerActions, defaultOpen = false, c
           type="button"
           className="flex flex-1 items-start gap-3 text-left"
           onClick={() => setIsOpen((current) => !current)}
-          aria-expanded={isOpen}
-        >
+          aria-expanded={isOpen}>
           <svg
             viewBox="0 0 20 20"
             fill="none"
-            className={`mt-1.5 h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 dark:text-slate-500 ${isOpen ? 'rotate-90' : ''}`}
-          >
+            className={`mt-1.5 h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 dark:text-slate-500 ${isOpen ? 'rotate-90' : ''}`}>
             <path d="M7 4.5L13 10L7 15.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span>

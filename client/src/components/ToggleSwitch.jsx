@@ -17,8 +17,7 @@ function ToggleSwitch({ label, title, lang, options, value, onChange }) {
       lang={lang}
       onClick={() => onChange(isSecondActive ? first.value : second.value)}
       className="group relative inline-flex cursor-pointer items-center rounded-full border p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-soft)]"
-      style={{ borderColor: 'var(--hero-ring)', background: 'rgba(255, 255, 255, 0.06)' }}
-    >
+      style={{ borderColor: 'var(--hero-ring)', background: 'rgba(255, 255, 255, 0.06)' }}>
       <span
         aria-hidden="true"
         className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full transition-transform duration-300 motion-reduce:transition-none"
@@ -37,8 +36,7 @@ function ToggleSwitch({ label, title, lang, options, value, onChange }) {
           lang={option.lang}
           className={`relative inline-flex h-7 w-10 items-center justify-center text-xs font-semibold tracking-[0.14em] transition-colors duration-200 ${
             option.value === value ? 'text-white' : 'text-white/55 group-hover:text-white/90'
-          }`}
-        >
+          }`}>
           {option.content}
         </span>
       ))}

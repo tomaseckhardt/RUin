@@ -78,9 +78,7 @@ function InvitePeopleForm({ eventId, token, onClose, onInvited }) {
         <h3 id="invite-people-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
           {t('invites.title')}
         </h3>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          {t('invites.intro', { status: t('attendees.status.invited') })}
-        </p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('invites.intro', { status: t('attendees.status.invited') })}</p>
       </div>
 
       <GroupPicker groups={groups} onPick={handlePickGroup} disabled={isSubmitting} />

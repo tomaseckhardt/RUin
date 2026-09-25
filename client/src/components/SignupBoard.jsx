@@ -184,17 +184,12 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
         <button type="button" className="secondary-button" onClick={() => setShowAddForm((current) => !current)}>
           {showAddForm ? t('common.close') : copy('addLabel')}
         </button>
-      }
-    >
+      }>
       {showAddForm ? (
-        <form className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30" onSubmit={handleAdd}>
-          <input
-            className="field"
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-            placeholder={copy('placeholder')}
-            required
-          />
+        <form
+          className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30"
+          onSubmit={handleAdd}>
+          <input className="field" value={label} onChange={(event) => setLabel(event.target.value)} placeholder={copy('placeholder')} required />
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">{copy('capacityLabel')}</label>
@@ -226,7 +221,9 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
             const claims = item.event_signup_claims || []
             const claimedSeats = claims.reduce((sum, claim) => sum + claim.seats, 0)
             const isFull = claimedSeats >= item.capacity
-            const myClaim = currentName ? claims.find((claim) => claim.attendee_name.toLocaleLowerCase('cs-CZ') === currentName.trim().toLocaleLowerCase('cs-CZ')) : null
+            const myClaim = currentName
+              ? claims.find((claim) => claim.attendee_name.toLocaleLowerCase('cs-CZ') === currentName.trim().toLocaleLowerCase('cs-CZ'))
+              : null
             const isOwnRide = category === 'ride' && currentName?.trim() && normalizeName(item.created_by) === normalizeName(currentName)
 
             return (
@@ -241,40 +238,40 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                           {claims.map((claim) => (
                             <span
                               key={claim.id}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/60 py-1 pl-2.5 pr-1.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
-                            >
+                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/60 py-1 pl-2.5 pr-1.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
                               {claim.attendee_name}
                               <button
                                 type="button"
                                 className="rounded-full px-1.5 py-0.5 text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
                                 disabled={busyItemId === item.id}
-                                onClick={() => handleRemoveClaim(item, claim)}
-                              >
+                                onClick={() => handleRemoveClaim(item, claim)}>
                                 {t('signup.offerSwap')}
                               </button>
                             </span>
                           ))}
-                          <span className="text-xs text-slate-400 dark:text-slate-500">({claimedSeats}/{item.capacity})</span>
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
+                            ({claimedSeats}/{item.capacity})
+                          </span>
                         </div>
                       ) : isOrganizer ? (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           {claims.map((claim) => (
                             <span
                               key={claim.id}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/60 py-1 pl-2.5 pr-1.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
-                            >
+                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/60 py-1 pl-2.5 pr-1.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
                               {claim.attendee_name}
                               <button
                                 type="button"
                                 className="rounded-full px-1.5 py-0.5 text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
                                 disabled={busyItemId === item.id}
-                                onClick={() => handleRemoveClaimAsOrganizer(item, claim)}
-                              >
+                                onClick={() => handleRemoveClaimAsOrganizer(item, claim)}>
                                 {t('common.remove')}
                               </button>
                             </span>
                           ))}
-                          <span className="text-xs text-slate-400 dark:text-slate-500">({claimedSeats}/{item.capacity})</span>
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
+                            ({claimedSeats}/{item.capacity})
+                          </span>
                         </div>
                       ) : (
                         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -293,8 +290,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                         type="button"
                         className="secondary-button px-3 py-1.5 text-xs"
                         disabled={busyItemId === item.id}
-                        onClick={() => handleUnclaim(item)}
-                      >
+                        onClick={() => handleUnclaim(item)}>
                         {t('signup.unclaim')}
                       </button>
                     ) : (
@@ -302,8 +298,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                         type="button"
                         className="secondary-button px-3 py-1.5 text-xs"
                         disabled={!canInteract || isFull || busyItemId === item.id}
-                        onClick={() => handleClaim(item)}
-                      >
+                        onClick={() => handleClaim(item)}>
                         {isFull ? t('signup.full') : t('signup.claim')}
                       </button>
                     )}
@@ -312,8 +307,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                         type="button"
                         className="secondary-button border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
                         disabled={busyItemId === item.id}
-                        onClick={() => handleDelete(item)}
-                      >
+                        onClick={() => handleDelete(item)}>
                         {t('common.delete')}
                       </button>
                     ) : null}

@@ -33,15 +33,11 @@ export function subscribeToEventTicks(eventId, reasons, onTick, discriminator) {
 
   const channel = supabase
     .channel(`event-ticks:${eventId}:${topicSuffix}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'event_realtime_ticks', filter: `event_id=eq.${eventId}` },
-      (payload) => {
-        if (reasonSet.has(payload.new?.reason)) {
-          scheduleTick()
-        }
-      },
-    )
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'event_realtime_ticks', filter: `event_id=eq.${eventId}` }, (payload) => {
+      if (reasonSet.has(payload.new?.reason)) {
+        scheduleTick()
+      }
+    })
     .subscribe()
 
   return () => {

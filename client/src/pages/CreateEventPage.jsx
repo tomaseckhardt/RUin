@@ -382,8 +382,7 @@ function CreateEventPage() {
           </Link>
           <AddToHomeButton />
         </>
-      }
-    >
+      }>
       <main className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]">
         <section className="order-2 space-y-6 xl:order-1">
           <article className="panel relative overflow-hidden">
@@ -395,9 +394,7 @@ function CreateEventPage() {
                 <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-[-0.06em] text-slate-950 dark:text-slate-50 sm:text-5xl lg:text-6xl">
                   {t('createEvent.heroTitle')}
                 </h2>
-                <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-                  {t('createEvent.heroText')}
-                </p>
+                <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">{t('createEvent.heroText')}</p>
                 <div className="mt-8 flex flex-wrap gap-3">
                   <a href="#create-form" className="primary-button">
                     {t('createEvent.startCreating')}
@@ -410,17 +407,23 @@ function CreateEventPage() {
 
               <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
                 <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">{t('createEvent.speedLabel')}</div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">
+                    {t('createEvent.speedLabel')}
+                  </div>
                   <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.speedValue')}</div>
                   <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.speedText')}</p>
                 </div>
                 <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">{t('createEvent.flowLabel')}</div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">
+                    {t('createEvent.flowLabel')}
+                  </div>
                   <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.flowValue')}</div>
                   <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.flowText')}</p>
                 </div>
                 <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">{t('createEvent.statusLabel')}</div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">
+                    {t('createEvent.statusLabel')}
+                  </div>
                   <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.statusValue')}</div>
                   <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.statusText')}</p>
                 </div>
@@ -454,15 +457,12 @@ function CreateEventPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.stepDecideText')}</p>
             </article>
           </section>
-
         </section>
 
         <aside id="create-form" className="panel order-1 h-fit xl:order-2 xl:sticky xl:top-6">
           <div className="mb-6">
             <CollapsibleCard eyebrow={t('createEvent.recentEyebrow')} title={t('createEvent.recentTitle')} defaultOpen={false}>
-              {isLoadingRecentEvents ? (
-                <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentLoading')}</p>
-              ) : null}
+              {isLoadingRecentEvents ? <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentLoading')}</p> : null}
 
               {!isLoadingRecentEvents && recentEvents.length === 0 ? (
                 <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentEmpty')}</p>
@@ -473,7 +473,9 @@ function CreateEventPage() {
                   {recentEvents.map(({ id: eventId, event }) => (
                     <article key={eventId} className="rounded-2xl border border-slate-200 bg-white/65 p-3 dark:border-slate-700 dark:bg-slate-950/35">
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.datetime)} · {event.location}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {formatDateTime(event.datetime)} · {event.location}
+                      </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Link to={`/event/${eventId}/manage`} className="secondary-button px-3 py-1.5 text-xs">
                           {t('createEvent.openManage')}
@@ -490,21 +492,13 @@ function CreateEventPage() {
           </div>
 
           <div className="mb-6">
-            <TemplatesPanel
-              templates={ownerPayload.templates}
-              isLoading={isLoadingOwnerPayload}
-              onUseTemplate={handleUseTemplate}
-            />
+            <TemplatesPanel templates={ownerPayload.templates} isLoading={isLoadingOwnerPayload} onUseTemplate={handleUseTemplate} />
           </div>
 
           <div className="mb-6">
             <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('createEvent.composerEyebrow')}</p>
-            <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">
-              {t('createEvent.composerTitle')}
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              {t('createEvent.composerText')}
-            </p>
+            <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{t('createEvent.composerTitle')}</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.composerText')}</p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
@@ -537,13 +531,7 @@ function CreateEventPage() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.name')}</label>
-              <input
-                className="field"
-                value={form.name}
-                onChange={updateField('name')}
-                placeholder={t('createEvent.namePlaceholder')}
-                required
-              />
+              <input className="field" value={form.name} onChange={updateField('name')} placeholder={t('createEvent.namePlaceholder')} required />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.location')}</label>
@@ -557,10 +545,7 @@ function CreateEventPage() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.dateTime')}</label>
-              <EventDateTimePicker
-                value={form.datetime}
-                onChange={(nextValue) => setForm((current) => ({ ...current, datetime: nextValue }))}
-              />
+              <EventDateTimePicker value={form.datetime} onChange={(nextValue) => setForm((current) => ({ ...current, datetime: nextValue }))} />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.description')}</label>
@@ -659,15 +644,16 @@ function CreateEventPage() {
                       style={{
                         background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
                         animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
-                      }}
-                    >
+                      }}>
                       🎉 {showAfterparty ? t('createEvent.afterpartyClose') : t('createEvent.afterpartyOpen')} 🎉
                     </button>
 
                     {showAfterparty ? (
                       <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
                         <div>
-                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createEvent.afterpartyLocation')}</label>
+                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+                            {t('createEvent.afterpartyLocation')}
+                          </label>
                           <input
                             className="field"
                             value={afterpartyLocation}
@@ -677,12 +663,7 @@ function CreateEventPage() {
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('common.time')}</label>
-                          <input
-                            type="time"
-                            className="field"
-                            value={afterpartyTime}
-                            onChange={(event) => setAfterpartyTime(event.target.value)}
-                          />
+                          <input type="time" className="field" value={afterpartyTime} onChange={(event) => setAfterpartyTime(event.target.value)} />
                         </div>
                       </div>
                     ) : null}
@@ -690,11 +671,7 @@ function CreateEventPage() {
                 ) : null}
 
                 <div>
-                  <button
-                    type="button"
-                    className="secondary-button w-full justify-center"
-                    onClick={() => setShowInvites((current) => !current)}
-                  >
+                  <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvites((current) => !current)}>
                     {showInvites ? t('createEvent.invitesClose') : t('createEvent.invitesOpen')}
                   </button>
 
@@ -758,9 +735,7 @@ function CreateEventPage() {
               <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
                 {isSubmitting ? t('createEvent.submitting') : t('createEvent.submit')}
               </button>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {t('createEvent.submitHint')}
-              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t('createEvent.submitHint')}</p>
             </div>
           </form>
         </aside>

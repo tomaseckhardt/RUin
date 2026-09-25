@@ -123,9 +123,7 @@ server.listen(port, async () => {
 
     results.forEach((result) => {
       const status = result.violations === 0 ? '✅' : '⚠️ '
-      console.log(
-        `${status} ${result.page}: ${result.violations} violation${result.violations !== 1 ? 's' : ''}`
-      )
+      console.log(`${status} ${result.page}: ${result.violations} violation${result.violations !== 1 ? 's' : ''}`)
     })
 
     console.log(`\nTotal violations: ${totalViolations}`)

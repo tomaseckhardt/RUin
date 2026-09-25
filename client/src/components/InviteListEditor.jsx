@@ -48,8 +48,7 @@ function InviteListEditor({ invitees, onChange, disabled = false, maxRows = 30 }
             type="button"
             className="text-xs text-rose-600 hover:underline dark:text-rose-300 sm:mb-3"
             onClick={() => removeRow(index)}
-            disabled={disabled}
-          >
+            disabled={disabled}>
             {t('common.remove')}
           </button>
         </div>
@@ -61,9 +60,7 @@ function InviteListEditor({ invitees, onChange, disabled = false, maxRows = 30 }
         </button>
       ) : null}
 
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        {t('invites.phoneHint', { option: t('eventForm.requirePhone') })}
-      </p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{t('invites.phoneHint', { option: t('eventForm.requirePhone') })}</p>
     </div>
   )
 }

@@ -5,9 +5,5 @@ export default {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
   testMatch: ['<rootDir>/src/**/*.test.js', '<rootDir>/src/**/*.spec.js'],
-  collectCoverageFrom: [
-    'src/**/*.{js,jsx}',
-    '!src/main.jsx',
-    '!src/lib/supabase.js',
-  ],
+  collectCoverageFrom: ['src/**/*.{js,jsx}', '!src/main.jsx', '!src/lib/supabase.js'],
 }

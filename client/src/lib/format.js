@@ -24,13 +24,7 @@ export function parseLocalDateTime(dateString) {
   const minuteNum = Number(minute)
   const secondNum = Number(second)
 
-  if (
-    monthNum < 1 || monthNum > 12
-    || dayNum < 1 || dayNum > 31
-    || hourNum > 23
-    || minuteNum > 59
-    || secondNum > 59
-  ) {
+  if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31 || hourNum > 23 || minuteNum > 59 || secondNum > 59) {
     return null
   }
 

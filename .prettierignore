@@ -1,0 +1,5 @@
+# Documentation is formatted by hand.
+*.md
+
+# Lockfiles belong to npm.
+package-lock.json

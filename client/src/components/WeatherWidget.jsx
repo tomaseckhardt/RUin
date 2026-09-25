@@ -39,10 +39,11 @@ function WeatherWidget({ location, datetime, compact = false }) {
       <span
         className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium"
         style={{ borderColor: 'var(--hero-ring)', color: 'var(--header-text)' }}
-        title={`${label} · ${weather.locationName}`}
-      >
+        title={`${label} · ${weather.locationName}`}>
         <span className="text-base leading-none">{weather.icon}</span>
-        <span>{weather.tempMin}° / {weather.tempMax}°C</span>
+        <span>
+          {weather.tempMin}° / {weather.tempMax}°C
+        </span>
       </span>
     )
   }
@@ -55,7 +56,9 @@ function WeatherWidget({ location, datetime, compact = false }) {
         <div className="mt-1 text-lg font-black tracking-[-0.02em] text-slate-950 dark:text-slate-50">
           {weather.tempMin}° / {weather.tempMax}°C
         </div>
-        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{label} · {weather.locationName}</p>
+        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+          {label} · {weather.locationName}
+        </p>
       </div>
     </div>
   )

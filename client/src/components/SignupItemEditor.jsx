@@ -61,8 +61,7 @@ function SignupItemEditor({ category, items, onChange, disabled = false, maxRows
             type="button"
             className="text-xs text-rose-600 hover:underline dark:text-rose-300 sm:mb-3"
             onClick={() => removeRow(index)}
-            disabled={disabled}
-          >
+            disabled={disabled}>
             {t('common.remove')}
           </button>
         </div>

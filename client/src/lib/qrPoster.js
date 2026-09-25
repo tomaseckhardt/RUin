@@ -2,7 +2,9 @@ import QRCode from 'qrcode'
 import { t } from './i18n.js'
 
 function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
-  const words = String(text || '').split(/\s+/).filter(Boolean)
+  const words = String(text || '')
+    .split(/\s+/)
+    .filter(Boolean)
 
   if (words.length === 0) {
     return y

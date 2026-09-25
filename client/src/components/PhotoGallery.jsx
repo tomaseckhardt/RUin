@@ -120,9 +120,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
 
   async function handleDownloadAll() {
     const normalizedCurrentName = normalizeName(currentName)
-    const othersPhotos = photos.filter(
-      (photo) => normalizeName(photo.uploaded_by) !== normalizedCurrentName,
-    )
+    const othersPhotos = photos.filter((photo) => normalizeName(photo.uploaded_by) !== normalizedCurrentName)
 
     if (othersPhotos.length === 0) {
       toast.error(t('photos.nothingToDownload'))
@@ -196,12 +194,13 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {photos.map((photo, index) => (
             <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => setLightboxIndex(index)}
-                className="block h-full w-full cursor-zoom-in"
-              >
-                <img src={getEventPhotoUrl(photo.storage_path)} alt={t('photos.photoBy', { name: photo.uploaded_by })} className="h-full w-full object-cover" loading="lazy" />
+              <button type="button" onClick={() => setLightboxIndex(index)} className="block h-full w-full cursor-zoom-in">
+                <img
+                  src={getEventPhotoUrl(photo.storage_path)}
+                  alt={t('photos.photoBy', { name: photo.uploaded_by })}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
               </button>
               {isOrganizer ? (
                 <button
@@ -210,8 +209,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                     event.stopPropagation()
                     handleDelete(photo)
                   }}
-                  className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white transition"
-                >
+                  className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white transition">
                   {t('common.delete')}
                 </button>
               ) : null}
@@ -238,8 +236,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                   type="button"
                   aria-label={t('photos.previous')}
                   onClick={() => setLightboxIndex((current) => (current - 1 + photos.length) % photos.length)}
-                  className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-left-14"
-                >
+                  className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-left-14">
                   ‹
                 </button>
               ) : null}
@@ -255,8 +252,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                   type="button"
                   aria-label={t('photos.next')}
                   onClick={() => setLightboxIndex((current) => (current + 1) % photos.length)}
-                  className="absolute right-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-right-14"
-                >
+                  className="absolute right-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-right-14">
                   ›
                 </button>
               ) : null}

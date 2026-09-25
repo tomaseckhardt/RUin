@@ -51,8 +51,7 @@ function FeedbackPage() {
               filter === key
                 ? 'border-transparent bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                 : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'
-            }`}
-          >
+            }`}>
             {t(`feedback.filters.${key}`)}
           </button>
         ))}

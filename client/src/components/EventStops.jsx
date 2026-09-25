@@ -91,12 +91,18 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
             {showAddForm ? t('common.close') : t('stops.add')}
           </button>
         ) : null
-      }
-    >
+      }>
       {showAddForm ? (
-        <form className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-3" onSubmit={handleAdd}>
+        <form
+          className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-3"
+          onSubmit={handleAdd}>
           <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder={t('stops.namePlaceholder')} required />
-          <input className="field" value={location} onChange={(event) => setLocation(event.target.value)} placeholder={t('stops.locationPlaceholder')} />
+          <input
+            className="field"
+            value={location}
+            onChange={(event) => setLocation(event.target.value)}
+            placeholder={t('stops.locationPlaceholder')}
+          />
           <div className="flex gap-2">
             <input className="field" value={startsAtLabel} onChange={(event) => setStartsAtLabel(event.target.value)} placeholder="18:00" />
             <button type="submit" className="primary-button shrink-0" disabled={isSaving}>
@@ -118,7 +124,9 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{stop.name}</p>
-                  {stop.starts_at_label ? <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{stop.starts_at_label}</span> : null}
+                  {stop.starts_at_label ? (
+                    <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{stop.starts_at_label}</span>
+                  ) : null}
                 </div>
                 {stop.location ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{stop.location}</p> : null}
               </div>

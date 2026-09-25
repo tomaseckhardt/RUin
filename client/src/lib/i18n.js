@@ -21,7 +21,9 @@ const PLACEHOLDER_PATTERN = /\{(\w+)\}/
 // fallback for everyone else.
 export function detectLocale(languages) {
   for (const language of languages || []) {
-    const base = String(language || '').toLowerCase().split('-')[0]
+    const base = String(language || '')
+      .toLowerCase()
+      .split('-')[0]
 
     if (base === 'cs' || base === 'sk') {
       return 'cs'
@@ -132,9 +134,7 @@ export function t(key, params) {
   }
 
   if (isPluralEntry(entry)) {
-    const pluralCategory = typeof params?.count === 'number'
-      ? new Intl.PluralRules(INTL_LOCALES[currentLocale]).select(params.count)
-      : 'other'
+    const pluralCategory = typeof params?.count === 'number' ? new Intl.PluralRules(INTL_LOCALES[currentLocale]).select(params.count) : 'other'
     entry = entry[pluralCategory] ?? entry.other
   }
 

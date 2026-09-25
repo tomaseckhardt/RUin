@@ -10,12 +10,7 @@ const RETRY_QUEUE_STORAGE_KEY = 'ruin-retry-queue'
 // Anything not in this set (chat messages, pings, adding a signup item, ...)
 // would create a visible duplicate if replayed twice, so those just surface
 // the offline error above instead of being queued.
-const RETRYABLE_RPCS = new Set([
-  'submit_rsvp',
-  'check_in_attendee',
-  'claim_signup_item',
-  'unclaim_signup_item',
-])
+const RETRYABLE_RPCS = new Set(['submit_rsvp', 'check_in_attendee', 'claim_signup_item', 'unclaim_signup_item'])
 
 function isOfflineError(error) {
   if (!error) {
@@ -186,11 +181,7 @@ export function unlockManageWithPin(eventId, pin) {
 }
 
 export function getEvent(id, organizerToken = null) {
-  return callRpc(
-    'get_event_payload',
-    { p_event_id: id, p_organizer_token: organizerToken },
-    t('api.errors.getEvent'),
-  )
+  return callRpc('get_event_payload', { p_event_id: id, p_organizer_token: organizerToken }, t('api.errors.getEvent'))
 }
 
 export function submitRsvp(id, data) {
@@ -288,27 +279,15 @@ export function inviteAttendees(eventId, token, invitees) {
 }
 
 export function accessOwnerAccount(name, phone, code) {
-  return callRpc(
-    'access_owner_account',
-    { p_name: name, p_phone: phone, p_code: code },
-    t('api.errors.accessOwnerAccount'),
-  )
+  return callRpc('access_owner_account', { p_name: name, p_phone: phone, p_code: code }, t('api.errors.accessOwnerAccount'))
 }
 
 export function getOwnerPayload(ownerId, token) {
-  return callRpc(
-    'get_owner_payload',
-    { p_owner_id: ownerId, p_token: token },
-    t('api.errors.getOwnerPayload'),
-  )
+  return callRpc('get_owner_payload', { p_owner_id: ownerId, p_token: token }, t('api.errors.getOwnerPayload'))
 }
 
 export function createContactGroup(ownerId, token, name) {
-  return callRpc(
-    'create_contact_group',
-    { p_owner_id: ownerId, p_token: token, p_name: name },
-    t('api.errors.createContactGroup'),
-  )
+  return callRpc('create_contact_group', { p_owner_id: ownerId, p_token: token, p_name: name }, t('api.errors.createContactGroup'))
 }
 
 export function renameContactGroup(ownerId, token, groupId, name) {
@@ -320,11 +299,7 @@ export function renameContactGroup(ownerId, token, groupId, name) {
 }
 
 export function deleteContactGroup(ownerId, token, groupId) {
-  return callRpc(
-    'delete_contact_group',
-    { p_owner_id: ownerId, p_token: token, p_group_id: groupId },
-    t('api.errors.deleteContactGroup'),
-  )
+  return callRpc('delete_contact_group', { p_owner_id: ownerId, p_token: token, p_group_id: groupId }, t('api.errors.deleteContactGroup'))
 }
 
 export function addContactGroupMember(ownerId, token, groupId, member) {
@@ -379,11 +354,7 @@ export function updateEventTemplate(ownerId, token, templateId, data) {
 }
 
 export function deleteEventTemplate(ownerId, token, templateId) {
-  return callRpc(
-    'delete_event_template',
-    { p_owner_id: ownerId, p_token: token, p_template_id: templateId },
-    t('api.errors.deleteEventTemplate'),
-  )
+  return callRpc('delete_event_template', { p_owner_id: ownerId, p_token: token, p_template_id: templateId }, t('api.errors.deleteEventTemplate'))
 }
 
 export async function getEventChatMessages(eventId, limit = 120) {
@@ -413,27 +384,15 @@ export function registerPushSubscription(eventId, subscription) {
 }
 
 export function unregisterPushSubscription(endpoint) {
-  return callRpc(
-    'unregister_push_subscription',
-    { p_endpoint: endpoint },
-    t('api.errors.unregisterPushSubscription'),
-  )
+  return callRpc('unregister_push_subscription', { p_endpoint: endpoint }, t('api.errors.unregisterPushSubscription'))
 }
 
 export function checkInAttendee(eventId, attendeeName) {
-  return callRpc(
-    'check_in_attendee',
-    { p_event_id: eventId, p_attendee_name: attendeeName },
-    t('api.errors.checkIn'),
-  )
+  return callRpc('check_in_attendee', { p_event_id: eventId, p_attendee_name: attendeeName }, t('api.errors.checkIn'))
 }
 
 export function toggleChatReaction(messageId, senderName, emoji) {
-  return callRpc(
-    'toggle_chat_reaction',
-    { p_message_id: messageId, p_sender_name: senderName, p_emoji: emoji },
-    t('api.errors.toggleChatReaction'),
-  )
+  return callRpc('toggle_chat_reaction', { p_message_id: messageId, p_sender_name: senderName, p_emoji: emoji }, t('api.errors.toggleChatReaction'))
 }
 
 export async function getChatReactions(eventId, messageIds) {
@@ -469,11 +428,7 @@ export function addSignupItem(eventId, data) {
 }
 
 export function claimSignupItem(itemId, attendeeName, seats = 1) {
-  return callRpc(
-    'claim_signup_item',
-    { p_item_id: itemId, p_attendee_name: attendeeName, p_seats: seats },
-    t('api.errors.claimSignupItem'),
-  )
+  return callRpc('claim_signup_item', { p_item_id: itemId, p_attendee_name: attendeeName, p_seats: seats }, t('api.errors.claimSignupItem'))
 }
 
 export function unclaimSignupItem(itemId, attendeeName) {
@@ -498,11 +453,7 @@ export function removeSignupClaim(itemId, claimAttendeeName, requesterName, orga
 }
 
 export function deleteSignupItem(eventId, itemId, token) {
-  return callRpc(
-    'delete_signup_item',
-    { p_event_id: eventId, p_item_id: itemId, p_token: token },
-    t('api.errors.deleteSignupItem'),
-  )
+  return callRpc('delete_signup_item', { p_event_id: eventId, p_item_id: itemId, p_token: token }, t('api.errors.deleteSignupItem'))
 }
 
 export async function getSignupItems(eventId) {
@@ -530,11 +481,7 @@ export function addEventStop(eventId, token, data) {
 }
 
 export function deleteEventStop(eventId, token, stopId) {
-  return callRpc(
-    'delete_event_stop',
-    { p_event_id: eventId, p_token: token, p_stop_id: stopId },
-    t('api.errors.deleteEventStop'),
-  )
+  return callRpc('delete_event_stop', { p_event_id: eventId, p_token: token, p_stop_id: stopId }, t('api.errors.deleteEventStop'))
 }
 
 export async function getEventStops(eventId) {
@@ -561,19 +508,11 @@ export function createEventPoll(data) {
 }
 
 export function getPollPayload(pollId, token = null) {
-  return callRpc(
-    'get_poll_payload',
-    { p_poll_id: pollId, p_token: token },
-    t('api.errors.getPollPayload'),
-  )
+  return callRpc('get_poll_payload', { p_poll_id: pollId, p_token: token }, t('api.errors.getPollPayload'))
 }
 
 export function votePoll(pollId, optionId, voterName) {
-  return callRpc(
-    'vote_event_poll',
-    { p_poll_id: pollId, p_option_id: optionId, p_voter_name: voterName },
-    t('api.errors.votePoll'),
-  )
+  return callRpc('vote_event_poll', { p_poll_id: pollId, p_option_id: optionId, p_voter_name: voterName }, t('api.errors.votePoll'))
 }
 
 export function finalizePoll(pollId, token, optionId, organizerPin, description) {
@@ -609,11 +548,7 @@ export async function getEventPhotos(eventId) {
 }
 
 export function deleteEventPhoto(eventId, token, photoId) {
-  return callRpc(
-    'delete_event_photo',
-    { p_event_id: eventId, p_token: token, p_photo_id: photoId },
-    t('api.errors.deleteEventPhoto'),
-  )
+  return callRpc('delete_event_photo', { p_event_id: eventId, p_token: token, p_photo_id: photoId }, t('api.errors.deleteEventPhoto'))
 }
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
@@ -630,9 +565,7 @@ export async function uploadEventPhoto(eventId, file) {
   const fileExt = file.name.split('.').pop()
   const storagePath = `${eventId}/${crypto.randomUUID()}.${fileExt}`
 
-  const { error: uploadError } = await supabase.storage
-    .from('event-photos')
-    .upload(storagePath, file)
+  const { error: uploadError } = await supabase.storage.from('event-photos').upload(storagePath, file)
 
   if (uploadError) {
     throw new Error(uploadError.message || t('api.uploadFailed'))
@@ -672,17 +605,9 @@ export async function sendEventChatMessage(eventId, senderName, message) {
 }
 
 export function submitFeedback(type, name, message) {
-  return callRpc(
-    'submit_feedback_report',
-    { p_type: type, p_name: name, p_message: message },
-    t('api.errors.submitFeedback'),
-  )
+  return callRpc('submit_feedback_report', { p_type: type, p_name: name, p_message: message }, t('api.errors.submitFeedback'))
 }
 
 export function getFeedbackReports() {
-  return callRpc(
-    'get_feedback_reports',
-    {},
-    t('api.errors.getFeedbackReports'),
-  )
+  return callRpc('get_feedback_reports', {}, t('api.errors.getFeedbackReports'))
 }

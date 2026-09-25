@@ -282,7 +282,8 @@ export default {
 
   ownerAccess: {
     title: 'Jméno, telefon a kód',
-    intro: 'Poprvé tady? Zvol si 6místný kód a účet se založí sám. Už ho máš? Zadej stejný telefon a kód a dostaneš se ke svým skupinám a šablonám z jakéhokoli zařízení.',
+    intro:
+      'Poprvé tady? Zvol si 6místný kód a účet se založí sám. Už ho máš? Zadej stejný telefon a kód a dostaneš se ke svým skupinám a šablonám z jakéhokoli zařízení.',
     code: '6místný kód',
     continue: 'Pokračovat',
     granted: 'Hotovo — ke skupinám a šablonám se teď dostaneš odkudkoli přes tenhle telefon a kód.',
@@ -408,10 +409,7 @@ export default {
 
   datePicker: {
     weekdays: ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'],
-    months: [
-      'leden', 'únor', 'březen', 'duben', 'květen', 'červen',
-      'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec',
-    ],
+    months: ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'],
     presetToday: 'Dnes 18:00',
     presetTomorrow: 'Zítra 18:00',
     presetFriday: 'Pátek 19:00',

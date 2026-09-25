@@ -124,15 +124,11 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
     <ModalOverlay open={open} onClose={onClose} labelledBy="share-invite-title">
       <div
         className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-8"
-        style={{ animation: 'scale-in 0.3s ease both' }}
-      >
+        style={{ animation: 'scale-in 0.3s ease both' }}>
         <div className="mb-3 flex items-start justify-between gap-4 sm:mb-5" style={{ animation: 'fade-up 0.3s ease both' }}>
           <div>
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em] sm:text-base">{t('share.invite')}</p>
-            <h3
-              id="share-invite-title"
-              className="mt-1 text-xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50 sm:mt-2 sm:text-3xl"
-            >
+            <h3 id="share-invite-title" className="mt-1 text-xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50 sm:mt-2 sm:text-3xl">
               {t('share.title')}
             </h3>
           </div>
@@ -149,8 +145,7 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
 
         <div
           className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:p-5"
-          style={{ animation: 'scale-in 0.35s ease 0.05s both' }}
-        >
+          style={{ animation: 'scale-in 0.35s ease 0.05s both' }}>
           {isGeneratingQr ? (
             <p className="py-16 text-center text-sm text-slate-500 dark:text-slate-300 sm:py-20 sm:text-base">{t('share.generatingQr')}</p>
           ) : (

@@ -49,9 +49,7 @@ describe('callRpc error handling (via submitRsvp)', () => {
   it('throws the RPC error message when the call fails', async () => {
     supabase.rpc.mockResolvedValue({ data: null, error: { message: 'Vyplň svoje jméno.' } })
 
-    await expect(submitRsvp('event-1', { name: '', status: 'confirmed' })).rejects.toThrow(
-      'Vyplň svoje jméno.',
-    )
+    await expect(submitRsvp('event-1', { name: '', status: 'confirmed' })).rejects.toThrow('Vyplň svoje jméno.')
   })
 
   it('falls back to the generic message when the error has none', async () => {
@@ -159,16 +157,12 @@ describe('reads go through event-scoped RPCs, not direct table selects', () => {
 
 describe('sendEventChatMessage', () => {
   it('rejects an empty message without calling supabase', async () => {
-    await expect(sendEventChatMessage('event-1', 'Alice', '   ')).rejects.toThrow(
-      'Napiš zprávu do chatu.',
-    )
+    await expect(sendEventChatMessage('event-1', 'Alice', '   ')).rejects.toThrow('Napiš zprávu do chatu.')
     expect(supabase.rpc).not.toHaveBeenCalled()
   })
 
   it('rejects a missing sender name without calling supabase', async () => {
-    await expect(sendEventChatMessage('event-1', '  ', 'Ahoj')).rejects.toThrow(
-      'Pro odeslání zprávy vyplň svoje jméno.',
-    )
+    await expect(sendEventChatMessage('event-1', '  ', 'Ahoj')).rejects.toThrow('Pro odeslání zprávy vyplň svoje jméno.')
     expect(supabase.rpc).not.toHaveBeenCalled()
   })
 
