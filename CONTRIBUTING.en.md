@@ -9,6 +9,7 @@ Thanks for wanting to contribute. This document describes the recommended proces
 - bug fixes
 - UX/UI improvements
 - accessibility improvements
+- translations and localization
 - tests and documentation
 - refactoring without changing functional behavior
 
@@ -24,6 +25,7 @@ Requirements:
 
 - Node.js 22+
 - npm 10+
+- `client/.env.local` with the Supabase URL and key (see the [README](README.en.md#environment-configuration))
 
 Install and start:
 
@@ -35,18 +37,23 @@ npm run dev
 Tests and checks:
 
 ```bash
+npm --prefix client run lint
 npm test
 npm run audit:a11y
 npm run build
 ```
+
+CI also runs lint and tests on every pull request to `main` - a PR with a lint or test failure won't pass.
 
 ## Coding conventions
 
 - Keep changes small and focused on a single topic.
 - Keep variable and function names readable and consistent.
 - Don't reformat unrelated parts of a file.
-- When you change the UI, check both desktop and mobile.
+- When you change the UI, check desktop and mobile, light and dark mode, and both Czech and English.
 - When you change accessibility, add or update the tests.
+- Don't hardcode UI texts in components - add a key to both `client/src/locales/cs.js` and `en.js` and use `t()` (see [Localization in the README](README.en.md#localization-czech-and-english)).
+- Database changes go straight into `supabase/sql/all-phases.sql`, written to be idempotent. Add every new `raise exception` message to `client/src/locales/serverMessages.en.js`, otherwise a test fails.
 
 ## Commit conventions
 
@@ -89,9 +96,10 @@ Then open a Pull Request from your branch into `main`.
 Before submitting a PR, check that:
 
 - [ ] the change is covered by tests (or it's clearly explained why not)
-- [ ] the build passed locally
+- [ ] lint and the build passed locally
 - [ ] the tests relevant to the change passed locally
-- [ ] the documentation is updated (README or other)
+- [ ] new UI texts exist in both Czech and English
+- [ ] the documentation is updated (README or other, in both languages)
 - [ ] the PR describes what changed, why, and how it was verified
 
 ## What the PR description should contain
@@ -103,13 +111,12 @@ Before submitting a PR, check that:
 
 ## Security
 
-Don't report vulnerabilities you find publicly in an issue. Follow the process in [SECURITY.md](SECURITY.md).
+Don't report vulnerabilities you find publicly in an issue. Follow the process in [SECURITY.en.md](SECURITY.en.md).
 
 Before you change RLS policies or RPC functions, or add a new table, read
-[SECURITY_MODEL.md](SECURITY_MODEL.md) - it describes how the app handles (and
-doesn't handle) identity and authorization (no authentication, `organizer_token`
-as the only bearer credential, why RLS must deny everything by default and
+[SECURITY_MODEL.en.md](SECURITY_MODEL.en.md) - it describes how the app handles
+(and doesn't handle) identity and authorization (no authentication, tokens in
+links as the only permissions, why RLS must deny everything by default and
 authorization is only checked by the RPC functions). Without this context it's
 easy to unknowingly repeat a mistake the project has already made once, which
-is documented in [CODE_REVIEW.md](CODE_REVIEW.md). All three documents are in
-Czech.
+is documented in [CODE_REVIEW.en.md](CODE_REVIEW.en.md).
