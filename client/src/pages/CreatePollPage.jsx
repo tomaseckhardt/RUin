@@ -5,12 +5,14 @@ import PageShell from '../components/PageShell.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import { createEventPoll } from '../lib/api.js'
+import { useI18n } from '../lib/i18n.js'
 
 function createEmptyOption() {
   return { key: crypto.randomUUID(), datetime: '', location: '', note: '' }
 }
 
 function CreatePollPage() {
+  const { t } = useI18n()
   const navigate = useNavigate()
   const [creatorName, setCreatorName] = useState('')
   const [name, setName] = useState('')
@@ -46,12 +48,12 @@ function CreatePollPage() {
     const incompleteIndex = options.findIndex((option) => !option.datetime || !option.location.trim())
 
     if (incompleteIndex !== -1) {
-      toast.error(`Možnost ${incompleteIndex + 1} nemá vyplněné datum nebo místo — doplň ji, nebo ji odeber.`)
+      toast.error(t('createPoll.optionIncomplete', { number: incompleteIndex + 1 }))
       return
     }
 
     if (options.length < 2) {
-      toast.error('Přidej aspoň dvě možnosti.')
+      toast.error(t('createPoll.minTwoOptions'))
       return
     }
 
@@ -64,7 +66,7 @@ function CreatePollPage() {
         description,
         options,
       })
-      toast.success('Anketa je připravená. Sdílej odkaz na hlasování.')
+      toast.success(t('createPoll.created'))
       navigate(result.creatorPath)
     } catch (error) {
       toast.error(error.message)
@@ -75,52 +77,52 @@ function CreatePollPage() {
 
   return (
     <PageShell
-      eyebrow="hlasování před založením akce"
-      title="Vytvoř anketu na termín a místo"
-      subtitle="Hoď 2–5 možností, ať se parta domluví, než založíš ostrou akci."
+      eyebrow={t('createPoll.eyebrow')}
+      title={t('createPoll.title')}
+      subtitle={t('createPoll.subtitle')}
     >
       <main className="grid gap-6">
         <form className="panel space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Tvoje jméno</label>
-              <input className="field" value={creatorName} onChange={(event) => setCreatorName(event.target.value)} placeholder="Např. Tomáš" required />
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('common.yourName')}</label>
+              <input className="field" value={creatorName} onChange={(event) => setCreatorName(event.target.value)} placeholder={t('common.namePlaceholder')} required />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Název ankety</label>
-              <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Kdy na led hokej?" required />
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createPoll.name')}</label>
+              <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder={t('createPoll.namePlaceholder')} required />
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Popis (nepovinné)</label>
-            <textarea className="field min-h-24" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Pár slov k akci…" />
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createPoll.description')}</label>
+            <textarea className="field min-h-24" value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t('createPoll.descriptionPlaceholder')} />
           </div>
 
           <div className="space-y-4">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Možnosti</p>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('poll.options')}</p>
             {options.map((option, index) => (
               <div key={option.key} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Možnost {index + 1}</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t('createPoll.option', { number: index + 1 })}</p>
                   {options.length > 1 ? (
                     <button type="button" className="text-xs text-rose-600 hover:underline dark:text-rose-300" onClick={() => removeOption(index)}>
-                      Odebrat
+                      {t('common.remove')}
                     </button>
                   ) : null}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">Datum a čas</label>
+                    <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('eventForm.dateTime')}</label>
                     <EventDateTimePicker value={option.datetime} onChange={(value) => updateOption(index, { datetime: value })} />
                   </div>
                   <div>
-                    <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">Místo</label>
-                    <input className="field" value={option.location} onChange={(event) => updateOption(index, { location: event.target.value })} placeholder="Praha 7" />
+                    <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('eventForm.location')}</label>
+                    <input className="field" value={option.location} onChange={(event) => updateOption(index, { location: event.target.value })} placeholder={t('createPoll.locationPlaceholder')} />
                   </div>
                 </div>
                 <div className="mt-3">
-                  <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">Poznámka (nepovinné)</label>
-                  <input className="field" value={option.note} onChange={(event) => updateOption(index, { note: event.target.value })} placeholder="Levnější vstupné před 18:00" />
+                  <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('common.noteOptional')}</label>
+                  <input className="field" value={option.note} onChange={(event) => updateOption(index, { note: event.target.value })} placeholder={t('createPoll.notePlaceholder')} />
                 </div>
               </div>
             ))}
@@ -135,13 +137,13 @@ function CreatePollPage() {
                   animation: 'party-pulse 1.8s ease-in-out infinite',
                 }}
               >
-                🎉 Afterparty?! 🎉
+                {t('createPoll.addOption')}
               </button>
             ) : null}
           </div>
 
           <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
-            {isSubmitting ? 'Vytvářím anketu…' : 'Vytvořit anketu'}
+            {isSubmitting ? t('createPoll.submitting') : t('createPoll.submit')}
           </button>
         </form>
       </main>

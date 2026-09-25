@@ -24,6 +24,7 @@ import {
   inviteAttendees,
 } from '../lib/api.js'
 import { formatDateTime, parseLocalDateTime } from '../lib/format.js'
+import { useI18n } from '../lib/i18n.js'
 import { createEmptyInvitee, getFilledInvitees, mergeInvitees } from '../lib/invitees.js'
 import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
 import { getSavedOwner } from '../lib/ownerLinkStorage.js'
@@ -51,6 +52,7 @@ const initialForm = {
 }
 
 function CreateEventPage() {
+  const { t } = useI18n()
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -76,24 +78,20 @@ function CreateEventPage() {
   const [showOwnerAccessModal, setShowOwnerAccessModal] = useState(false)
   const [pendingOwnerCheckbox, setPendingOwnerCheckbox] = useState(null)
 
-  const whyItWorks = [
-    'Všichni vidí stejný plán, žádné ztracené zprávy v chatu.',
-    'Odpověď je na jedno kliknutí, takže lidi to fakt vyplní.',
-    'Organizátor má backstage odkaz a drží věci pod kontrolou.',
-  ]
+  const whyItWorks = t('createEvent.whyItWorks')
 
   async function handleSubmit(event) {
     event.preventDefault()
 
     if (!form.datetime) {
-      toast.error('Vyber datum a čas akce.')
+      toast.error(t('eventForm.pickDateTime'))
       return
     }
 
     const parsedDatetime = parseLocalDateTime(form.datetime)
 
     if (!parsedDatetime || parsedDatetime.getTime() <= Date.now()) {
-      toast.error('Datum a čas akce musí být v budoucnosti.')
+      toast.error(t('createEvent.dateMustBeFuture'))
       return
     }
 
@@ -111,7 +109,7 @@ function CreateEventPage() {
             startsAtLabel: afterpartyTime,
           })
         } catch (afterpartyError) {
-          toast.error(`Akce je založená, ale afterparty se nepodařilo uložit: ${afterpartyError.message}`)
+          toast.error(t('createEvent.afterpartyFailed', { error: afterpartyError.message }))
         }
       }
 
@@ -121,7 +119,7 @@ function CreateEventPage() {
         try {
           await inviteAttendees(payload.event.id, organizerToken, filledInvitees)
         } catch (inviteError) {
-          toast.error(`Akce je založená, ale pozvánky se nepodařilo uložit: ${inviteError.message}`)
+          toast.error(t('createEvent.invitesFailed', { error: inviteError.message }))
         }
       }
 
@@ -136,7 +134,7 @@ function CreateEventPage() {
             await addContactGroupMember(owner.ownerId, owner.token, createdGroupId, invitee)
           }
         } catch (groupError) {
-          toast.error(`Akce je založená, ale skupinu se nepodařilo uložit: ${groupError.message}`)
+          toast.error(t('createEvent.groupFailed', { error: groupError.message }))
         }
       }
 
@@ -151,7 +149,7 @@ function CreateEventPage() {
             defaultGroupId: createdGroupId,
           })
         } catch (templateError) {
-          toast.error(`Akce je založená, ale šablonu se nepodařilo uložit: ${templateError.message}`)
+          toast.error(t('createEvent.templateFailed', { error: templateError.message }))
         }
       }
 
@@ -171,7 +169,7 @@ function CreateEventPage() {
               await claimSignupItem(itemResult.id, item.personName, item.quantity)
             }
           } catch (bringError) {
-            toast.error(`Akce je založená, ale položku "${item.label}" se nepodařilo uložit: ${bringError.message}`)
+            toast.error(t('createEvent.bringItemFailed', { label: item.label, error: bringError.message }))
           }
         }
       }
@@ -188,12 +186,12 @@ function CreateEventPage() {
               createdBy: item.personName || form.organizerName,
             })
           } catch (rideError) {
-            toast.error(`Akce je založená, ale odvoz "${item.label}" se nepodařilo uložit: ${rideError.message}`)
+            toast.error(t('createEvent.rideFailed', { label: item.label, error: rideError.message }))
           }
         }
       }
 
-      toast.success('Akce je připravená. Odkazy můžeš rovnou sdílet.')
+      toast.success(t('createEvent.created'))
       setForm(initialForm)
       setShowAfterparty(false)
       setAfterpartyLocation('')
@@ -286,7 +284,7 @@ function CreateEventPage() {
       setInvitees((current) => mergeInvitees(current, defaultGroup.members))
     }
 
-    toast.success(`Šablona „${template.name}“ je načtená do formuláře.`)
+    toast.success(t('createEvent.templateLoaded', { name: template.name }))
   }
 
   useEffect(() => {
@@ -371,13 +369,13 @@ function CreateEventPage() {
 
   return (
     <PageShell
-      eyebrow="group plans, less chaos"
+      eyebrow={t('createEvent.eyebrow')}
       title="R U in?"
-      subtitle="Pozvánka, co vypadá fresh, funguje rychle a nenechá skupinový chat spadnout do tří dnů ticha a šesti výmluv."
+      subtitle={t('createEvent.subtitle')}
       actions={
         <>
           <Link to="/moje" className="secondary-button">
-            Moje skupiny a šablony
+            {t('owner.title')}
           </Link>
           <AddToHomeButton />
         </>
@@ -390,41 +388,41 @@ function CreateEventPage() {
             <div className="pointer-events-none absolute -left-16 bottom-0 h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(122,28,63,0.18),transparent_66%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(122,28,63,0.28),transparent_66%)]" />
             <div className="relative grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:items-end">
               <div>
-                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.28em]">Organizátor</p>
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.28em]">{t('createEvent.heroEyebrow')}</p>
                 <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-[-0.06em] text-slate-950 dark:text-slate-50 sm:text-5xl lg:text-6xl">
-                  Vytvoř událost, kterou lidi fakt chtějí otevřít
+                  {t('createEvent.heroTitle')}
                 </h2>
                 <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-                  Jedna krásná stránka místo nekonečného přepisování do chatu. Nahoď název, místo a čas, pošli odkaz a hned vidíš, kdo dorazí.
+                  {t('createEvent.heroText')}
                 </p>
                 <div className="mt-8 flex flex-wrap gap-3">
                   <a href="#create-form" className="primary-button">
-                    Začít tvořit
+                    {t('createEvent.startCreating')}
                   </a>
                   <Link to="/poll/new" className="secondary-button">
-                    Nejdřív hlasování o termínu
+                    {t('createEvent.pollFirst')}
                   </Link>
                   <span className="hero-badge inline-flex items-center rounded-full border border-slate-200 bg-white/70 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
-                    Bez přihlašování, bez zdržování
+                    {t('createEvent.noSignup')}
                   </span>
                 </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
                 <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">Rychlost</div>
-                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">30 s</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Připraveno k odeslání během chvilky.</p>
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">{t('createEvent.speedLabel')}</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.speedValue')}</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.speedText')}</p>
                 </div>
                 <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">Flow</div>
-                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">1 link</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Veřejně pro hosty, privátně pro organizátora.</p>
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">{t('createEvent.flowLabel')}</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.flowValue')}</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.flowText')}</p>
                 </div>
                 <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">Stav</div>
-                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">Live</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Všechno vidíš přehledně na jednom místě.</p>
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">{t('createEvent.statusLabel')}</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.statusValue')}</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.statusText')}</p>
                 </div>
               </div>
             </div>
@@ -442,18 +440,18 @@ function CreateEventPage() {
           <section className="grid gap-4 md:grid-cols-3">
             <article className="panel">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">01</p>
-              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">Dropni link</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Veřejná pozvánka jde rovnou do skupiny a všichni mají stejný přehled.</p>
+              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">{t('createEvent.stepShareTitle')}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.stepShareText')}</p>
             </article>
             <article className="panel">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">02</p>
-              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">Sbírej vibe check</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Lidi kliknou, jestli dorazí nebo pošlou omluvenku i s důvodem.</p>
+              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">{t('createEvent.stepCollectTitle')}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.stepCollectText')}</p>
             </article>
             <article className="panel">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">03</p>
-              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">Rozhodni backstage</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Z privátního linku vidíš seznam a držíš nad akcí moderátorský přehled.</p>
+              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">{t('createEvent.stepDecideTitle')}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.stepDecideText')}</p>
             </article>
           </section>
 
@@ -461,13 +459,13 @@ function CreateEventPage() {
 
         <aside id="create-form" className="panel order-1 h-fit xl:order-2 xl:sticky xl:top-6">
           <div className="mb-6">
-            <CollapsibleCard eyebrow="Rychlý vstup" title="Moje poslední akce" defaultOpen={false}>
+            <CollapsibleCard eyebrow={t('createEvent.recentEyebrow')} title={t('createEvent.recentTitle')} defaultOpen={false}>
               {isLoadingRecentEvents ? (
-                <p className="text-sm text-slate-600 dark:text-slate-300">Načítám poslední akce…</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentLoading')}</p>
               ) : null}
 
               {!isLoadingRecentEvents && recentEvents.length === 0 ? (
-                <p className="text-sm text-slate-600 dark:text-slate-300">Zatím tu nic není. Jakmile založíš akci, objeví se tady rychlý vstup do správy.</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentEmpty')}</p>
               ) : null}
 
               {!isLoadingRecentEvents && recentEvents.length > 0 ? (
@@ -478,10 +476,10 @@ function CreateEventPage() {
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.datetime)} · {event.location}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Link to={`/event/${eventId}/manage`} className="secondary-button px-3 py-1.5 text-xs">
-                          Otevřít správu
+                          {t('createEvent.openManage')}
                         </Link>
                         <Link to={`/event/${eventId}`} className="secondary-button px-3 py-1.5 text-xs">
-                          Otevřít pozvánku
+                          {t('common.openInvite')}
                         </Link>
                       </div>
                     </article>
@@ -500,29 +498,29 @@ function CreateEventPage() {
           </div>
 
           <div className="mb-6">
-            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Composer</p>
+            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('createEvent.composerEyebrow')}</p>
             <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">
-              Poskládej akci
+              {t('createEvent.composerTitle')}
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Vyplň jen to důležité. Po uložení dostaneš odkaz, který můžeš rovnou poslat do skupiny.
+              {t('createEvent.composerText')}
             </p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Tvoje jméno (organizátor)</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createEvent.organizerName')}</label>
                 <input
                   className="field"
                   value={form.organizerName}
                   onChange={updateField('organizerName')}
-                  placeholder="Např. Tomáš"
+                  placeholder={t('common.namePlaceholder')}
                   required
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Správcovský PIN</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('pin.label')}</label>
                 <input
                   type="password"
                   inputMode="numeric"
@@ -531,46 +529,46 @@ function CreateEventPage() {
                   className="field"
                   value={form.organizerPin}
                   onChange={updateField('organizerPin')}
-                  placeholder="Např. 1234"
+                  placeholder={t('createEvent.pinPlaceholder')}
                   required
                 />
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">4 číslice. Bude potřeba pro vstup do správy akce.</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.pinHint')}</p>
               </div>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Název akce</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.name')}</label>
               <input
                 className="field"
                 value={form.name}
                 onChange={updateField('name')}
-                placeholder="Např. Grilovačka na střeše"
+                placeholder={t('createEvent.namePlaceholder')}
                 required
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Místo</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.location')}</label>
               <input
                 className="field"
                 value={form.location}
                 onChange={updateField('location')}
-                placeholder="Praha 7, dvorek za kavárnou"
+                placeholder={t('createEvent.locationPlaceholder')}
                 required
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Datum a čas</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.dateTime')}</label>
               <EventDateTimePicker
                 value={form.datetime}
                 onChange={(nextValue) => setForm((current) => ({ ...current, datetime: nextValue }))}
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Popis</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.description')}</label>
               <textarea
                 className="field min-h-32"
                 value={form.description}
                 onChange={updateField('description')}
-                placeholder="Co se děje, co vzít s sebou a jestli hrozí dress code."
+                placeholder={t('eventForm.descriptionPlaceholder')}
                 required
               />
             </div>
@@ -582,8 +580,8 @@ function CreateEventPage() {
                 onChange={(e) => setForm((current) => ({ ...current, requirePhone: e.target.checked }))}
               />
               <div>
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Vyžadovat telefonní číslo</p>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Učastníci budou muset vyplnit telefon. Z organizátorské stránky pak můžeš na každého přímo zavolat.</p>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.requirePhone')}</p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.requirePhoneHint')}</p>
               </div>
             </label>
 
@@ -596,8 +594,8 @@ function CreateEventPage() {
                   onChange={(e) => setForm((current) => ({ ...current, enableBringList: e.target.checked }))}
                 />
                 <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Kdo co bere</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Seznam věcí k přinesení, kam se lidi zapisují.</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.bringList')}</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.bringListHint')}</p>
                 </div>
               </label>
               <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
@@ -608,8 +606,8 @@ function CreateEventPage() {
                   onChange={(e) => setForm((current) => ({ ...current, enableCarpool: e.target.checked }))}
                 />
                 <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Spolujízda</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Kdo koho sveze, kam se lidi zapisují.</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.carpool')}</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.carpoolHint')}</p>
                 </div>
               </label>
               <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
@@ -626,15 +624,15 @@ function CreateEventPage() {
                   }}
                 />
                 <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Itinerář / zastávky</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Vícero zastávek večera (i afterparty).</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.stops')}</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.stopsHint')}</p>
                 </div>
               </label>
             </div>
 
             {form.enableBringList ? (
               <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Kdo co bere</p>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.bringList')}</p>
                 <div className="mt-3">
                   <SignupItemEditor category="bring" items={bringItems} onChange={setBringItems} disabled={isSubmitting} />
                 </div>
@@ -643,14 +641,14 @@ function CreateEventPage() {
 
             {form.enableCarpool ? (
               <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Spolujízda</p>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.carpool')}</p>
                 <div className="mt-3">
                   <SignupItemEditor category="ride" items={rideItems} onChange={setRideItems} disabled={isSubmitting} />
                 </div>
               </div>
             ) : null}
 
-            <CollapsibleCard eyebrow="Nepovinné" title="Doplňkové možnosti" defaultOpen={false}>
+            <CollapsibleCard eyebrow={t('createEvent.extrasEyebrow')} title={t('createEvent.extrasTitle')} defaultOpen={false}>
               <div className="space-y-4">
                 {form.enableStops ? (
                   <div>
@@ -663,22 +661,22 @@ function CreateEventPage() {
                         animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
                       }}
                     >
-                      🎉 {showAfterparty ? 'Zavřít afterparty' : 'Afterparty?!'} 🎉
+                      🎉 {showAfterparty ? t('createEvent.afterpartyClose') : t('createEvent.afterpartyOpen')} 🎉
                     </button>
 
                     {showAfterparty ? (
                       <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
                         <div>
-                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Kam se jde potom</label>
+                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createEvent.afterpartyLocation')}</label>
                           <input
                             className="field"
                             value={afterpartyLocation}
                             onChange={(event) => setAfterpartyLocation(event.target.value)}
-                            placeholder="Klub Afterparty, Praha 7"
+                            placeholder={t('createEvent.afterpartyLocationPlaceholder')}
                           />
                         </div>
                         <div>
-                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">Čas</label>
+                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('common.time')}</label>
                           <input
                             type="time"
                             className="field"
@@ -697,7 +695,7 @@ function CreateEventPage() {
                     className="secondary-button w-full justify-center"
                     onClick={() => setShowInvites((current) => !current)}
                   >
-                    {showInvites ? 'Zavřít pozvané' : '+ Pozvat lidi předem'}
+                    {showInvites ? t('createEvent.invitesClose') : t('createEvent.invitesOpen')}
                   </button>
 
                   {showInvites ? (
@@ -714,14 +712,14 @@ function CreateEventPage() {
                           disabled={isSubmitting}
                         />
                         <div className="w-full">
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Uložit tento seznam jako skupinu</p>
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Příště je pozveš znovu jedním kliknutím.</p>
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('createEvent.saveAsGroup')}</p>
+                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.saveAsGroupHint')}</p>
                           {saveAsGroup ? (
                             <input
                               className="field mt-3"
                               value={groupName}
                               onChange={(event) => setGroupName(event.target.value)}
-                              placeholder="Např. badminton"
+                              placeholder={t('createEvent.groupNamePlaceholder')}
                               disabled={isSubmitting}
                             />
                           ) : null}
@@ -740,14 +738,14 @@ function CreateEventPage() {
                     disabled={isSubmitting}
                   />
                   <div className="w-full">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Uložit tuto akci jako šablonu</p>
-                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Příště založíš podobnou akci jedním kliknutím.</p>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('createEvent.saveAsTemplate')}</p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.saveAsTemplateHint')}</p>
                     {saveAsTemplate ? (
                       <input
                         className="field mt-3"
                         value={templateName}
                         onChange={(event) => setTemplateName(event.target.value)}
-                        placeholder="Např. Badminton"
+                        placeholder={t('createEvent.templateNamePlaceholder')}
                         disabled={isSubmitting}
                       />
                     ) : null}
@@ -758,10 +756,10 @@ function CreateEventPage() {
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
-                {isSubmitting ? 'Zakládám akci…' : 'Vytvořit akci'}
+                {isSubmitting ? t('createEvent.submitting') : t('createEvent.submit')}
               </button>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Po vytvoření dostaneš veřejný odkaz i soukromý organizátorský link.
+                {t('createEvent.submitHint')}
               </p>
             </div>
           </form>

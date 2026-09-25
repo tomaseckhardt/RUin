@@ -5,38 +5,38 @@ const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
 const MAX_FORECAST_DAYS = 16
 
 const WEATHER_CODE_INFO = {
-  0: { label: 'Jasno', icon: '☀️' },
-  1: { label: 'Skoro jasno', icon: '🌤️' },
-  2: { label: 'Polojasno', icon: '⛅' },
-  3: { label: 'Zataženo', icon: '☁️' },
-  45: { label: 'Mlha', icon: '🌫️' },
-  48: { label: 'Mlha s jinovatkou', icon: '🌫️' },
-  51: { label: 'Slabé mrholení', icon: '🌦️' },
-  53: { label: 'Mrholení', icon: '🌦️' },
-  55: { label: 'Vydatné mrholení', icon: '🌦️' },
-  56: { label: 'Mrznoucí mrholení', icon: '🌧️' },
-  57: { label: 'Mrznoucí mrholení', icon: '🌧️' },
-  61: { label: 'Slabý déšť', icon: '🌧️' },
-  63: { label: 'Déšť', icon: '🌧️' },
-  65: { label: 'Vydatný déšť', icon: '🌧️' },
-  66: { label: 'Mrznoucí déšť', icon: '🌧️' },
-  67: { label: 'Mrznoucí déšť', icon: '🌧️' },
-  71: { label: 'Slabé sněžení', icon: '🌨️' },
-  73: { label: 'Sněžení', icon: '🌨️' },
-  75: { label: 'Vydatné sněžení', icon: '🌨️' },
-  77: { label: 'Sněhové zrno', icon: '🌨️' },
-  80: { label: 'Přeháňky', icon: '🌦️' },
-  81: { label: 'Přeháňky', icon: '🌦️' },
-  82: { label: 'Silné přeháňky', icon: '🌧️' },
-  85: { label: 'Sněhové přeháňky', icon: '🌨️' },
-  86: { label: 'Sněhové přeháňky', icon: '🌨️' },
-  95: { label: 'Bouřky', icon: '⛈️' },
-  96: { label: 'Bouřky s kroupami', icon: '⛈️' },
-  99: { label: 'Bouřky s kroupami', icon: '⛈️' },
+  0: { condition: 'clear', icon: '☀️' },
+  1: { condition: 'mostlyClear', icon: '🌤️' },
+  2: { condition: 'partlyCloudy', icon: '⛅' },
+  3: { condition: 'overcast', icon: '☁️' },
+  45: { condition: 'fog', icon: '🌫️' },
+  48: { condition: 'rimeFog', icon: '🌫️' },
+  51: { condition: 'lightDrizzle', icon: '🌦️' },
+  53: { condition: 'drizzle', icon: '🌦️' },
+  55: { condition: 'heavyDrizzle', icon: '🌦️' },
+  56: { condition: 'freezingDrizzle', icon: '🌧️' },
+  57: { condition: 'freezingDrizzle', icon: '🌧️' },
+  61: { condition: 'lightRain', icon: '🌧️' },
+  63: { condition: 'rain', icon: '🌧️' },
+  65: { condition: 'heavyRain', icon: '🌧️' },
+  66: { condition: 'freezingRain', icon: '🌧️' },
+  67: { condition: 'freezingRain', icon: '🌧️' },
+  71: { condition: 'lightSnow', icon: '🌨️' },
+  73: { condition: 'snow', icon: '🌨️' },
+  75: { condition: 'heavySnow', icon: '🌨️' },
+  77: { condition: 'snowGrains', icon: '🌨️' },
+  80: { condition: 'showers', icon: '🌦️' },
+  81: { condition: 'showers', icon: '🌦️' },
+  82: { condition: 'heavyShowers', icon: '🌧️' },
+  85: { condition: 'snowShowers', icon: '🌨️' },
+  86: { condition: 'snowShowers', icon: '🌨️' },
+  95: { condition: 'thunderstorm', icon: '⛈️' },
+  96: { condition: 'thunderstormHail', icon: '⛈️' },
+  99: { condition: 'thunderstormHail', icon: '⛈️' },
 }
 
 function describeWeatherCode(code) {
-  return WEATHER_CODE_INFO[code] || { label: 'Počasí', icon: '🌡️' }
+  return WEATHER_CODE_INFO[code] || { condition: 'unknown', icon: '🌡️' }
 }
 
 function buildGeocodeCandidates(location) {
@@ -46,11 +46,11 @@ function buildGeocodeCandidates(location) {
   return [...new Set([location, firstSegment, withoutDistrictNumber].filter(Boolean))]
 }
 
-async function geocodeLocation(location) {
+async function geocodeLocation(location, language) {
   const candidates = buildGeocodeCandidates(location)
 
   for (const query of candidates) {
-    const url = `${GEOCODING_URL}?name=${encodeURIComponent(query)}&count=1&language=cs&format=json`
+    const url = `${GEOCODING_URL}?name=${encodeURIComponent(query)}&count=1&language=${language}&format=json`
 
     try {
       const response = await fetch(url)
@@ -76,7 +76,10 @@ async function geocodeLocation(location) {
   return null
 }
 
-export async function fetchEventWeather(location, datetimeString) {
+// `condition` is a key under weather.conditions in the locale dictionaries;
+// `language` (an app locale code) only picks the language of the returned
+// place name.
+export async function fetchEventWeather(location, datetimeString, language) {
   if (!location || !datetimeString) {
     return null
   }
@@ -95,7 +98,7 @@ export async function fetchEventWeather(location, datetimeString) {
     return null
   }
 
-  const place = await geocodeLocation(location)
+  const place = await geocodeLocation(location, language)
 
   if (!place) {
     console.warn(`[weather] could not geocode location "${location}"`)
@@ -127,10 +130,10 @@ export async function fetchEventWeather(location, datetimeString) {
   }
 
   const code = data.daily.weathercode[dayIndex]
-  const { label, icon } = describeWeatherCode(code)
+  const { condition, icon } = describeWeatherCode(code)
 
   return {
-    label,
+    condition,
     icon,
     tempMax: Math.round(data.daily.temperature_2m_max[dayIndex]),
     tempMin: Math.round(data.daily.temperature_2m_min[dayIndex]),

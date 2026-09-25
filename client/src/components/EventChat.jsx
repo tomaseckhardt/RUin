@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getChatReactions, getEventChatMessages, sendEventChatMessage, toggleChatReaction } from '../lib/api.js'
+import { getIntlLocale, useI18n } from '../lib/i18n.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
 
 const CHAT_MESSAGE_MAX = 500
@@ -29,7 +30,7 @@ function toTimeLabel(value) {
     return ''
   }
 
-  return date.toLocaleTimeString('cs-CZ', {
+  return date.toLocaleTimeString(getIntlLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   })
@@ -77,6 +78,7 @@ function mergeMessages(previousMessages, fetchedMessages) {
 }
 
 function EventChat({ eventId, currentName, canSend }) {
+  const { t } = useI18n()
   const [messages, setMessages] = useState([])
   const [reactionsByMessage, setReactionsByMessage] = useState({})
   const [messageInput, setMessageInput] = useState('')
@@ -157,7 +159,7 @@ function EventChat({ eventId, currentName, canSend }) {
 
   async function handleToggleReaction(messageId, emoji) {
     if (!currentName?.trim()) {
-      toast.error('Pro reakci se nejdřív pod svým jménem.')
+      toast.error(t('chat.reactNeedsName'))
       return
     }
 
@@ -192,12 +194,12 @@ function EventChat({ eventId, currentName, canSend }) {
     event.preventDefault()
 
     if (!canSend) {
-      toast.error('Pro chat se nejdřív pod svým jménem.')
+      toast.error(t('chat.chatNeedsName'))
       return
     }
 
     if (!currentName?.trim()) {
-      toast.error('Chybí jméno pro chat.')
+      toast.error(t('chat.missingName'))
       return
     }
 
@@ -222,11 +224,11 @@ function EventChat({ eventId, currentName, canSend }) {
     <section className="panel">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.24em]">Live chat</p>
-          <h3 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">Pokec účastníků</h3>
+          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.24em]">{t('chat.eyebrow')}</p>
+          <h3 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{t('chat.title')}</h3>
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-300">
-          {canSend ? 'Mluvte spolu přímo pod pozvánkou.' : 'Pro psaní do chatu nejdřív odešli RSVP.'}
+          {canSend ? t('chat.canSendHint') : t('chat.cannotSendHint')}
         </p>
       </div>
 
@@ -236,11 +238,11 @@ function EventChat({ eventId, currentName, canSend }) {
         className="max-h-80 space-y-3 overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/45"
       >
         {isLoading ? (
-          <p className="text-sm text-slate-500 dark:text-slate-300">Načítám chat…</p>
+          <p className="text-sm text-slate-500 dark:text-slate-300">{t('chat.loading')}</p>
         ) : null}
 
         {!isLoading && messages.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-300">Zatím ticho. Hoď první zprávu.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-300">{t('chat.empty')}</p>
         ) : null}
 
         {messages.map((message) => {
@@ -312,13 +314,13 @@ function EventChat({ eventId, currentName, canSend }) {
           className="field min-h-24"
           value={messageInput}
           onChange={(event) => setMessageInput(event.target.value.slice(0, CHAT_MESSAGE_MAX))}
-          placeholder={canSend ? 'Napiš zprávu ostatním…' : 'Nejdřív potvrď účast nebo pošli omluvenku.'}
+          placeholder={canSend ? t('chat.placeholder') : t('chat.disabledPlaceholder')}
           disabled={!canSend || isSending}
         />
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-500 dark:text-slate-300">Zbývá {remainingCharacters} znaků</p>
+          <p className="text-xs text-slate-500 dark:text-slate-300">{t('common.charactersLeft', { count: remainingCharacters })}</p>
           <button type="submit" className="primary-button" disabled={!canSend || isSending || !messageInput.trim()}>
-            {isSending ? 'Odesílám…' : 'Poslat zprávu'}
+            {isSending ? t('common.sending') : t('chat.send')}
           </button>
         </div>
       </form>

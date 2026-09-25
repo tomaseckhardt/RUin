@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { LOCALE_NAMES, SUPPORTED_LOCALES, useI18n } from '../lib/i18n.js'
 import { useOnlineStatus } from '../lib/useOnlineStatus.js'
 
 function getInitialTheme() {
@@ -19,6 +20,8 @@ function getInitialTheme() {
 function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel = false }) {
   const [theme, setTheme] = useState(getInitialTheme)
   const isOnline = useOnlineStatus()
+  const { locale, setLocale, t } = useI18n()
+  const otherLocale = SUPPORTED_LOCALES.find((code) => code !== locale)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -59,7 +62,16 @@ function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel
               className="secondary-button"
               onClick={() => setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))}
             >
-              {theme === 'dark' ? 'Světlý režim' : 'Tmavý režim'}
+              {theme === 'dark' ? t('shell.lightMode') : t('shell.darkMode')}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              lang={otherLocale}
+              title={t('shell.switchLanguage')}
+              onClick={() => setLocale(otherLocale)}
+            >
+              {LOCALE_NAMES[otherLocale]}
             </button>
             {actions}
           </div>
@@ -69,7 +81,7 @@ function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel
             role="status"
             className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm font-medium leading-6 text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100"
           >
-            Jsi offline - některé věci se neuloží, dokud se nepřipojíš.
+            {t('shell.offline')}
           </div>
         )}
         <main>{children}</main>

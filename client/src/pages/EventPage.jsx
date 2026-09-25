@@ -25,6 +25,7 @@ import {
   unregisterPushSubscription,
 } from "../lib/api.js";
 import { buildAbsoluteUrl, formatDateTime } from "../lib/format.js";
+import { useI18n } from "../lib/i18n.js";
 import {
   isReminderSupported,
   subscribeToEventReminders,
@@ -49,12 +50,6 @@ const SUMMARY_STATUS_GROUPS = [
   "excused_accepted",
   "excused_rejected",
 ];
-const SUMMARY_STATUS_LABELS = {
-  confirmed: "✅ Přijdou",
-  excused: "⏳ Omluvenky (čeká)",
-  excused_accepted: "❌ Omluvenka přijatá",
-  excused_rejected: "⚪ Omluvenka zamítnutá",
-};
 
 function normalizeName(value) {
   return value.trim().toLocaleLowerCase("cs-CZ");
@@ -95,24 +90,10 @@ function writePingCooldownUntil(eventId, targetAttendeeId, until) {
   );
 }
 
-function statusLabel(status) {
-  if (status === "confirmed") {
-    return "Potvrzeno";
-  }
-
-  if (status === "excused") {
-    return "Omluveno (čeká na posouzení)";
-  }
-
-  if (status === "excused_accepted") {
-    return "Omluvenka přijatá";
-  }
-
-  if (status === "excused_rejected") {
-    return "Omluvenka zamítnutá";
-  }
-
-  return "Neznámý stav";
+function statusLabelKey(status) {
+  return SUMMARY_STATUS_GROUPS.includes(status)
+    ? `event.status.${status}`
+    : "event.status.unknown";
 }
 
 function attendeeStatusToFormStatus(status) {
@@ -124,6 +105,7 @@ async function fetchEventPayload(id) {
 }
 
 function EventPage() {
+  const { t } = useI18n();
   const { id } = useParams();
   const navigate = useNavigate();
   const initialIdentity =
@@ -215,19 +197,17 @@ function EventPage() {
           try {
             await unregisterPushSubscription(endpoint);
           } catch {
-            toast.warning(
-              "Připomínku jsme vypnuli jen v tomhle prohlížeči, server o tom neví. Zkus to prosím znovu.",
-            );
+            toast.warning(t("event.reminderOffLocalOnly"));
             return;
           }
         }
 
-        toast.success("Připomínku jsme vypnuli.");
+        toast.success(t("event.reminderTurnedOff"));
       } else {
         const subscription = await subscribeToEventReminders();
         await registerPushSubscription(id, subscription);
         setIsReminderOn(true);
-        toast.success("Připomeneme ti to den i hodinu předem.");
+        toast.success(t("event.reminderTurnedOn"));
       }
     } catch (reminderError) {
       toast.error(reminderError.message);
@@ -241,7 +221,7 @@ function EventPage() {
 
     try {
       await checkInAttendee(id, sessionName);
-      toast.success("Odbaveno, ať ostatní vidí, že jsi na místě!");
+      toast.success(t("event.checkInDone"));
       await loadEvent();
     } catch (checkInError) {
       toast.error(checkInError.message);
@@ -500,13 +480,15 @@ function EventPage() {
         pingMessageInput,
       );
       writePingCooldownUntil(id, pingTargetId, Date.now() + PING_COOLDOWN_MS);
-      toast.success("Šťouchnutí odeslané.");
+      toast.success(t("ping.sent"));
       setShowPingComposerModal(false);
       setPingTargetId(null);
       setPingMessageInput("");
       await loadEvent();
     } catch (pingError) {
-      if (pingError.message.includes("10 minut")) {
+      // Matched against the database's original text - error.message may
+      // already be translated (see toRequestError in lib/api.js).
+      if (pingError.serverMessage?.includes("10 minut")) {
         writePingCooldownUntil(id, pingTargetId, Date.now() + PING_COOLDOWN_MS);
       }
 
@@ -556,7 +538,7 @@ function EventPage() {
 
     try {
       const response = await unlockManageWithPin(id, managePin);
-      toast.success("Správa odemčená.");
+      toast.success(t("event.manageUnlocked"));
       setShowManageModal(false);
       setManagePin("");
       navigate(response.organizerPath);
@@ -607,9 +589,9 @@ function EventPage() {
   if (isLoading) {
     return (
       <PageShell
-        eyebrow="Veřejná pozvánka"
-        title="Načítám akci…"
-        subtitle="Chvilka, lovím data z databáze."
+        eyebrow={t("event.publicInvite")}
+        title={t("event.loadingTitle")}
+        subtitle={t("event.loadingSubtitle")}
       />
     );
   }
@@ -617,9 +599,9 @@ function EventPage() {
   if (error || !payload) {
     return (
       <PageShell
-        eyebrow="Veřejná pozvánka"
-        title="Akci se nepodařilo najít"
-        subtitle={error || "Tenhle odkaz už nic nevrací."}
+        eyebrow={t("event.publicInvite")}
+        title={t("event.notFoundTitle")}
+        subtitle={error || t("common.linkGone")}
       />
     );
   }
@@ -628,7 +610,7 @@ function EventPage() {
 
   return (
     <PageShell
-      eyebrow="live invite page"
+      eyebrow={t("event.eyebrow")}
       title={event.name}
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       mergeNextPanel
@@ -646,20 +628,20 @@ function EventPage() {
             type="button"
             className="secondary-button"
             onClick={() => setShowOverviewModal(true)}>
-            Přehled
+            {t("overview.title")}
           </button>
           <button
             type="button"
             className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-bold text-white shadow-[0_10px_28px_-6px_rgba(111,76,255,0.65)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-6px_rgba(111,76,255,0.8)]"
             style={{ background: "linear-gradient(135deg, #7a1c3f, #6f4cff)" }}
             onClick={() => setShowShareModal(true)}>
-            Pozvánka
+            {t("share.invite")}
           </button>
           <button
             type="button"
             className="secondary-button border-transparent bg-transparent shadow-none hover:bg-slate-100 dark:hover:bg-slate-800"
             onClick={openManageModal}>
-            Spravovat akci
+            {t("event.manage")}
           </button>
         </section>
 
@@ -667,7 +649,7 @@ function EventPage() {
           <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
           <div className="relative">
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">
-              Poznámka k akci
+              {t("event.note")}
             </p>
             <p
               className="mt-4 max-w-3xl rounded-2xl border-l-4 px-5 py-4 text-xl font-semibold leading-8 text-slate-900 shadow-sm dark:text-slate-50"
@@ -680,7 +662,7 @@ function EventPage() {
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <div className="stat-tile">
                 <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
-                  Dorazí
+                  {t("event.statComing")}
                 </div>
                 <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">
                   {summary.confirmed}
@@ -688,7 +670,7 @@ function EventPage() {
               </div>
               <div className="stat-tile">
                 <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
-                  Omluvenky
+                  {t("event.statExcuses")}
                 </div>
                 <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">
                   {summary.excused}
@@ -696,7 +678,7 @@ function EventPage() {
               </div>
               <div className="stat-tile">
                 <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">
-                  Zamítnuto
+                  {t("event.statRejected")}
                 </div>
                 <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">
                   {summary.rejected}
@@ -719,17 +701,20 @@ function EventPage() {
             {!isIdentityLocked || isEditingResponse ? (
               <>
                 <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-                  {isIdentityLocked ? "Změnit účast" : "Odpověz organizátorovi"}
+                  {isIdentityLocked
+                    ? t("event.changeResponse")
+                    : t("event.replyEyebrow")}
                 </p>
                 <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">
                   {isIdentityLocked
-                    ? "Uprav svoji odpověď"
-                    : "Přijdeš, nebo ghostíš?"}
+                    ? t("event.editTitle")
+                    : t("event.replyTitle")}
                 </h2>
                 {isIdentityLocked && sessionAttendee ? (
                   <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    Aktuálně máš stav: {statusLabel(sessionAttendee.status)}. Po
-                    odeslání se tvoje účast přepíše.
+                    {t("event.currentStatusOverwrite", {
+                      status: t(statusLabelKey(sessionAttendee.status)),
+                    })}
                   </p>
                 ) : null}
                 <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
@@ -737,14 +722,14 @@ function EventPage() {
                     <label
                       htmlFor="attendee-name"
                       className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Tvoje jméno
+                      {t("common.yourName")}
                     </label>
                     <input
                       id="attendee-name"
                       className="field"
                       value={name}
                       onChange={(event) => setName(event.target.value)}
-                      placeholder="Třeba Viki"
+                      placeholder={t("common.guestNamePlaceholder")}
                       required
                       disabled={isIdentityLocked}
                     />
@@ -755,7 +740,7 @@ function EventPage() {
                       <label
                         htmlFor="attendee-phone"
                         className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Telefonní číslo
+                        {t("common.phoneNumber")}
                       </label>
                       <input
                         id="attendee-phone"
@@ -772,7 +757,7 @@ function EventPage() {
                   <div
                     className="grid gap-3 sm:grid-cols-2"
                     role="radiogroup"
-                    aria-label="Stav účasti">
+                    aria-label={t("event.attendanceStatus")}>
                     <button
                       type="button"
                       role="radio"
@@ -780,10 +765,10 @@ function EventPage() {
                       className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === "confirmed" ? "border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50" : "border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300"}`}
                       onClick={() => setSelectedStatus("confirmed")}>
                       <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
-                        Potvrzuji účast
+                        {t("event.confirmOption")}
                       </span>
                       <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">
-                        Jdeš a chceš být v line-upu potvrzených.
+                        {t("event.confirmOptionHint")}
                       </span>
                     </button>
                     <button
@@ -793,10 +778,10 @@ function EventPage() {
                       className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === "excused" ? "border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50" : "border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300"}`}
                       onClick={() => setSelectedStatus("excused")}>
                       <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
-                        Omlouvám se
+                        {t("event.excuseOption")}
                       </span>
                       <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">
-                        Můžeš přihodit důvod, pokud chceš znít důvěryhodně.
+                        {t("event.excuseOptionHint")}
                       </span>
                     </button>
                   </div>
@@ -806,7 +791,7 @@ function EventPage() {
                       <label
                         htmlFor="excuse-reason"
                         className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Důvod omluvy
+                        {t("event.excuseReason")}
                       </label>
                       <textarea
                         id="excuse-reason"
@@ -815,7 +800,7 @@ function EventPage() {
                         onChange={(event) =>
                           setExcuseReason(event.target.value)
                         }
-                        placeholder="Nepovinné, ale často zábavné."
+                        placeholder={t("event.excuseReasonPlaceholder")}
                       />
                     </div>
                   ) : null}
@@ -825,14 +810,14 @@ function EventPage() {
                     className="primary-button w-full"
                     disabled={isSubmitting}>
                     {isSubmitting
-                      ? "Odesílám odpověď…"
+                      ? t("event.submitting")
                       : selectedStatus === "confirmed"
                         ? isIdentityLocked
-                          ? "Uložit novou účast"
-                          : "Potvrzuji účast"
+                          ? t("event.saveNewResponse")
+                          : t("event.confirmOption")
                         : isIdentityLocked
-                          ? "Poslat novou omluvenku"
-                          : "Poslat omluvenku"}
+                          ? t("event.sendNewExcuse")
+                          : t("event.sendExcuse")}
                   </button>
 
                   {isIdentityLocked ? (
@@ -840,7 +825,7 @@ function EventPage() {
                       type="button"
                       className="secondary-button w-full justify-center"
                       onClick={handleCancelEdit}>
-                      Zpět
+                      {t("common.back")}
                     </button>
                   ) : null}
                 </form>
@@ -848,21 +833,22 @@ function EventPage() {
             ) : (
               <>
                 <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">
-                  Jsi přihlášený
+                  {t("event.signedInEyebrow")}
                 </p>
                 <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">
                   {sessionName}
                 </h2>
                 <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  Docházka je navázaná na tvoje jméno v této session.
+                  {t("event.identityNote")}{" "}
                   {sessionAttendee
-                    ? ` Aktuální stav: ${statusLabel(sessionAttendee.status)}.`
-                    : " Načítám tvůj aktuální stav…"}
+                    ? t("event.currentStatus", {
+                        status: t(statusLabelKey(sessionAttendee.status)),
+                      })
+                    : t("event.loadingStatus")}
                 </p>
                 {sessionAttendee?.status === "excused_rejected" ? (
                   <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50/90 p-4 text-sm leading-6 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
-                    Organizátor omluvenku zamítl. Můžeš odpověď upravit a poslat
-                    ji znovu.
+                    {t("event.excuseRejectedNotice")}
                   </div>
                 ) : null}
                 {sessionAttendee?.status === "confirmed" ? (
@@ -874,17 +860,17 @@ function EventPage() {
                       isCheckingIn || Boolean(sessionAttendee?.checked_in_at)
                     }>
                     {sessionAttendee?.checked_in_at
-                      ? "📍 Odbaveno, dorazil/a jsi"
+                      ? t("event.checkedIn")
                       : isCheckingIn
-                        ? "Odbavuju…"
-                        : "📍 Dorazil/a jsem"}
+                        ? t("event.checkingIn")
+                        : t("event.checkIn")}
                   </button>
                 ) : null}
                 <button
                   type="button"
                   className="primary-button mt-5 w-full justify-center"
                   onClick={() => setIsEditingResponse(true)}>
-                  Změnit účast
+                  {t("event.changeResponse")}
                 </button>
                 {isReminderSupported() ? (
                   <button
@@ -893,17 +879,17 @@ function EventPage() {
                     onClick={toggleReminder}
                     disabled={isTogglingReminder}>
                     {isTogglingReminder
-                      ? "Chvilku…"
+                      ? t("event.reminderBusy")
                       : isReminderOn
-                        ? "🔔 Připomínka zapnutá (klikni pro vypnutí)"
-                        : "🔔 Připomenout den a hodinu předem"}
+                        ? t("event.reminderOn")
+                        : t("event.reminderOff")}
                   </button>
                 ) : null}
                 <button
                   type="button"
                   className="secondary-button mt-3 w-full"
                   onClick={handleResetIdentity}>
-                  Nejsem to já
+                  {t("event.notMe")}
                 </button>
               </>
             )}
@@ -970,15 +956,15 @@ function EventPage() {
           <div className={MODAL_CARD_CLASS_NAME}>
             <div className="mb-5">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
-                Správa akce
+                {t("pin.eyebrow")}
               </p>
               <h3
                 id="manage-modal-title"
                 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-                Zadej PIN
+                {t("pin.title")}
               </h3>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Pro vstup do správy akce zadej 4místný správcovský PIN.
+                {t("pin.hint")}
               </p>
             </div>
 
@@ -987,7 +973,7 @@ function EventPage() {
                 <label
                   htmlFor="manage-pin"
                   className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Správcovský PIN
+                  {t("pin.label")}
                 </label>
                 <input
                   id="manage-pin"
@@ -1010,13 +996,13 @@ function EventPage() {
                   className="secondary-button flex-1 justify-center"
                   disabled={isUnlockingManage}
                   onClick={closeManageModal}>
-                  Zrušit
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   className="primary-button flex-1"
                   disabled={isUnlockingManage}>
-                  {isUnlockingManage ? "Ověřuji…" : "Vstoupit"}
+                  {isUnlockingManage ? t("common.verifying") : t("pin.enter")}
                 </button>
               </div>
             </form>
@@ -1030,7 +1016,7 @@ function EventPage() {
           {incomingPing ? (
             <div className={MODAL_CARD_CLASS_NAME}>
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
-                Někdo tě šťouchl
+                {t("ping.incomingEyebrow")}
               </p>
               <h3
                 id="incoming-ping-title"
@@ -1039,14 +1025,14 @@ function EventPage() {
               </h3>
               <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
                 {incomingPing.message
-                  ? `Vzkaz: ${incomingPing.message}`
-                  : "Poslal ti šťouchnutí bez zprávy."}
+                  ? t("ping.incomingMessage", { message: incomingPing.message })
+                  : t("ping.incomingNoMessage")}
               </p>
               <button
                 type="button"
                 className="primary-button mt-6 w-full"
                 onClick={closePingModal}>
-                Rozumím
+                {t("ping.gotIt")}
               </button>
             </div>
           ) : null}
@@ -1058,15 +1044,15 @@ function EventPage() {
           labelledBy="ping-composer-title">
           <div className={MODAL_CARD_CLASS_NAME}>
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
-              Šťouchnout účastníka
+              {t("ping.composerEyebrow")}
             </p>
             <h3
               id="ping-composer-title"
               className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-              Přidej zprávu
+              {t("ping.composerTitle")}
             </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Nepovinné. Když nic nenapíšeš, odešle se jen šťouchnutí.
+              {t("ping.composerHint")}
             </p>
 
             <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
@@ -1074,7 +1060,7 @@ function EventPage() {
                 <label
                   htmlFor="ping-message"
                   className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Zpráva
+                  {t("ping.messageLabel")}
                 </label>
                 <textarea
                   id="ping-message"
@@ -1083,12 +1069,14 @@ function EventPage() {
                   onChange={(event) =>
                     setPingMessageInput(event.target.value.slice(0, 280))
                   }
-                  placeholder="Hej, pojď s náma!"
+                  placeholder={t("ping.messagePlaceholder")}
                   disabled={pingBusyId !== null}
                   autoFocus
                 />
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  Zbývá {280 - pingMessageInput.length} znaků
+                  {t("common.charactersLeft", {
+                    count: 280 - pingMessageInput.length,
+                  })}
                 </p>
               </div>
 
@@ -1098,13 +1086,13 @@ function EventPage() {
                   className="secondary-button flex-1 justify-center"
                   disabled={pingBusyId !== null}
                   onClick={closePingComposerModal}>
-                  Zrušit
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   className="primary-button flex-1"
                   disabled={pingBusyId !== null}>
-                  {pingBusyId !== null ? "Šťouchám…" : "Odeslat"}
+                  {pingBusyId !== null ? t("ping.sending") : t("common.send")}
                 </button>
               </div>
             </form>
@@ -1128,7 +1116,7 @@ function EventPage() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">
-                  Přehled
+                  {t("overview.title")}
                 </p>
                 <h3
                   id="overview-modal-title"
@@ -1140,17 +1128,17 @@ function EventPage() {
                 type="button"
                 className="secondary-button shrink-0"
                 onClick={() => setShowOverviewModal(false)}>
-                Zavřít
+                {t("common.close")}
               </button>
             </div>
 
             <div className="space-y-5 max-h-[60vh] overflow-y-auto">
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                  Poznámka akce
+                  {t("overview.note")}
                 </p>
                 <p className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
-                  {event.description || "Bez poznámky."}
+                  {event.description || t("overview.noNote")}
                 </p>
               </div>
               {SUMMARY_STATUS_GROUPS.map((statusGroup) => {
@@ -1160,7 +1148,7 @@ function EventPage() {
                 return (
                   <div key={statusGroup}>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                      {SUMMARY_STATUS_LABELS[statusGroup]} ({group.length})
+                      {t(`overview.groups.${statusGroup}`)} ({group.length})
                     </p>
                     <ul className="space-y-2">
                       {group.map((a) => (

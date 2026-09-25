@@ -1,4 +1,5 @@
 import QRCode from 'qrcode'
+import { t } from './i18n.js'
 
 function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
   const words = String(text || '').split(/\s+/).filter(Boolean)
@@ -80,22 +81,25 @@ export async function createQrPosterDataUrl({ inviteUrl, eventName, eventDateLab
 
   ctx.fillStyle = '#6f4cff'
   ctx.font = '700 40px "Space Grotesk", "Segoe UI", sans-serif'
-  ctx.fillText('RUin? · QR pozvánka', 90, 120)
+  ctx.fillText(t('share.posterHeader'), 90, 120)
 
   ctx.fillStyle = '#1a1a1a'
   ctx.font = '900 66px "Space Grotesk", "Segoe UI", sans-serif'
-  const nextY = wrapCanvasText(ctx, eventName || 'Pozvánka', 90, 220, width - 180, 78, 3)
+  const nextY = wrapCanvasText(ctx, eventName || t('share.posterFallbackTitle'), 90, 220, width - 180, 78, 3)
 
   ctx.fillStyle = '#4b4b4b'
   ctx.font = '500 34px "Space Grotesk", "Segoe UI", sans-serif'
   ctx.fillText(eventDateLabel || '', 90, nextY + 40)
 
   if (isPastEvent) {
-    ctx.fillStyle = '#fee2e2'
-    ctx.fillRect(90, nextY + 80, 290, 64)
-    ctx.fillStyle = '#9f1239'
+    const badgeLabel = t('share.eventOver')
     ctx.font = '700 32px "Space Grotesk", "Segoe UI", sans-serif'
-    ctx.fillText('Akce proběhla', 112, nextY + 124)
+    ctx.fillStyle = '#fee2e2'
+    // Sized to the label rather than a fixed width, since its length
+    // depends on the UI language.
+    ctx.fillRect(90, nextY + 80, ctx.measureText(badgeLabel).width + 44, 64)
+    ctx.fillStyle = '#9f1239'
+    ctx.fillText(badgeLabel, 112, nextY + 124)
   }
 
   const qrSize = 760
@@ -108,7 +112,8 @@ export async function createQrPosterDataUrl({ inviteUrl, eventName, eventDateLab
 
   ctx.fillStyle = '#6f4cff'
   ctx.font = '600 26px "Space Grotesk", "Segoe UI", sans-serif'
-  ctx.fillText('Naskenuj pro otevření pozvánky', 320, 1320)
+  const scanHint = t('share.posterScanHint')
+  ctx.fillText(scanHint, (width - ctx.measureText(scanHint).width) / 2, 1320)
 
   return canvas.toDataURL('image/png')
 }

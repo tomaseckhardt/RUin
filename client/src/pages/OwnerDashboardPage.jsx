@@ -12,13 +12,17 @@ import {
   getOwnerPayload,
   removeContactGroupMember,
 } from '../lib/api.js'
+import { useI18n } from '../lib/i18n.js'
 import { clearSavedOwnerIdentity, getSavedOwner } from '../lib/ownerLinkStorage.js'
 
-function isInvalidOwnerTokenError(message) {
-  return typeof message === 'string' && message.includes('Neplatný přístupový token')
+// Matched against the database's original text, not the (possibly
+// translated) error.message - see toRequestError in lib/api.js.
+function isInvalidOwnerTokenError(error) {
+  return typeof error?.serverMessage === 'string' && error.serverMessage.includes('Neplatný přístupový token')
 }
 
 function OwnerDashboardPage() {
+  const { t } = useI18n()
   const navigate = useNavigate()
   const [owner, setOwner] = useState(() => getSavedOwner())
   const [payload, setPayload] = useState(null)
@@ -35,7 +39,7 @@ function OwnerDashboardPage() {
       setPayload(nextPayload)
       setError('')
     } catch (loadError) {
-      if (isInvalidOwnerTokenError(loadError.message)) {
+      if (isInvalidOwnerTokenError(loadError)) {
         clearSavedOwnerIdentity()
         setOwner(null)
         setPayload(null)
@@ -65,7 +69,7 @@ function OwnerDashboardPage() {
           return
         }
 
-        if (isInvalidOwnerTokenError(loadError.message)) {
+        if (isInvalidOwnerTokenError(loadError)) {
           clearSavedOwnerIdentity()
           setOwner(null)
           setPayload(null)
@@ -95,7 +99,7 @@ function OwnerDashboardPage() {
 
     try {
       await createContactGroup(owner.ownerId, owner.token, newGroupName)
-      toast.success('Skupina uložená.')
+      toast.success(t('owner.groupSaved'))
       setNewGroupName('')
       await loadPayload(owner)
     } catch (createError) {
@@ -110,7 +114,7 @@ function OwnerDashboardPage() {
       return
     }
 
-    const confirmed = window.confirm(`Opravdu chceš smazat skupinu „${groupName}“?`)
+    const confirmed = window.confirm(t('owner.confirmDeleteGroup', { name: groupName }))
 
     if (!confirmed) {
       return
@@ -118,7 +122,7 @@ function OwnerDashboardPage() {
 
     try {
       await deleteContactGroup(owner.ownerId, owner.token, groupId)
-      toast.success('Skupina byla smazaná.')
+      toast.success(t('owner.groupDeleted'))
       await loadPayload(owner)
     } catch (deleteError) {
       toast.error(deleteError.message)
@@ -142,13 +146,13 @@ function OwnerDashboardPage() {
     const form = memberForms[groupId] || { name: '', phone: '' }
 
     if (!form.name.trim() || !form.phone.trim()) {
-      toast.error('Vyplň jméno i telefon.')
+      toast.error(t('owner.fillNameAndPhone'))
       return
     }
 
     try {
       await addContactGroupMember(owner.ownerId, owner.token, groupId, form)
-      toast.success('Člověk je přidaný.')
+      toast.success(t('owner.memberAdded'))
       updateMemberForm(groupId, { name: '', phone: '' })
       await loadPayload(owner)
     } catch (addError) {
@@ -178,7 +182,7 @@ function OwnerDashboardPage() {
       return
     }
 
-    const confirmed = window.confirm(`Opravdu chceš smazat šablonu „${templateName}“?`)
+    const confirmed = window.confirm(t('owner.confirmDeleteTemplate', { name: templateName }))
 
     if (!confirmed) {
       return
@@ -186,7 +190,7 @@ function OwnerDashboardPage() {
 
     try {
       await deleteEventTemplate(owner.ownerId, owner.token, templateId)
-      toast.success('Šablona byla smazaná.')
+      toast.success(t('owner.templateDeleted'))
       await loadPayload(owner)
     } catch (deleteError) {
       toast.error(deleteError.message)
@@ -195,16 +199,16 @@ function OwnerDashboardPage() {
 
   const backButton = (
     <button type="button" className="secondary-button" onClick={() => navigate(-1)}>
-      ← Zpět
+      {t('owner.back')}
     </button>
   )
 
   if (!owner) {
     return (
       <PageShell
-        eyebrow="Skupiny a šablony"
-        title="Přihlas se telefonem a kódem"
-        subtitle="Odtud spravuješ uložené skupiny kontaktů i šablony akcí."
+        eyebrow={t('owner.eyebrow')}
+        title={t('owner.signInTitle')}
+        subtitle={t('owner.signInSubtitle')}
         actions={backButton}
       >
         <OwnerAccessModal open onClose={() => navigate('/')} onAccessGranted={handleAccessGranted} />
@@ -214,36 +218,36 @@ function OwnerDashboardPage() {
 
   if (isLoading) {
     return (
-      <PageShell eyebrow="Skupiny a šablony" title="Načítám…" subtitle="Chvilka, sbírám tvoje skupiny a šablony." actions={backButton} />
+      <PageShell eyebrow={t('owner.eyebrow')} title={t('common.loading')} subtitle={t('owner.loadingSubtitle')} actions={backButton} />
     )
   }
 
   if (error || !payload) {
     return (
-      <PageShell eyebrow="Skupiny a šablony" title="Nepodařilo se načíst" subtitle={error || 'Zkus to znovu.'} actions={backButton} />
+      <PageShell eyebrow={t('owner.eyebrow')} title={t('owner.loadFailedTitle')} subtitle={error || t('owner.tryAgain')} actions={backButton} />
     )
   }
 
   return (
     <PageShell
-      eyebrow="Skupiny a šablony"
-      title="Moje skupiny a šablony"
-      subtitle="Uložené kontakty a šablony akcí, dostupné z jakéhokoli zařízení přes telefon a kód."
+      eyebrow={t('owner.eyebrow')}
+      title={t('owner.title')}
+      subtitle={t('owner.subtitle')}
       actions={backButton}
     >
       <main className="grid gap-6">
         <section className="panel">
-          <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Nová skupina</p>
+          <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('owner.newGroup')}</p>
           <form className="mt-3 flex flex-wrap gap-3" onSubmit={handleCreateGroup}>
             <input
               className="field flex-1"
               value={newGroupName}
               onChange={(event) => setNewGroupName(event.target.value)}
-              placeholder="Např. badminton"
+              placeholder={t('owner.groupNamePlaceholder')}
               disabled={isCreatingGroup}
             />
             <button type="submit" className="primary-button" disabled={isCreatingGroup}>
-              {isCreatingGroup ? 'Ukládám…' : 'Vytvořit'}
+              {isCreatingGroup ? t('common.saving') : t('owner.create')}
             </button>
           </form>
         </section>
@@ -251,7 +255,7 @@ function OwnerDashboardPage() {
         {payload.groups.length === 0 ? (
           <section className="panel">
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Zatím žádné skupiny. Založ novou nahoře, nebo si nějakou ulož při zakládání akce.
+              {t('owner.noGroups')}
             </p>
           </section>
         ) : (
@@ -261,7 +265,7 @@ function OwnerDashboardPage() {
             return (
               <CollapsibleCard
                 key={group.id}
-                eyebrow="Skupina"
+                eyebrow={t('owner.group')}
                 title={group.name}
                 headerActions={
                   <button
@@ -269,7 +273,7 @@ function OwnerDashboardPage() {
                     className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
                     onClick={() => handleDeleteGroup(group.id, group.name)}
                   >
-                    Smazat skupinu
+                    {t('owner.deleteGroup')}
                   </button>
                 }
               >
@@ -294,12 +298,12 @@ function OwnerDashboardPage() {
                         disabled={busyMemberId === member.id}
                         onClick={() => handleRemoveMember(group.id, member.id)}
                       >
-                        Smazat
+                        {t('common.delete')}
                       </button>
                     </li>
                   ))}
                   {group.members.length === 0 ? (
-                    <li className="text-sm text-slate-500 dark:text-slate-400">Zatím nikdo.</li>
+                    <li className="text-sm text-slate-500 dark:text-slate-400">{t('owner.nobodyYet')}</li>
                   ) : null}
                 </ul>
 
@@ -311,17 +315,17 @@ function OwnerDashboardPage() {
                     className="field"
                     value={memberForm.name}
                     onChange={(event) => updateMemberForm(group.id, { name: event.target.value })}
-                    placeholder="Jméno"
+                    placeholder={t('common.name')}
                   />
                   <input
                     className="field"
                     type="tel"
                     value={memberForm.phone}
                     onChange={(event) => updateMemberForm(group.id, { phone: event.target.value })}
-                    placeholder="Telefon"
+                    placeholder={t('common.phone')}
                   />
                   <button type="submit" className="secondary-button">
-                    Přidat
+                    {t('common.add')}
                   </button>
                 </form>
               </CollapsibleCard>
@@ -330,10 +334,10 @@ function OwnerDashboardPage() {
         )}
 
         <section className="panel">
-          <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">Šablony akcí</p>
+          <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('owner.templatesTitle')}</p>
           {payload.templates.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-              Zatím žádné šablony. Uložíš je při zakládání akce.
+              {t('owner.noTemplates')}
             </p>
           ) : (
             <ul className="mt-3 space-y-3">
@@ -346,7 +350,7 @@ function OwnerDashboardPage() {
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{template.name}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {template.eventName} · {template.location}
-                      {template.requirePhone ? ' · telefon povinný' : ''}
+                      {template.requirePhone ? t('common.phoneRequiredSuffix') : ''}
                     </p>
                   </div>
                   <button
@@ -354,7 +358,7 @@ function OwnerDashboardPage() {
                     className="text-xs text-rose-600 hover:underline dark:text-rose-300"
                     onClick={() => handleDeleteTemplate(template.id, template.name)}
                   >
-                    Smazat
+                    {t('common.delete')}
                   </button>
                 </li>
               ))}

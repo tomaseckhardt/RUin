@@ -1,8 +1,10 @@
 import { supabase } from './supabase.js'
+import { setLocale } from './i18n.js'
 import {
   claimSignupItem,
   createEvent,
   getChatReactions,
+  getEvent,
   getEventChatMessages,
   getEventPhotos,
   getEventStops,
@@ -56,6 +58,29 @@ describe('callRpc error handling (via submitRsvp)', () => {
     supabase.rpc.mockResolvedValue({ data: null, error: {} })
 
     await expect(createEvent({ name: 'x' })).rejects.toThrow('Akci se nepodařilo vytvořit.')
+  })
+})
+
+describe('database error messages in the English UI', () => {
+  afterEach(() => {
+    setLocale('cs')
+  })
+
+  it('translates a known message but keeps the original on serverMessage', async () => {
+    setLocale('en')
+    supabase.rpc.mockResolvedValue({ data: null, error: { message: 'Neplatný organizátorský odkaz.' } })
+
+    const error = await getEvent('event-1', 'stale-token').catch((caught) => caught)
+
+    expect(error.message).toBe('Invalid organizer link.')
+    expect(error.serverMessage).toBe('Neplatný organizátorský odkaz.')
+  })
+
+  it('falls back to the English generic message when the error has none', async () => {
+    setLocale('en')
+    supabase.rpc.mockResolvedValue({ data: null, error: {} })
+
+    await expect(createEvent({ name: 'x' })).rejects.toThrow('Couldn’t create the event.')
   })
 })
 

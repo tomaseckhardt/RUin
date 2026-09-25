@@ -1,3 +1,5 @@
+import { getIntlLocale, t } from './i18n.js'
+
 const basePath = import.meta.env.BASE_URL || '/'
 
 function normalizePath(path) {
@@ -45,7 +47,7 @@ export function formatDateTime(dateString) {
   const localDate = parseLocalDateTime(dateString)
 
   if (localDate) {
-    return new Intl.DateTimeFormat('cs-CZ', {
+    return new Intl.DateTimeFormat(getIntlLocale(), {
       dateStyle: 'full',
       timeStyle: 'short',
     }).format(localDate)
@@ -57,7 +59,7 @@ export function formatDateTime(dateString) {
     return dateString
   }
 
-  return new Intl.DateTimeFormat('cs-CZ', {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
     dateStyle: 'full',
     timeStyle: 'short',
   }).format(date)
@@ -70,7 +72,7 @@ export function buildAbsoluteUrl(path) {
 }
 
 export function summaryText(summary) {
-  return `${summary.confirmed} přijde · ${summary.excused} se omluvili`
+  return t('attendees.summary', { confirmed: summary.confirmed, excused: summary.excused })
 }
 
 export function toDateTimeLocalValue(date) {

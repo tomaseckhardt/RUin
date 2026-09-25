@@ -1,3 +1,5 @@
+import { t } from './i18n.js'
+
 const APP_BASE_PATH = import.meta.env.BASE_URL || '/'
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY?.trim() || ''
 
@@ -53,19 +55,19 @@ function subscriptionKeyMatches(subscription, applicationServerKey) {
 
 export async function subscribeToEventReminders() {
   if (!isReminderSupported()) {
-    throw new Error('Tenhle prohlížeč nepodporuje připomínky, nebo appka nemá nastavený VAPID klíč.')
+    throw new Error(t('push.unsupported'))
   }
 
   const permission = await Notification.requestPermission()
 
   if (permission !== 'granted') {
-    throw new Error('Bez povolení notifikací ti připomínku poslat nemůžeme.')
+    throw new Error(t('push.permissionDenied'))
   }
 
   const registration = await ensurePushServiceWorker()
 
   if (!registration) {
-    throw new Error('Service worker se nepodařilo zaregistrovat.')
+    throw new Error(t('push.registrationFailed'))
   }
 
   const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)

@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import PageShell from '../components/PageShell.jsx'
 import { finalizePoll, getPollPayload, votePoll } from '../lib/api.js'
 import { formatDateTime } from '../lib/format.js'
+import { useI18n } from '../lib/i18n.js'
 
 const VOTER_STORAGE_PREFIX = 'ruin-poll-voter'
 
@@ -16,6 +17,7 @@ function voterStorageKey(pollId) {
 }
 
 function PollPage() {
+  const { t } = useI18n()
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -66,7 +68,7 @@ function PollPage() {
     event.preventDefault()
 
     if (!voterName.trim() || !selectedOptionId) {
-      toast.error('Napiš jméno a vyber možnost.')
+      toast.error(t('poll.nameAndOptionRequired'))
       return
     }
 
@@ -75,7 +77,7 @@ function PollPage() {
     try {
       await votePoll(id, selectedOptionId, voterName)
       window.localStorage.setItem(voterStorageKey(id), voterName.trim())
-      toast.success('Hlas uložen.')
+      toast.success(t('poll.voteSaved'))
       await loadPoll()
     } catch (voteError) {
       toast.error(voteError.message)
@@ -95,7 +97,7 @@ function PollPage() {
 
     try {
       const result = await finalizePoll(id, token, finalizingOptionId, organizerPin, payload?.poll?.description)
-      toast.success('Akce založena z ankety!')
+      toast.success(t('poll.eventCreated'))
       navigate(result.organizerPath)
     } catch (finalizeError) {
       toast.error(finalizeError.message)
@@ -105,11 +107,11 @@ function PollPage() {
   }
 
   if (isLoading) {
-    return <PageShell eyebrow="Anketa" title="Načítám anketu…" subtitle="Chvilka." />
+    return <PageShell eyebrow={t('poll.eyebrow')} title={t('poll.loadingTitle')} subtitle={t('poll.loadingSubtitle')} />
   }
 
   if (error || !payload) {
-    return <PageShell eyebrow="Anketa" title="Anketu se nepodařilo najít" subtitle={error || 'Tenhle odkaz už nic nevrací.'} />
+    return <PageShell eyebrow={t('poll.eyebrow')} title={t('poll.notFoundTitle')} subtitle={error || t('common.linkGone')} />
   }
 
   const { poll, options, isCreator } = payload
@@ -117,14 +119,14 @@ function PollPage() {
 
   if (poll.finalizedEventId) {
     return (
-      <PageShell eyebrow="Anketa" title={poll.name} subtitle="Anketa už byla vyhodnocená.">
+      <PageShell eyebrow={t('poll.eyebrow')} title={poll.name} subtitle={t('poll.finalizedSubtitle')}>
         <main className="grid gap-6">
           <section className="panel">
             <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Termín byl vybraný a akce je založená.
+              {t('poll.finalizedText')}
             </p>
             <a className="primary-button mt-4 inline-flex" href={`#/event/${poll.finalizedEventId}`}>
-              Otevřít pozvánku
+              {t('common.openInvite')}
             </a>
           </section>
         </main>
@@ -133,10 +135,10 @@ function PollPage() {
   }
 
   return (
-    <PageShell eyebrow={isCreator ? 'anketa · vyhodnocení' : 'anketa · hlasování'} title={poll.name} subtitle={poll.description || `Založil/a ${poll.creatorName}`}>
+    <PageShell eyebrow={isCreator ? t('poll.creatorEyebrow') : t('poll.voterEyebrow')} title={poll.name} subtitle={poll.description || t('poll.createdBy', { name: poll.creatorName })}>
       <main className="grid gap-6">
         <section className="panel">
-          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Možnosti</p>
+          <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('poll.options')}</p>
           <div className="mt-4 space-y-3">
             {options.map((option) => {
               const isHighlighted = isCreator ? finalizingOptionId === option.id : selectedOptionId === option.id
@@ -166,7 +168,7 @@ function PollPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="status-chip bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {option.votes.length} {option.votes.length === 1 ? 'hlas' : 'hlasů'}
+                    {t('poll.votes', { count: option.votes.length })}
                   </span>
                   {option.votes.length > 0 ? (
                     <span className="text-xs text-slate-500 dark:text-slate-400">{option.votes.join(', ')}</span>
@@ -177,7 +179,7 @@ function PollPage() {
                       className="secondary-button px-3 py-1.5 text-xs"
                       onClick={() => setFinalizingOptionId(option.id)}
                     >
-                      Vybrat
+                      {t('poll.pick')}
                     </button>
                   ) : null}
                 </div>
@@ -190,16 +192,16 @@ function PollPage() {
         {!isCreator ? (
           <form className="panel space-y-4" onSubmit={handleVote}>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tvoje jméno</label>
-              <input className="field" value={voterName} onChange={(event) => setVoterName(event.target.value)} placeholder="Třeba Viki" required />
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('common.yourName')}</label>
+              <input className="field" value={voterName} onChange={(event) => setVoterName(event.target.value)} placeholder={t('common.guestNamePlaceholder')} required />
             </div>
             {myExistingVoteOption ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Aktuálně máš hlas pro <strong>{formatDateTime(myExistingVoteOption.datetime)} · {myExistingVoteOption.location}</strong>. Klidně vyber jinou možnost a hlasuj znovu.
+                {t('poll.currentVote', { option: <strong>{formatDateTime(myExistingVoteOption.datetime)} · {myExistingVoteOption.location}</strong> })}
               </p>
             ) : null}
             <button type="submit" className="primary-button w-full" disabled={isVoting}>
-              {isVoting ? 'Ukládám hlas…' : myExistingVoteOption ? 'Změnit hlas' : 'Hlasovat'}
+              {isVoting ? t('poll.savingVote') : myExistingVoteOption ? t('poll.changeVote') : t('poll.vote')}
             </button>
           </form>
         ) : null}
@@ -207,18 +209,18 @@ function PollPage() {
         {isCreator && finalizingOptionId ? (
           <form className="panel space-y-4" onSubmit={handleFinalize}>
             <div className="flex items-start justify-between gap-4">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">Vyhodnotit anketu</p>
+              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('poll.finalizeTitle')}</p>
               <button type="button" className="text-xs text-slate-500 hover:underline dark:text-slate-400" onClick={() => setFinalizingOptionId(null)}>
-                Zrušit výběr
+                {t('poll.clearSelection')}
               </button>
             </div>
             {chosenOption ? (
               <div className="rounded-2xl border border-fuchsia-200 bg-fuchsia-50/60 p-3 text-sm dark:border-fuchsia-500/50 dark:bg-fuchsia-950/20">
-                Zakládáš akci na <strong>{formatDateTime(chosenOption.datetime)} · {chosenOption.location}</strong>
+                {t('poll.creatingFor', { option: <strong>{formatDateTime(chosenOption.datetime)} · {chosenOption.location}</strong> })}
               </div>
             ) : null}
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              Tohle vytvoří ostrou akci z vybrané možnosti a anketu uzavře. Nastav správcovský PIN pro tu novou akci.
+              {t('poll.finalizeHint')}
             </p>
             <input
               type="password"
@@ -232,7 +234,7 @@ function PollPage() {
               required
             />
             <button type="submit" className="primary-button w-full" disabled={isFinalizing}>
-              {isFinalizing ? 'Zakládám akci…' : 'Finalizovat a založit akci'}
+              {isFinalizing ? t('createEvent.submitting') : t('poll.finalize')}
             </button>
           </form>
         ) : null}
