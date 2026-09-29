@@ -6,3 +6,7 @@ server/data/*.db
 server/data/*.db-*
 .DS_Store
 supabase/.temp/
+
+# graphify: the knowledge graph, its cache, and pages fetched by `graphify add`
+graphify-out/
+/raw/
