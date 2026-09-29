@@ -1,11 +1,5 @@
 import { getIntlLocale, t } from './i18n.js'
 
-const basePath = import.meta.env.BASE_URL || '/'
-
-function normalizePath(path) {
-  return path.startsWith('/') ? path : `/${path}`
-}
-
 export function parseLocalDateTime(dateString) {
   if (typeof dateString !== 'string') {
     return null
@@ -38,31 +32,13 @@ export function parseLocalDateTime(dateString) {
 }
 
 export function formatDateTime(dateString) {
-  const localDate = parseLocalDateTime(dateString)
-
-  if (localDate) {
-    return new Intl.DateTimeFormat(getIntlLocale(), {
-      dateStyle: 'full',
-      timeStyle: 'short',
-    }).format(localDate)
-  }
-
-  const date = new Date(dateString)
-
-  if (Number.isNaN(date.getTime())) {
-    return dateString
-  }
-
-  return new Intl.DateTimeFormat(getIntlLocale(), {
-    dateStyle: 'full',
-    timeStyle: 'short',
-  }).format(date)
+  const date = parseLocalDateTime(dateString) ?? new Date(dateString)
+  return Number.isNaN(date.getTime()) ? dateString : new Intl.DateTimeFormat(getIntlLocale(), { dateStyle: 'full', timeStyle: 'short' }).format(date)
 }
 
+// path starts with '/', e.g. `/event/${id}`; BASE_URL always ends with '/'.
 export function buildAbsoluteUrl(path) {
-  const normalizedPath = normalizePath(path)
-  const base = basePath.endsWith('/') ? basePath : `${basePath}/`
-  return new URL(`${base}#${normalizedPath}`, window.location.origin).toString()
+  return new URL(`${import.meta.env.BASE_URL}#${path}`, window.location.origin).href
 }
 
 export function summaryText(summary) {

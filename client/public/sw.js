@@ -45,12 +45,6 @@ function isCacheableAppShellRequest(request) {
     return false
   }
 
-  // Belt-and-braces: never cache anything under a supabase.co host, even if
-  // it somehow shared this origin (e.g. a same-origin dev proxy rewrite).
-  if (url.hostname.endsWith('supabase.co')) {
-    return false
-  }
-
   const scopePath = new URL(self.registration.scope).pathname
   const relativePath = url.pathname.startsWith(scopePath) ? url.pathname.slice(scopePath.length) : url.pathname
 
@@ -131,43 +125,17 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(handleStaticAssetRequest(request))
 })
 
-function pickNotificationData(eventData) {
-  const scopedIconUrl = new URL('ruinfavicon/web-app-manifest-192x192.png', self.registration.scope).href
-  const scopedBadgeUrl = new URL('ruinfavicon/favicon-96x96.png', self.registration.scope).href
-
-  if (!eventData || typeof eventData !== 'object') {
-    return {
-      title: 'RUin?',
-      body: 'Máte novou notifikaci.',
-      url: '#/',
-      icon: scopedIconUrl,
-      badge: scopedBadgeUrl,
-    }
-  }
-
-  return {
-    title: eventData.title || 'RUin?',
-    body: eventData.body || 'Máte novou notifikaci.',
-    url: eventData.url || '#/',
-    tag: eventData.tag || 'ruin-notification',
-    icon: eventData.icon || scopedIconUrl,
-    badge: eventData.badge || scopedBadgeUrl,
-  }
-}
-
+// send-event-reminders sends title, body, url and tag.
 self.addEventListener('push', (event) => {
-  const payload = event.data ? event.data.json() : null
-  const notification = pickNotificationData(payload)
+  const data = event.data?.json() || {}
 
   event.waitUntil(
-    self.registration.showNotification(notification.title, {
-      body: notification.body,
-      tag: notification.tag,
-      icon: notification.icon,
-      badge: notification.badge,
-      data: {
-        url: notification.url,
-      },
+    self.registration.showNotification(data.title || 'RUin?', {
+      body: data.body || 'Máte novou notifikaci.',
+      tag: data.tag || 'ruin-notification',
+      icon: new URL('ruinfavicon/web-app-manifest-192x192.png', self.registration.scope).href,
+      badge: new URL('ruinfavicon/favicon-96x96.png', self.registration.scope).href,
+      data: { url: data.url || '#/' },
     }),
   )
 })

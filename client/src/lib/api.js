@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { toast } from 'sonner'
+import { readStoredValue, writeStoredValue } from './browserStorage.js'
 import { localizeServerMessage, t } from './i18n.js'
 import { hashPhotoDeleteToken } from './photoDeleteTokens.js'
 
@@ -46,24 +47,15 @@ function toRequestError(error, fallbackMessage) {
 
 function readRetryQueue() {
   try {
-    const raw = window.localStorage.getItem(RETRY_QUEUE_STORAGE_KEY)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed)
-      ? parsed
-          .filter((item) => item && typeof item === 'object' && RETRYABLE_RPCS.has(item.name) && item.args && typeof item.args === 'object')
-          .map((item) => ({ ...item, id: item.id || crypto.randomUUID() }))
-      : []
+    const parsed = JSON.parse(readStoredValue(RETRY_QUEUE_STORAGE_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed.filter((item) => RETRYABLE_RPCS.has(item?.name) && typeof item.args === 'object') : []
   } catch {
     return []
   }
 }
 
 function writeRetryQueue(queue) {
-  try {
-    window.localStorage.setItem(RETRY_QUEUE_STORAGE_KEY, JSON.stringify(queue))
-  } catch {
-    // localStorage unavailable or full - not worth failing the request over.
-  }
+  writeStoredValue(RETRY_QUEUE_STORAGE_KEY, JSON.stringify(queue))
 }
 
 function removeRetryQueueItem(itemId) {
@@ -377,15 +369,7 @@ export function deleteEventTemplate(ownerId, token, templateId) {
 }
 
 export async function getEventChatMessages(eventId, limit = 120) {
-  const { data, error } = await supabase.rpc('get_event_chat_messages', {
-    p_event_id: eventId,
-    p_limit: limit,
-  })
-
-  if (error) {
-    throw toRequestError(error, t('api.errors.getChatMessages'))
-  }
-
+  const data = await callRpc('get_event_chat_messages', { p_event_id: eventId, p_limit: limit }, t('api.errors.getChatMessages'))
   return (data ?? []).reverse()
 }
 
@@ -425,15 +409,7 @@ export async function getChatReactions(eventId, messageIds) {
     return []
   }
 
-  const { data, error } = await supabase.rpc('get_chat_reactions', {
-    p_event_id: eventId,
-    p_message_ids: messageIds,
-  })
-
-  if (error) {
-    throw toRequestError(error, t('api.errors.getChatReactions'))
-  }
-
+  const data = await callRpc('get_chat_reactions', { p_event_id: eventId, p_message_ids: messageIds }, t('api.errors.getChatReactions'))
   return data ?? []
 }
 
@@ -482,12 +458,7 @@ export function deleteSignupItem(eventId, itemId, token) {
 }
 
 export async function getSignupItems(eventId) {
-  const { data, error } = await supabase.rpc('get_event_signup_items', { p_event_id: eventId })
-
-  if (error) {
-    throw toRequestError(error, t('api.errors.getSignupItems'))
-  }
-
+  const data = await callRpc('get_event_signup_items', { p_event_id: eventId }, t('api.errors.getSignupItems'))
   return data ?? []
 }
 
@@ -510,12 +481,7 @@ export function deleteEventStop(eventId, token, stopId) {
 }
 
 export async function getEventStops(eventId) {
-  const { data, error } = await supabase.rpc('get_event_stops', { p_event_id: eventId })
-
-  if (error) {
-    throw toRequestError(error, t('api.errors.getEventStops'))
-  }
-
+  const data = await callRpc('get_event_stops', { p_event_id: eventId }, t('api.errors.getEventStops'))
   return data ?? []
 }
 
@@ -563,12 +529,7 @@ export function recordEventPhoto(eventId, storagePath, uploadedBy, deleteToken) 
 }
 
 export async function getEventPhotos(eventId) {
-  const { data, error } = await supabase.rpc('get_event_photos', { p_event_id: eventId })
-
-  if (error) {
-    throw toRequestError(error, t('api.errors.getEventPhotos'))
-  }
-
+  const data = await callRpc('get_event_photos', { p_event_id: eventId }, t('api.errors.getEventPhotos'))
   return data ?? []
 }
 
@@ -583,22 +544,12 @@ export function deleteOwnEventPhoto(eventId, photoId, photoToken) {
 }
 
 export async function getEventPhotoLikes(eventId) {
-  const { data, error } = await supabase.rpc('get_event_photo_likes', { p_event_id: eventId })
-
-  if (error) {
-    throw toRequestError(error, t('api.errors.getEventPhotoLikes'))
-  }
-
+  const data = await callRpc('get_event_photo_likes', { p_event_id: eventId }, t('api.errors.getEventPhotoLikes'))
   return data ?? []
 }
 
 export async function getEventPhotoComments(eventId) {
-  const { data, error } = await supabase.rpc('get_event_photo_comments', { p_event_id: eventId })
-
-  if (error) {
-    throw toRequestError(error, t('api.errors.getEventPhotoComments'))
-  }
-
+  const data = await callRpc('get_event_photo_comments', { p_event_id: eventId }, t('api.errors.getEventPhotoComments'))
   return data ?? []
 }
 
@@ -677,16 +628,11 @@ export async function sendEventChatMessage(eventId, senderName, message) {
     throw new Error(t('api.chatMessageRequired'))
   }
 
-  const { data, error } = await supabase.rpc('send_event_chat_message', {
-    p_event_id: eventId,
-    p_sender_name: cleanSenderName,
-    p_message: cleanMessage,
-  })
-
-  if (error) {
-    throw toRequestError(error, t('api.errors.sendChatMessage'))
-  }
-
+  const data = await callRpc(
+    'send_event_chat_message',
+    { p_event_id: eventId, p_sender_name: cleanSenderName, p_message: cleanMessage },
+    t('api.errors.sendChatMessage'),
+  )
   return data?.[0]
 }
 
