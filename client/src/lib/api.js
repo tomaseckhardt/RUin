@@ -578,6 +578,53 @@ export function deleteOwnEventPhoto(eventId, photoId, photoToken) {
   return callDeleteEventData({ action: 'delete_photo', eventId, photoId, photoToken }, t('api.errors.deleteEventPhoto'))
 }
 
+export async function getEventPhotoLikes(eventId) {
+  const { data, error } = await supabase.rpc('get_event_photo_likes', { p_event_id: eventId })
+
+  if (error) {
+    throw toRequestError(error, t('api.errors.getEventPhotoLikes'))
+  }
+
+  return data ?? []
+}
+
+export async function getEventPhotoComments(eventId) {
+  const { data, error } = await supabase.rpc('get_event_photo_comments', { p_event_id: eventId })
+
+  if (error) {
+    throw toRequestError(error, t('api.errors.getEventPhotoComments'))
+  }
+
+  return data ?? []
+}
+
+// Resolves to { liked }: whether the photo is now liked under this name.
+export function toggleEventPhotoLike(eventId, photoId, likerName) {
+  return callRpc(
+    'toggle_event_photo_like',
+    { p_event_id: eventId, p_photo_id: photoId, p_liker_name: likerName },
+    t('api.errors.toggleEventPhotoLike'),
+  )
+}
+
+export async function addEventPhotoComment(eventId, photoId, authorName, message) {
+  const data = await callRpc(
+    'add_event_photo_comment',
+    { p_event_id: eventId, p_photo_id: photoId, p_author_name: authorName, p_message: message },
+    t('api.errors.addEventPhotoComment'),
+  )
+
+  return data?.[0]
+}
+
+export function deleteEventPhotoComment(eventId, token, commentId) {
+  return callRpc(
+    'delete_event_photo_comment',
+    { p_event_id: eventId, p_token: token, p_comment_id: commentId },
+    t('api.errors.deleteEventPhotoComment'),
+  )
+}
+
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 // deleteToken is the photo's delete token (lib/photoDeleteTokens.js). The file

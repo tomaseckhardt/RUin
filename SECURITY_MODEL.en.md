@@ -33,7 +33,8 @@ or endpoint needs to keep in mind.
 
 RUin doesn't use Supabase Auth, user accounts, passwords or session tokens tied
 to a user. The guest's name in the RSVP form, the sender's name in the chat, the
-name in the "who brings what" list, the name on a nudge (ping) - all of it is
+name in the "who brings what" list, the name on a nudge (ping), the name on a
+photo like or comment - all of it is
 plain text that the author typed into an input, and the app saves it without
 any verification.
 

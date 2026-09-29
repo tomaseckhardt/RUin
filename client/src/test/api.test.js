@@ -12,8 +12,13 @@ import {
   getSignupItems,
   moderateAttendee,
   removeEvent,
+  addEventPhotoComment,
   deleteEventPhoto,
+  deleteEventPhotoComment,
   deleteOwnEventPhoto,
+  getEventPhotoComments,
+  getEventPhotoLikes,
+  toggleEventPhotoLike,
   recordEventPhoto,
   replayRetryQueue,
   sendEventChatMessage,
@@ -320,5 +325,45 @@ describe('uploadEventPhoto file name', () => {
     const expectedHash = createHash('sha256').update('delete-token-1').digest('hex')
     expect(storagePath).toBe(`event-1/${expectedHash}.JPG`)
     expect(upload).toHaveBeenCalledWith(storagePath, file)
+  })
+})
+
+describe('photo likes and comments', () => {
+  it('reads likes and comments through event-scoped RPCs', async () => {
+    supabase.rpc.mockResolvedValue({ data: [], error: null })
+
+    await getEventPhotoLikes('event-1')
+    await getEventPhotoComments('event-1')
+
+    expect(supabase.rpc).toHaveBeenCalledWith('get_event_photo_likes', { p_event_id: 'event-1' })
+    expect(supabase.rpc).toHaveBeenCalledWith('get_event_photo_comments', { p_event_id: 'event-1' })
+  })
+
+  it('toggles a like under the given name', async () => {
+    supabase.rpc.mockResolvedValue({ data: { success: true, liked: true }, error: null })
+
+    await expect(toggleEventPhotoLike('event-1', 12, 'Alice')).resolves.toEqual({ success: true, liked: true })
+    expect(supabase.rpc).toHaveBeenCalledWith('toggle_event_photo_like', { p_event_id: 'event-1', p_photo_id: 12, p_liker_name: 'Alice' })
+  })
+
+  it('returns the saved comment row', async () => {
+    const row = { id: 3, photo_id: 12, author_name: 'Alice', message: 'Hezká', created_at: 'now' }
+    supabase.rpc.mockResolvedValue({ data: [row], error: null })
+
+    await expect(addEventPhotoComment('event-1', 12, 'Alice', 'Hezká')).resolves.toEqual(row)
+    expect(supabase.rpc).toHaveBeenCalledWith('add_event_photo_comment', {
+      p_event_id: 'event-1',
+      p_photo_id: 12,
+      p_author_name: 'Alice',
+      p_message: 'Hezká',
+    })
+  })
+
+  it('deletes a comment with the organizer token', async () => {
+    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+
+    await deleteEventPhotoComment('event-1', 'organizer-token', 3)
+
+    expect(supabase.rpc).toHaveBeenCalledWith('delete_event_photo_comment', { p_event_id: 'event-1', p_token: 'organizer-token', p_comment_id: 3 })
   })
 })

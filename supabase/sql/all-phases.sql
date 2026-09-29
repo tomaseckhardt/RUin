@@ -6832,3 +6832,263 @@ $$;
 grant execute on function public.delete_event_photo(text, text, bigint, text) to anon, authenticated;
 
 commit;
+
+-- ==================== Photo comments and likes ====================
+-- Anyone with the invite can like a photo and comment on it under their name,
+-- the same way the chat works: names are labels, not identities (see
+-- SECURITY_MODEL.md). One like per name and photo, case-insensitive. Only the
+-- organizer can delete a comment. Likes and comments go with their photo (on
+-- delete cascade), and new realtime tick reasons ('photo', 'photo_like',
+-- 'photo_comment') tell open galleries to refetch.
+
+begin;
+
+create table if not exists public.event_photo_likes (
+  id bigint generated always as identity primary key,
+  photo_id bigint not null references public.event_photos(id) on delete cascade,
+  event_id text not null references public.events(id) on delete cascade,
+  liker_name text not null check (length(liker_name) between 1 and 80),
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists event_photo_likes_photo_name_idx
+  on public.event_photo_likes (photo_id, lower(liker_name));
+
+create index if not exists event_photo_likes_event_idx
+  on public.event_photo_likes (event_id);
+
+create table if not exists public.event_photo_comments (
+  id bigint generated always as identity primary key,
+  photo_id bigint not null references public.event_photos(id) on delete cascade,
+  event_id text not null references public.events(id) on delete cascade,
+  author_name text not null check (length(author_name) between 1 and 80),
+  message text not null check (length(message) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists event_photo_comments_photo_created_idx
+  on public.event_photo_comments (photo_id, created_at);
+
+create index if not exists event_photo_comments_event_idx
+  on public.event_photo_comments (event_id);
+
+-- No direct table access at all; the RPCs below are the only way in.
+alter table public.event_photo_likes enable row level security;
+alter table public.event_photo_comments enable row level security;
+
+drop policy if exists "event_photo_likes_no_direct_access" on public.event_photo_likes;
+create policy "event_photo_likes_no_direct_access"
+  on public.event_photo_likes
+  for all
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+drop policy if exists "event_photo_comments_no_direct_access" on public.event_photo_comments;
+create policy "event_photo_comments_no_direct_access"
+  on public.event_photo_comments
+  for all
+  to anon, authenticated
+  using (false)
+  with check (false);
+
+create or replace function public.get_event_photo_likes(p_event_id text)
+returns table (photo_id bigint, liker_name text)
+language sql
+security definer
+set search_path = public
+as $$
+  select l.photo_id, l.liker_name
+  from public.event_photo_likes l
+  where l.event_id = p_event_id
+  order by l.created_at asc, l.id asc;
+$$;
+
+create or replace function public.get_event_photo_comments(p_event_id text)
+returns table (id bigint, photo_id bigint, author_name text, message text, created_at timestamptz)
+language sql
+security definer
+set search_path = public
+as $$
+  select c.id, c.photo_id, c.author_name, c.message, c.created_at
+  from public.event_photo_comments c
+  where c.event_id = p_event_id
+  order by c.created_at asc, c.id asc;
+$$;
+
+create or replace function public.toggle_event_photo_like(
+  p_event_id text,
+  p_photo_id bigint,
+  p_liker_name text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_liker_name text := nullif(trim(p_liker_name), '');
+begin
+  if v_liker_name is null then
+    raise exception 'Pro lajk vyplň svoje jméno.';
+  end if;
+
+  if length(v_liker_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
+  if not exists (select 1 from public.event_photos p where p.id = p_photo_id and p.event_id = p_event_id) then
+    raise exception 'Fotka nebyla nalezena.';
+  end if;
+
+  delete from public.event_photo_likes l
+  where l.photo_id = p_photo_id and lower(l.liker_name) = lower(v_liker_name);
+
+  if found then
+    return jsonb_build_object('success', true, 'liked', false);
+  end if;
+
+  -- A concurrent like under the same name already did the job.
+  insert into public.event_photo_likes (photo_id, event_id, liker_name)
+  values (p_photo_id, p_event_id, v_liker_name)
+  on conflict do nothing;
+
+  return jsonb_build_object('success', true, 'liked', true);
+end;
+$$;
+
+create or replace function public.add_event_photo_comment(
+  p_event_id text,
+  p_photo_id bigint,
+  p_author_name text,
+  p_message text
+)
+returns table (id bigint, photo_id bigint, author_name text, message text, created_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_author_name text := nullif(trim(p_author_name), '');
+  v_message text := nullif(trim(p_message), '');
+  v_last_comment_at timestamptz;
+begin
+  if v_author_name is null then
+    raise exception 'Pro komentář vyplň svoje jméno.';
+  end if;
+
+  if length(v_author_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
+  if v_message is null then
+    raise exception 'Napiš komentář.';
+  end if;
+
+  if length(v_message) > 500 then
+    raise exception 'Komentář může mít nejvýš 500 znaků.';
+  end if;
+
+  -- Locks the photo against other comments on it (so the per-photo cap
+  -- below holds) and against its deletion, but not against likes.
+  perform 1 from public.event_photos p where p.id = p_photo_id and p.event_id = p_event_id for no key update;
+
+  if not found then
+    raise exception 'Fotka nebyla nalezena.';
+  end if;
+
+  -- The same 3-second throttle per name as the chat.
+  select max(c.created_at)
+  into v_last_comment_at
+  from public.event_photo_comments c
+  where c.event_id = p_event_id and lower(c.author_name) = lower(v_author_name);
+
+  if v_last_comment_at > now() - interval '3 seconds' then
+    raise exception 'Komentáře posíláš moc rychle, chvilku počkej.';
+  end if;
+
+  if (select count(*) from public.event_photo_comments c where c.photo_id = p_photo_id) >= 200 then
+    raise exception 'Tahle fotka už má maximum komentářů.';
+  end if;
+
+  return query
+  insert into public.event_photo_comments as c (photo_id, event_id, author_name, message)
+  values (p_photo_id, p_event_id, v_author_name, v_message)
+  returning c.id, c.photo_id, c.author_name, c.message, c.created_at;
+end;
+$$;
+
+create or replace function public.delete_event_photo_comment(
+  p_event_id text,
+  p_token text,
+  p_comment_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.events e where e.id = p_event_id and e.organizer_token = p_token) then
+    raise exception 'Neplatný organizátorský odkaz.';
+  end if;
+
+  delete from public.event_photo_comments c
+  where c.id = p_comment_id and c.event_id = p_event_id;
+
+  if not found then
+    raise exception 'Komentář nebyl nalezen.';
+  end if;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.get_event_photo_likes(text) to anon, authenticated;
+grant execute on function public.get_event_photo_comments(text) to anon, authenticated;
+grant execute on function public.toggle_event_photo_like(text, bigint, text) to anon, authenticated;
+grant execute on function public.add_event_photo_comment(text, bigint, text, text) to anon, authenticated;
+grant execute on function public.delete_event_photo_comment(text, text, bigint) to anon, authenticated;
+
+-- --- Realtime: galleries refetch on these ticks instead of reading the
+-- tables directly (see "Realtime read hardening").
+
+alter table public.event_realtime_ticks drop constraint if exists event_realtime_ticks_reason_check;
+alter table public.event_realtime_ticks add constraint event_realtime_ticks_reason_check
+  check (reason in (
+    'event', 'attendee', 'ping', 'chat_message', 'chat_reaction', 'signup_item', 'signup_claim', 'stop',
+    'photo', 'photo_like', 'photo_comment'
+  ));
+
+-- For tables with their own event_id column; the trigger passes the reason.
+create or replace function public.emit_event_realtime_tick_from_event_row()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.emit_event_realtime_tick(coalesce(new.event_id, old.event_id), tg_argv[0]);
+  return coalesce(new, old);
+end;
+$$;
+
+drop trigger if exists event_photos_emit_event_realtime_tick_tg on public.event_photos;
+create trigger event_photos_emit_event_realtime_tick_tg
+after insert or delete on public.event_photos
+for each row
+execute function public.emit_event_realtime_tick_from_event_row('photo');
+
+drop trigger if exists event_photo_likes_emit_event_realtime_tick_tg on public.event_photo_likes;
+create trigger event_photo_likes_emit_event_realtime_tick_tg
+after insert or delete on public.event_photo_likes
+for each row
+execute function public.emit_event_realtime_tick_from_event_row('photo_like');
+
+drop trigger if exists event_photo_comments_emit_event_realtime_tick_tg on public.event_photo_comments;
+create trigger event_photo_comments_emit_event_realtime_tick_tg
+after insert or delete on public.event_photo_comments
+for each row
+execute function public.emit_event_realtime_tick_from_event_row('photo_comment');
+
+commit;

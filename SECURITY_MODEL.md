@@ -29,7 +29,8 @@ který musí mít v hlavě každý, kdo přidává novou tabulku, RPC funkci neb
 
 RUin nepoužívá Supabase Auth, žádné uživatelské účty, hesla ani session tokeny
 vázané na uživatele. Jméno účastníka v RSVP formuláři, jméno odesílatele v chatu,
-jméno "kdo si bere co" v seznamu na sraz, jméno u šťouchnutí (ping) - to všechno
+jméno "kdo si bere co" v seznamu na sraz, jméno u šťouchnutí (ping), jméno u
+lajku nebo komentáře fotky - to všechno
 je prostý text, který si autor sám napsal do inputu a appka ho bez ověření uloží.
 
 Důsledek: pokud dva lidé na stejné akci napíšou stejné jméno (schválně, nebo

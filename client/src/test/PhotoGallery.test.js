@@ -1,17 +1,40 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import PhotoGallery from '../components/PhotoGallery.jsx'
-import { deleteEventPhoto, deleteOwnEventPhoto, getEventPhotos, recordEventPhoto, uploadEventPhoto } from '../lib/api.js'
+import { axe, toHaveNoViolations } from 'jest-axe'
+import {
+  addEventPhotoComment,
+  deleteEventPhoto,
+  deleteEventPhotoComment,
+  deleteOwnEventPhoto,
+  getEventPhotoComments,
+  getEventPhotoLikes,
+  getEventPhotos,
+  recordEventPhoto,
+  toggleEventPhotoLike,
+  uploadEventPhoto,
+} from '../lib/api.js'
 import { getPhotoDeleteToken, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
 
 jest.mock('../lib/api.js', () => ({
+  addEventPhotoComment: jest.fn(),
   deleteEventPhoto: jest.fn(),
+  deleteEventPhotoComment: jest.fn(),
   deleteOwnEventPhoto: jest.fn(),
+  getEventPhotoComments: jest.fn(),
+  getEventPhotoLikes: jest.fn(),
   getEventPhotoUrl: jest.fn((path) => `https://photos.example/${path}`),
   getEventPhotos: jest.fn(),
   recordEventPhoto: jest.fn(),
+  toggleEventPhotoLike: jest.fn(),
   uploadEventPhoto: jest.fn(),
 }))
+
+jest.mock('../lib/realtimeTick.js', () => ({
+  subscribeToEventTicks: jest.fn(() => () => {}),
+}))
+
+expect.extend(toHaveNoViolations)
 
 const PHOTOS = [
   { id: 1, storage_path: 'event-1/mine.jpg', uploaded_by: 'Alice', created_at: '2026-01-02T00:00:00Z' },
@@ -24,6 +47,8 @@ beforeEach(() => {
   jest.clearAllMocks()
   window.localStorage.removeItem('ruin-photo-delete-tokens')
   getEventPhotos.mockResolvedValue(PHOTOS)
+  getEventPhotoLikes.mockResolvedValue([])
+  getEventPhotoComments.mockResolvedValue([])
   deleteEventPhoto.mockResolvedValue({ success: true })
   deleteOwnEventPhoto.mockResolvedValue({ success: true })
   jest.spyOn(window, 'confirm').mockReturnValue(true)
@@ -175,5 +200,162 @@ describe('PhotoGallery upload', () => {
     expect(deleteToken).not.toBe('')
     expect(uploadEventPhoto).toHaveBeenCalledWith('event-1', file, deleteToken)
     expect(recordEventPhoto).toHaveBeenCalledWith('event-1', 'event-1/uploaded.jpg', 'Alice', deleteToken)
+  })
+})
+
+describe('PhotoGallery likes and comments', () => {
+  const COMMENTS = [
+    { id: 10, photo_id: 1, author_name: 'Bob', message: 'Pěkná!', created_at: '2026-01-02T10:00:00Z' },
+    { id: 11, photo_id: 1, author_name: 'Cyril', message: 'Kde to je?', created_at: '2026-01-02T11:00:00Z' },
+  ]
+
+  it('shows like and comment counts on the thumbnails', async () => {
+    getEventPhotoLikes.mockResolvedValue([
+      { photo_id: 1, liker_name: 'Bob' },
+      { photo_id: 1, liker_name: 'Cyril' },
+    ])
+    getEventPhotoComments.mockResolvedValue(COMMENTS)
+
+    const { container } = render(<PhotoGallery eventId="event-1" currentName="Alice" />)
+
+    await screen.findByAltText('Fotka od Alice')
+    const [alicesTile, bobsTile] = container.querySelectorAll('.aspect-square')
+    expect(alicesTile).toHaveTextContent('♥ 2')
+    expect(alicesTile).toHaveTextContent('💬 2')
+    expect(bobsTile).not.toHaveTextContent('♥')
+  })
+
+  it('likes a photo under the viewer’s name and takes the like back', async () => {
+    const user = userEvent.setup()
+    getEventPhotoLikes.mockResolvedValue([{ photo_id: 1, liker_name: 'Bob' }])
+    toggleEventPhotoLike.mockResolvedValueOnce({ success: true, liked: true }).mockResolvedValueOnce({ success: true, liked: false })
+
+    render(<PhotoGallery eventId="event-1" currentName="Alice" />)
+    await user.click(await screen.findByAltText('Fotka od Alice'))
+    const lightbox = screen.getByRole('dialog')
+    const likeButton = within(lightbox).getByRole('button', { name: 'Líbí se mi' })
+    expect(likeButton).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(likeButton)
+
+    expect(toggleEventPhotoLike).toHaveBeenCalledWith('event-1', 1, 'Alice')
+    expect(likeButton).toHaveAttribute('aria-pressed', 'true')
+    expect(within(lightbox).getByText('2 lajky')).toBeInTheDocument()
+    expect(within(lightbox).getByText('Líbí se: Bob, Alice')).toBeInTheDocument()
+
+    await user.click(likeButton)
+
+    expect(likeButton).toHaveAttribute('aria-pressed', 'false')
+    expect(within(lightbox).getByText('1 lajk')).toBeInTheDocument()
+  })
+
+  it('asks for a name before a like or a comment', async () => {
+    const user = userEvent.setup()
+
+    render(<PhotoGallery eventId="event-1" currentName="" />)
+    await user.click(await screen.findByAltText('Fotka od Alice'))
+    const lightbox = screen.getByRole('dialog')
+
+    await user.click(within(lightbox).getByRole('button', { name: 'Líbí se mi' }))
+    await user.type(within(lightbox).getByLabelText('Komentář k fotce'), 'Ahoj')
+    await user.click(within(lightbox).getByRole('button', { name: 'Přidat komentář' }))
+
+    expect(toggleEventPhotoLike).not.toHaveBeenCalled()
+    expect(addEventPhotoComment).not.toHaveBeenCalled()
+  })
+
+  it('adds a comment to the open photo and clears the draft', async () => {
+    const user = userEvent.setup()
+    addEventPhotoComment.mockImplementation(async (_eventId, photoId, authorName, message) => ({
+      id: 20,
+      photo_id: photoId,
+      author_name: authorName,
+      message,
+      created_at: '2026-01-03T09:00:00Z',
+    }))
+
+    render(<PhotoGallery eventId="event-1" currentName="Alice" />)
+    await user.click(await screen.findByAltText('Fotka od Bob'))
+    const lightbox = screen.getByRole('dialog')
+    expect(within(lightbox).getByText('Zatím bez komentářů. Napiš první.')).toBeInTheDocument()
+
+    const commentInput = within(lightbox).getByLabelText('Komentář k fotce')
+    await user.type(commentInput, 'Super fotka')
+    await user.click(within(lightbox).getByRole('button', { name: 'Přidat komentář' }))
+
+    expect(addEventPhotoComment).toHaveBeenCalledWith('event-1', 2, 'Alice', 'Super fotka')
+    expect(await within(lightbox).findByText('Super fotka')).toBeInTheDocument()
+    expect(commentInput).toHaveValue('')
+    expect(commentInput).toHaveFocus()
+  })
+
+  it('keeps the draft when the comment can’t be saved', async () => {
+    const user = userEvent.setup()
+    addEventPhotoComment.mockRejectedValue(new Error('Komentáře posíláš moc rychle, chvilku počkej.'))
+
+    render(<PhotoGallery eventId="event-1" currentName="Alice" />)
+    await user.click(await screen.findByAltText('Fotka od Bob'))
+    const commentInput = within(screen.getByRole('dialog')).getByLabelText('Komentář k fotce')
+    await user.type(commentInput, 'Super fotka')
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Přidat komentář' }))
+
+    await waitFor(() => {
+      expect(addEventPhotoComment).toHaveBeenCalled()
+    })
+    expect(commentInput).toHaveValue('Super fotka')
+  })
+
+  it('doesn’t switch photos when arrow keys are used while typing a comment', async () => {
+    const user = userEvent.setup()
+
+    render(<PhotoGallery eventId="event-1" currentName="Alice" />)
+    await user.click(await screen.findByAltText('Fotka od Alice'))
+    const lightbox = screen.getByRole('dialog')
+
+    await user.type(within(lightbox).getByLabelText('Komentář k fotce'), 'Ahoj{ArrowLeft}{ArrowRight}')
+
+    expect(within(lightbox).getByText('Fotka od Alice · 1 / 2')).toBeInTheDocument()
+  })
+
+  it('lets only the organizer delete comments', async () => {
+    const user = userEvent.setup()
+    getEventPhotoComments.mockResolvedValue(COMMENTS)
+    deleteEventPhotoComment.mockResolvedValue({ success: true })
+
+    const { unmount } = render(<PhotoGallery eventId="event-1" currentName="Alice" />)
+    await user.click(await screen.findByAltText('Fotka od Alice'))
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Smazat komentář od Bob' })).not.toBeInTheDocument()
+    unmount()
+
+    render(<PhotoGallery eventId="event-1" currentName="Organizátor" isOrganizer organizerToken="organizer-token" />)
+    await user.click(await screen.findByAltText('Fotka od Alice'))
+    const lightbox = screen.getByRole('dialog')
+    await user.click(within(lightbox).getByRole('button', { name: 'Smazat komentář od Bob' }))
+
+    expect(deleteEventPhotoComment).toHaveBeenCalledWith('event-1', 'organizer-token', 10)
+    await waitFor(() => {
+      expect(within(lightbox).queryByText('Pěkná!')).not.toBeInTheDocument()
+    })
+    expect(within(lightbox).getByText('Kde to je?')).toBeInTheDocument()
+    expect(within(lightbox).getByLabelText('Komentář k fotce')).toHaveFocus()
+  })
+
+  it('still shows the photos when likes and comments can’t be loaded', async () => {
+    getEventPhotoLikes.mockRejectedValue(new Error('Lajky u fotek se nepodařilo načíst.'))
+    getEventPhotoComments.mockRejectedValue(new Error('Komentáře u fotek se nepodařilo načíst.'))
+
+    render(<PhotoGallery eventId="event-1" currentName="Alice" />)
+
+    expect(await screen.findByAltText('Fotka od Alice')).toBeInTheDocument()
+  })
+
+  it('has no axe violations in the lightbox with comments', async () => {
+    const user = userEvent.setup()
+    getEventPhotoComments.mockResolvedValue(COMMENTS)
+
+    render(<PhotoGallery eventId="event-1" currentName="Organizátor" isOrganizer organizerToken="organizer-token" />)
+    await user.click(await screen.findByAltText('Fotka od Alice'))
+
+    expect(await axe(screen.getByRole('dialog'))).toHaveNoViolations()
   })
 })

@@ -40,6 +40,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 - nudges (pings) with a message for people who aren't coming (the same person can be nudged again only after 10 minutes)
 - a chat for each event, with emoji reactions to messages
 - an event photo album with a clickable preview (arrows between photos) and a bulk download of everyone else's photos (one click, as a ZIP, without the ones the signed-in user uploaded themselves)
+- likes and comments on photos: anyone with the invite can like and comment on a photo under their name, and the counts show right in the album
 - a weather forecast for the event's place and time (Open-Meteo, up to 16 days ahead)
 - adding the event to a calendar (Google Calendar; on iPhone an `.ics` file with a reminder 2 days before) and the app to the phone's home screen (PWA)
 - sharing the invite (link, QR code, downloadable QR poster)
@@ -47,7 +48,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 
 **For organizers**
 
-- event management: editing the details (name, place, date, description, required phone, modules), accepting and rejecting excuses, removing guests, stops, items and photos, removing anyone from an item, deleting the whole event
+- event management: editing the details (name, place, date, description, required phone, modules), accepting and rejecting excuses, removing guests, stops, items, photos and photo comments, removing anyone from an item, deleting the whole event
 - getting into management through the link with its token, or from the invite by entering the PIN; the browser remembers the sign-in, and after repeated wrong attempts the PIN is temporarily locked
 - "My recent events" on the home page - a shortcut into managing the events created in this browser
 - inviting people in advance (name + phone) - they show up in the list as "Invited" until they reply themselves
@@ -163,6 +164,7 @@ What `all-phases.sql` contains:
 - Read hardening: chat, photos, polls, lists and stops can only be read through RPCs scoped to a specific event (the direct `select` policies are `using (false)`), and realtime goes through `event_realtime_ticks`.
 - The organizer as a separate identity (`events.organizer_name`) - chat messages, nudges, photos and items from event management are signed with the organizer's name.
 - Server-side limits on photo uploads (bucket `event-photos`: 10 MB max, images only, at most 50 photos per event, and uploads restricted to folders for existing events).
+- Photo likes and comments (`event_photo_likes`, `event_photo_comments`): reads and writes go through RPCs only (`get_event_photo_likes`, `get_event_photo_comments`, `toggle_event_photo_like`, `add_event_photo_comment`, `delete_event_photo_comment`), one like per name and photo, comments up to 500 characters, at most 200 comments per photo, and only the organizer can delete comments. Open albums refresh through the `photo`, `photo_like` and `photo_comment` realtime ticks.
 - Feedback (bug reports and ideas): `feedback_reports` + RPCs `submit_feedback_report`/`get_feedback_reports`. Reading them at `/feedback` is deliberately public, without a PIN - anyone at that address sees the name and text of every report.
 - Contact groups and event templates (`owners`, `contact_groups`, `contact_group_members`, `event_templates`) tied to an account identified by name, phone and a 6-digit code (`access_owner_account`; the code is stored as a bcrypt hash and is temporarily locked after repeated wrong attempts) + inviting people into an event in bulk (`invite_attendees`, status `invited`).
 - Optional event modules (`enable_bring_list`, `enable_carpool`, `enable_stops`).

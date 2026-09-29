@@ -2,17 +2,47 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import JSZip from 'jszip'
 import ModalOverlay from './ModalOverlay.jsx'
-import { deleteEventPhoto, deleteOwnEventPhoto, getEventPhotoUrl, getEventPhotos, recordEventPhoto, uploadEventPhoto } from '../lib/api.js'
+import PhotoComments from './PhotoComments.jsx'
+import {
+  addEventPhotoComment,
+  deleteEventPhoto,
+  deleteEventPhotoComment,
+  deleteOwnEventPhoto,
+  getEventPhotoComments,
+  getEventPhotoLikes,
+  getEventPhotoUrl,
+  getEventPhotos,
+  recordEventPhoto,
+  toggleEventPhotoLike,
+  uploadEventPhoto,
+} from '../lib/api.js'
 import { useI18n } from '../lib/i18n.js'
 import { clearPhotoDeleteToken, createPhotoDeleteToken, getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
+import { subscribeToEventTicks } from '../lib/realtimeTick.js'
+
+const NO_ROWS = []
 
 function normalizeName(value) {
   return (value || '').trim().toLocaleLowerCase('cs-CZ')
 }
 
+function groupByPhoto(rows, pick) {
+  const groups = new Map()
+
+  for (const row of rows) {
+    const group = groups.get(row.photo_id) || []
+    group.push(pick(row))
+    groups.set(row.photo_id, group)
+  }
+
+  return groups
+}
+
 function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToken = null }) {
   const { t } = useI18n()
   const [photos, setPhotos] = useState([])
+  const [likes, setLikes] = useState([])
+  const [comments, setComments] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
@@ -20,7 +50,9 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   // one when the list changes under it (and closes when that photo is gone).
   const [lightboxPhotoId, setLightboxPhotoId] = useState(null)
   const [deletingPhotoId, setDeletingPhotoId] = useState(null)
+  const [likePendingPhotoId, setLikePendingPhotoId] = useState(null)
   const isDeletingRef = useRef(false)
+  const latestLoadIdRef = useRef(0)
   const fileInputRef = useRef(null)
   const addButtonRef = useRef(null)
   const lightboxCloseButtonRef = useRef(null)
@@ -29,6 +61,14 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   // Read once per render; a guest can delete only photos uploaded from this
   // browser, which hold a delete token.
   const deleteTokens = isOrganizer ? {} : getPhotoDeleteTokens()
+  // Who likes and comments; the organizer page may not know a name.
+  const authorName = currentName?.trim() || (isOrganizer ? t('common.organizer') : '')
+  const likerNamesByPhoto = groupByPhoto(likes, (like) => like.liker_name)
+  const commentsByPhoto = groupByPhoto(comments, (comment) => comment)
+
+  function isLikedByViewer(photoId) {
+    return authorName !== '' && (likerNamesByPhoto.get(photoId) || NO_ROWS).some((name) => normalizeName(name) === normalizeName(authorName))
+  }
 
   function canDelete(photo) {
     return isOrganizer || typeof deleteTokens[photo.storage_path] === 'string'
@@ -44,6 +84,11 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     }
 
     function handleKeyDown(event) {
+      // Arrow keys move the cursor while typing a comment.
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]')) {
+        return
+      }
+
       if (event.key === 'ArrowRight') {
         setLightboxPhotoId(photos[(lightboxIndex + 1) % photos.length].id)
       } else if (event.key === 'ArrowLeft') {
@@ -56,20 +101,47 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   }, [lightboxIndex, photos])
 
   async function loadPhotos() {
-    try {
-      setPhotos(await getEventPhotos(eventId))
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setIsLoading(false)
+    const loadId = ++latestLoadIdRef.current
+    // Likes and comments are extras: the album still shows when they fail.
+    const results = await Promise.allSettled([getEventPhotos(eventId), getEventPhotoLikes(eventId), getEventPhotoComments(eventId)])
+
+    if (loadId !== latestLoadIdRef.current) {
+      return
     }
+
+    const [photosResult, likesResult, commentsResult] = results
+
+    if (photosResult.status === 'fulfilled') {
+      setPhotos(photosResult.value)
+    }
+
+    if (likesResult.status === 'fulfilled') {
+      setLikes(likesResult.value)
+    }
+
+    if (commentsResult.status === 'fulfilled') {
+      setComments(commentsResult.value)
+    }
+
+    const failure = results.find((result) => result.status === 'rejected')
+
+    if (failure) {
+      toast.error(failure.reason.message)
+    }
+
+    setIsLoading(false)
   }
 
   useEffect(() => {
-    // Fetch-on-mount-and-eventId-change; there's no external system to
-    // "subscribe" to here, just an initial load.
+    // Fetch-on-mount-and-eventId-change, refreshed again by the realtime
+    // tick subscription below.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPhotos()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId])
+
+  useEffect(() => {
+    return subscribeToEventTicks(eventId, ['photo', 'photo_like', 'photo_comment'], loadPhotos)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
 
@@ -162,6 +234,58 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     await loadPhotos()
   }
 
+  async function handleToggleLike(photo) {
+    if (!authorName) {
+      toast.error(t('photos.likeNeedsName'))
+      return
+    }
+
+    if (likePendingPhotoId !== null) {
+      return
+    }
+
+    setLikePendingPhotoId(photo.id)
+
+    try {
+      const result = await toggleEventPhotoLike(eventId, photo.id, authorName)
+      const isViewersLike = (like) => like.photo_id === photo.id && normalizeName(like.liker_name) === normalizeName(authorName)
+
+      setLikes((current) => {
+        const others = current.filter((like) => !isViewersLike(like))
+        return result?.liked ? [...others, { photo_id: photo.id, liker_name: authorName }] : others
+      })
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setLikePendingPhotoId(null)
+    }
+  }
+
+  // Errors go back to PhotoComments, which keeps the draft and shows them.
+  async function handleAddComment(photo, message) {
+    const savedComment = await addEventPhotoComment(eventId, photo.id, authorName, message)
+
+    if (savedComment) {
+      setComments((current) => (current.some((comment) => comment.id === savedComment.id) ? current : [...current, savedComment]))
+    }
+  }
+
+  // Resolves to whether the comment is gone.
+  async function handleDeleteComment(comment) {
+    if (!window.confirm(t('photos.confirmDeleteComment'))) {
+      return false
+    }
+
+    try {
+      await deleteEventPhotoComment(eventId, organizerToken, comment.id)
+      setComments((current) => current.filter((item) => item.id !== comment.id))
+      return true
+    } catch (error) {
+      toast.error(error.message)
+      return false
+    }
+  }
+
   async function handleDownloadAll() {
     const normalizedCurrentName = normalizeName(currentName)
     const othersPhotos = photos.filter((photo) => normalizeName(photo.uploaded_by) !== normalizedCurrentName)
@@ -236,35 +360,47 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         <p className="text-sm text-slate-500 dark:text-slate-400">{t('photos.empty')}</p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {photos.map((photo) => (
-            <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
-              <button type="button" onClick={() => setLightboxPhotoId(photo.id)} className="block h-full w-full cursor-zoom-in">
-                <img
-                  src={getEventPhotoUrl(photo.storage_path)}
-                  alt={t('photos.photoBy', { name: photo.uploaded_by })}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                />
-              </button>
-              {canDelete(photo) ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleDelete(photo)
-                  }}
-                  className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white transition">
-                  {deletingPhotoId === photo.id ? t('photos.deleting') : t('common.delete')}
+          {photos.map((photo) => {
+            const likeCount = (likerNamesByPhoto.get(photo.id) || NO_ROWS).length
+            const commentCount = (commentsByPhoto.get(photo.id) || NO_ROWS).length
+
+            return (
+              <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
+                <button type="button" onClick={() => setLightboxPhotoId(photo.id)} className="block h-full w-full cursor-zoom-in">
+                  <img
+                    src={getEventPhotoUrl(photo.storage_path)}
+                    alt={t('photos.photoBy', { name: photo.uploaded_by })}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
                 </button>
-              ) : null}
-            </div>
-          ))}
+                {canDelete(photo) ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleDelete(photo)
+                    }}
+                    className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white transition">
+                    {deletingPhotoId === photo.id ? t('photos.deleting') : t('common.delete')}
+                  </button>
+                ) : null}
+                {likeCount > 0 || commentCount > 0 ? (
+                  // The lightbox has the same numbers for screen readers.
+                  <div aria-hidden="true" className="pointer-events-none absolute bottom-1.5 left-1.5 flex gap-1 text-xs text-white">
+                    {likeCount > 0 ? <span className="rounded-full bg-slate-950/60 px-2 py-0.5">♥ {likeCount}</span> : null}
+                    {commentCount > 0 ? <span className="rounded-full bg-slate-950/60 px-2 py-0.5">💬 {commentCount}</span> : null}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       )}
 
       {lightboxPhoto ? (
         <ModalOverlay open onClose={() => setLightboxPhotoId(null)} labelledBy="photo-lightbox-title">
-          <div className="flex max-h-[90dvh] w-full max-w-3xl flex-col items-center gap-4 p-4">
+          <div className="flex max-h-[92dvh] w-full max-w-5xl flex-col gap-4 overflow-y-auto p-4 lg:overflow-hidden">
             <div className="flex w-full items-center justify-between gap-3 text-slate-100">
               <p id="photo-lightbox-title" className="text-sm">
                 {t('photos.lightboxTitle', { name: lightboxPhoto.uploaded_by, index: lightboxIndex + 1, total: photos.length })}
@@ -281,32 +417,47 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
               </div>
             </div>
 
-            <div className="relative flex w-full flex-1 items-center justify-center">
-              {photos.length > 1 ? (
-                <button
-                  type="button"
-                  aria-label={t('photos.previous')}
-                  onClick={() => showPhotoAt(lightboxIndex - 1)}
-                  className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-left-14">
-                  ‹
-                </button>
-              ) : null}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+              <div className="relative flex min-w-0 flex-1 items-center justify-center">
+                {photos.length > 1 ? (
+                  <button
+                    type="button"
+                    aria-label={t('photos.previous')}
+                    onClick={() => showPhotoAt(lightboxIndex - 1)}
+                    className="absolute left-2 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white">
+                    ‹
+                  </button>
+                ) : null}
 
-              <img
-                src={getEventPhotoUrl(lightboxPhoto.storage_path)}
-                alt={t('photos.photoBy', { name: lightboxPhoto.uploaded_by })}
-                className="max-h-[70dvh] max-w-full rounded-xl object-contain"
+                <img
+                  src={getEventPhotoUrl(lightboxPhoto.storage_path)}
+                  alt={t('photos.photoBy', { name: lightboxPhoto.uploaded_by })}
+                  className="max-h-[55dvh] max-w-full rounded-xl object-contain lg:max-h-[78dvh]"
+                />
+
+                {photos.length > 1 ? (
+                  <button
+                    type="button"
+                    aria-label={t('photos.next')}
+                    onClick={() => showPhotoAt(lightboxIndex + 1)}
+                    className="absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white">
+                    ›
+                  </button>
+                ) : null}
+              </div>
+
+              <PhotoComments
+                key={lightboxPhoto.id}
+                likerNames={likerNamesByPhoto.get(lightboxPhoto.id) || NO_ROWS}
+                comments={commentsByPhoto.get(lightboxPhoto.id) || NO_ROWS}
+                authorName={authorName}
+                isLiked={isLikedByViewer(lightboxPhoto.id)}
+                isLikePending={likePendingPhotoId === lightboxPhoto.id}
+                canModerate={isOrganizer}
+                onToggleLike={() => handleToggleLike(lightboxPhoto)}
+                onAddComment={(message) => handleAddComment(lightboxPhoto, message)}
+                onDeleteComment={handleDeleteComment}
               />
-
-              {photos.length > 1 ? (
-                <button
-                  type="button"
-                  aria-label={t('photos.next')}
-                  onClick={() => showPhotoAt(lightboxIndex + 1)}
-                  className="absolute right-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-right-14">
-                  ›
-                </button>
-              ) : null}
             </div>
           </div>
         </ModalOverlay>

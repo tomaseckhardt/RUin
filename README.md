@@ -40,6 +40,7 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 - šťouchnutí (ping) se vzkazem pro ty, kdo nejdou (stejnou osobu lze šťouchnout znovu až po 10 minutách)
 - chat k akci s emoji reakcemi na zprávy
 - album fotek z akce s rozklikávacím náhledem (šipky mezi fotkami) a hromadným stažením fotek ostatních (jedním klikem jako ZIP, bez těch, které nahrál přihlášený uživatel sám)
+- lajky a komentáře u fotek: kdokoli s pozvánkou může fotku pod svým jménem lajknout a okomentovat, počty jsou vidět rovnou v albu
 - předpověď počasí pro místo a čas akce (Open-Meteo, až 16 dní dopředu)
 - přidání do kalendáře (Google Kalendář, na iPhonu `.ics` soubor s upozorněním 2 dny předem) a na plochu telefonu (PWA)
 - sdílení pozvánky (odkaz, QR kód, QR plakátek ke stažení)
@@ -47,7 +48,7 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 
 **Pro organizátora**
 
-- správa akce: úprava detailů (název, místo, termín, popis, povinný telefon, moduly), schvalování a zamítání omluvenek, mazání účastníků, zastávek, položek a fotek, odebrání kohokoli z položky, smazání celé akce
+- správa akce: úprava detailů (název, místo, termín, popis, povinný telefon, moduly), schvalování a zamítání omluvenek, mazání účastníků, zastávek, položek, fotek a komentářů u fotek, odebrání kohokoli z položky, smazání celé akce
 - vstup do správy přes odkaz s tokenem, nebo z pozvánky zadáním PINu; přihlášení si prohlížeč pamatuje a po opakovaných chybných pokusech se PIN dočasně zablokuje
 - "Moje poslední akce" na úvodní stránce - rychlý vstup do správy akcí založených v tomhle prohlížeči
 - pozvání lidí předem (jméno + telefon) - v seznamu se ukážou jako "Pozváno", dokud sami neodpoví
@@ -163,6 +164,7 @@ Co všechno `all-phases.sql` obsahuje:
 - Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé `select` politiky jsou `using (false)`), realtime běží přes `event_realtime_ticks`.
 - Organizátor jako samostatná identita (`events.organizer_name`) - chat, šťouchnutí, fotky i položky ze správy akce se podepisují jménem organizátora.
 - Serverové omezení uploadu fotek (bucket `event-photos`: max 10 MB, jen obrázky, nejvýše 50 fotek na akci a upload pouze do složky existující akce).
+- Lajky a komentáře u fotek (`event_photo_likes`, `event_photo_comments`): číst i zapisovat jdou jen přes RPC (`get_event_photo_likes`, `get_event_photo_comments`, `toggle_event_photo_like`, `add_event_photo_comment`, `delete_event_photo_comment`), jeden lajk na jméno a fotku, komentář max 500 znaků, max 200 komentářů na fotku, mazat komentáře smí jen organizátor. Otevřená alba se obnovují přes realtime ticky `photo`, `photo_like` a `photo_comment`.
 - Feedback (hlášení chyb a nápadů): `feedback_reports` + RPC `submit_feedback_report`/`get_feedback_reports`. Čtení přes `/feedback` je záměrně veřejné bez PINu - kdokoliv na tuhle adresu uvidí jméno i text všech hlášení.
 - Skupiny kontaktů a šablony akcí (`owners`, `contact_groups`, `contact_group_members`, `event_templates`) vázané na účet podle jména, telefonu a 6místného kódu (`access_owner_account`; kód je uložený jako bcrypt hash a po opakovaných chybách se dočasně zablokuje) + hromadné pozvání lidí do akce (`invite_attendees`, stav `invited`).
 - Volitelné moduly akce (`enable_bring_list`, `enable_carpool`, `enable_stops`).
