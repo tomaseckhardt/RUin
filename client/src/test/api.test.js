@@ -10,6 +10,8 @@ import {
   getEventStops,
   getSignupItems,
   moderateAttendee,
+  removeEvent,
+  deleteEventPhoto,
   replayRetryQueue,
   sendEventChatMessage,
   submitRsvp,
@@ -23,12 +25,16 @@ jest.mock('../lib/supabase.js', () => ({
     storage: {
       from: jest.fn(),
     },
+    functions: {
+      invoke: jest.fn(),
+    },
   },
 }))
 
 beforeEach(() => {
   supabase.rpc.mockReset()
   supabase.storage.from.mockReset()
+  supabase.functions.invoke.mockReset()
   window.localStorage.removeItem('ruin-retry-queue')
 })
 
@@ -58,6 +64,28 @@ describe('callRpc error handling (via submitRsvp)', () => {
     supabase.rpc.mockResolvedValue({ data: null, error: {} })
 
     await expect(createEvent({ name: 'x' })).rejects.toThrow('Akci se nepodařilo vytvořit.')
+  })
+})
+
+describe('deleteEventData', () => {
+  it('calls the server-side handler to delete an event and its stored photos', async () => {
+    supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
+
+    await removeEvent('event-1', 'organizer-token')
+
+    expect(supabase.functions.invoke).toHaveBeenCalledWith('delete-event-data', {
+      body: { action: 'delete_event', eventId: 'event-1', token: 'organizer-token' },
+    })
+  })
+
+  it('calls the server-side handler to delete a photo', async () => {
+    supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
+
+    await deleteEventPhoto('event-1', 'organizer-token', 12)
+
+    expect(supabase.functions.invoke).toHaveBeenCalledWith('delete-event-data', {
+      body: { action: 'delete_photo', eventId: 'event-1', token: 'organizer-token', photoId: 12 },
+    })
   })
 })
 

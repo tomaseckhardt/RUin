@@ -13,16 +13,7 @@ import EventStops from '../components/EventStops.jsx'
 import InvitePeopleModal from '../components/InvitePeopleModal.jsx'
 import SignupBoard from '../components/SignupBoard.jsx'
 import PhotoGallery from '../components/PhotoGallery.jsx'
-import {
-  deleteAttendee,
-  getEvent,
-  getEventPhotos,
-  moderateAttendee,
-  pingAttendee,
-  removeEvent,
-  unlockManageWithPin,
-  updateEvent,
-} from '../lib/api.js'
+import { deleteAttendee, getEvent, moderateAttendee, pingAttendee, removeEvent, unlockManageWithPin, updateEvent } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 import { clearSavedOrganizerToken, getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
@@ -328,16 +319,6 @@ function ManageEventPage() {
     setIsDeleting(true)
 
     try {
-      const photos = await getEventPhotos(id).catch(() => [])
-
-      if (photos.length > 0) {
-        const { error: storageError } = await supabase.storage.from('event-photos').remove(photos.map((photo) => photo.storage_path))
-
-        if (storageError) {
-          toast.warning(t('manage.photosNotDeleted'))
-        }
-      }
-
       await removeEvent(id, activeToken)
       clearSavedOrganizerToken(id)
       toast.success(t('manage.eventDeleted'))

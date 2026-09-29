@@ -242,14 +242,29 @@ export function deleteAttendee(eventId, attendeeId, token) {
 }
 
 export function removeEvent(eventId, token) {
-  return callRpc(
-    'delete_event',
-    {
-      p_event_id: eventId,
-      p_token: token,
-    },
-    t('api.errors.removeEvent'),
-  )
+  return callDeleteEventData({ action: 'delete_event', eventId, token }, t('api.errors.removeEvent'))
+}
+
+async function callDeleteEventData(body, fallbackMessage) {
+  const { data, error } = await supabase.functions.invoke('delete-event-data', { body })
+
+  if (error) {
+    let serverMessage = ''
+
+    try {
+      serverMessage = (await error.context?.clone?.().json())?.error || ''
+    } catch {
+      // Keep the Functions client error when its response body is unavailable.
+    }
+
+    throw toRequestError({ message: serverMessage || error.message }, fallbackMessage)
+  }
+
+  if (data?.error) {
+    throw toRequestError({ message: data.error }, fallbackMessage)
+  }
+
+  return data
 }
 
 export function updateEvent(eventId, data) {
@@ -553,7 +568,7 @@ export async function getEventPhotos(eventId) {
 }
 
 export function deleteEventPhoto(eventId, token, photoId) {
-  return callRpc('delete_event_photo', { p_event_id: eventId, p_token: token, p_photo_id: photoId }, t('api.errors.deleteEventPhoto'))
+  return callDeleteEventData({ action: 'delete_photo', eventId, token, photoId }, t('api.errors.deleteEventPhoto'))
 }
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
