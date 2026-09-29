@@ -15,6 +15,7 @@ import {
   uploadEventPhoto,
 } from '../lib/api.js'
 import { getPhotoDeleteToken, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
+import { installEnterToSubmit } from '../lib/enterToSubmit.js'
 
 jest.mock('../lib/api.js', () => ({
   addEventPhotoComment: jest.fn(),
@@ -287,6 +288,29 @@ describe('PhotoGallery likes and comments', () => {
     expect(await within(lightbox).findByText('Super fotka')).toBeInTheDocument()
     expect(commentInput).toHaveValue('')
     expect(commentInput).toHaveFocus()
+  })
+
+  it('sends a comment with Enter, as main.jsx sets up for the whole app', async () => {
+    const user = userEvent.setup()
+    const uninstall = installEnterToSubmit()
+    addEventPhotoComment.mockImplementation(async (_eventId, photoId, authorName, message) => ({
+      id: 21,
+      photo_id: photoId,
+      author_name: authorName,
+      message,
+      created_at: '2026-01-03T09:00:00Z',
+    }))
+
+    try {
+      render(<PhotoGallery eventId="event-1" currentName="Alice" />)
+      await user.click(await screen.findByAltText('Fotka od Bob'))
+      await user.type(within(screen.getByRole('dialog')).getByLabelText('Komentář k fotce'), 'Paráda{Enter}')
+
+      expect(addEventPhotoComment).toHaveBeenCalledWith('event-1', 2, 'Alice', 'Paráda')
+      expect(await within(screen.getByRole('dialog')).findByText('Paráda')).toBeInTheDocument()
+    } finally {
+      uninstall()
+    }
   })
 
   it('keeps the draft when the comment can’t be saved', async () => {

@@ -40,6 +40,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 - on-site check-in ("📍 I’m here")
 - nudges (pings) with a message for people who aren't coming (the same person can be nudged again only after 10 minutes)
 - a chat for each event, with emoji reactions to messages
+- Enter sends everywhere: a chat message, a comment, an excuse, a nudge or a whole form (from multi-line fields too; Shift+Enter starts a new line, and phone keyboards show Enter as "Send")
 - an event photo album with a clickable preview (arrows between photos) and a bulk download of everyone else's photos (one click, as a ZIP, without the ones the signed-in user uploaded themselves)
 - likes and comments on photos: anyone with the invite can like and comment on a photo under their name, and the counts show right in the album
 - a weather forecast for the event's place and time (Open-Meteo, up to 16 days ahead)

@@ -40,6 +40,7 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 - check-in na místě ("📍 Dorazil/a jsem")
 - šťouchnutí (ping) se vzkazem pro ty, kdo nejdou (stejnou osobu lze šťouchnout znovu až po 10 minutách)
 - chat k akci s emoji reakcemi na zprávy
+- Enter všude odesílá: zprávu v chatu, komentář, omluvenku, šťouchnutí i celý formulář (i z víceřádkových polí, Shift+Enter udělá nový řádek; na telefonu se Enter ukáže jako „Odeslat“)
 - album fotek z akce s rozklikávacím náhledem (šipky mezi fotkami) a hromadným stažením fotek ostatních (jedním klikem jako ZIP, bez těch, které nahrál přihlášený uživatel sám)
 - lajky a komentáře u fotek: kdokoli s pozvánkou může fotku pod svým jménem lajknout a okomentovat, počty jsou vidět rovnou v albu
 - předpověď počasí pro místo a čas akce (Open-Meteo, až 16 dní dopředu)
