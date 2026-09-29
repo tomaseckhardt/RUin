@@ -245,8 +245,19 @@ for (const locale of ['cs', 'en'] as const) {
       expect(backend.db.pings).toEqual([expect.objectContaining({ source_name: input.guest, message: input.ping })])
     })
 
+    await test.step('a wrong link asks for the PIN, which unlocks the event again', async () => {
+      await page.goto(`/#/event/${eventId}/manage?token=not-the-real-token`)
+      await expect(page.getByRole('heading', { level: 1, name: t('manage.unlockTitle') })).toBeVisible()
+      await expect(page.getByText(t('manage.unlockAgain'))).toBeVisible()
+      // The wrong token is dropped from the address bar and from storage.
+      await expect(page).toHaveURL(new RegExp(`#/event/${eventId}/manage$`))
+      await page.getByLabel(t('pin.label')).fill('1234')
+      await page.getByRole('button', { name: t('pin.enter') }).click()
+      await toast(t('manage.unlockedAndSaved'))
+      await expect(page.getByRole('heading', { level: 1, name: input.event })).toBeVisible()
+    })
+
     await test.step('the organizer accepts the excuse', async () => {
-      await page.goto(`/#/event/${eventId}/manage`)
       await page.getByRole('button', { name: t('attendees.accept') }).click()
       await toast(t('manage.excuseAccepted'))
       await expect(page.getByText(t('attendees.status.excused_accepted'), { exact: true })).toBeVisible()
@@ -282,10 +293,8 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(page.getByText(t('poll.votes', { count: 1 }), { exact: true })).toBeVisible()
 
       await page.goto(creatorUrl)
-      // The button sits in the option's <label>, which gives it the whole card as its name.
       await page
-        .getByRole('button')
-        .filter({ hasText: t('poll.pick') })
+        .getByRole('button', { name: t('poll.pick'), exact: true })
         .first()
         .click()
       await page.getByPlaceholder('1234').fill('5678')

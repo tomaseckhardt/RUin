@@ -138,9 +138,12 @@ function PollPage() {
           <div className="mt-4 space-y-3">
             {options.map((option) => {
               const isHighlighted = isCreator ? finalizingOptionId === option.id : chosenId === option.id
+              // A voter's option labels its radio. The creator's has a button
+              // instead, which a <label> would name after the whole card.
+              const OptionCard = isCreator ? 'div' : 'label'
 
               return (
-                <label
+                <OptionCard
                   key={option.id}
                   className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-4 transition sm:flex-row sm:items-center sm:justify-between ${isHighlighted ? 'border-fuchsia-300 bg-fuchsia-50/60 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/20' : 'border-slate-200 dark:border-slate-700'}`}>
                   <div className="flex items-center gap-3">
@@ -172,7 +175,7 @@ function PollPage() {
                       </button>
                     ) : null}
                   </div>
-                </label>
+                </OptionCard>
               )
             })}
           </div>

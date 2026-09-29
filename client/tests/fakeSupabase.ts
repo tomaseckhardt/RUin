@@ -203,7 +203,12 @@ export function createFakeSupabase() {
 
   function eventPayload(args: { p_event_id: string; p_organizer_token?: string | null }) {
     const event = findEvent(args.p_event_id)
-    const isOrganizer = args.p_organizer_token === event.organizer_token
+
+    if (args.p_organizer_token != null && args.p_organizer_token !== event.organizer_token) {
+      fail('Neplatný organizátorský odkaz.')
+    }
+
+    const isOrganizer = args.p_organizer_token != null
     const attendees = db.attendees
       .filter((attendee) => attendee.event_id === event.id)
       .sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.id - b.id)

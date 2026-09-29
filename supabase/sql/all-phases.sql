@@ -1090,7 +1090,13 @@ begin
     raise exception 'Tahle akce už neexistuje.';
   end if;
 
-  v_is_organizer := p_organizer_token is not null and p_organizer_token = v_event.organizer_token;
+  -- A wrong token is refused, not served as a guest: otherwise the
+  -- management page would open with it and only its actions would fail.
+  if p_organizer_token is not null and p_organizer_token is distinct from v_event.organizer_token then
+    raise exception 'Neplatný organizátorský odkaz.';
+  end if;
+
+  v_is_organizer := p_organizer_token is not null;
 
   select coalesce(
     jsonb_agg(
