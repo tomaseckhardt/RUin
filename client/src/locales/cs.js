@@ -129,6 +129,8 @@ export default {
     composerEyebrow: 'Composer',
     composerTitle: 'Poskládej akci',
     composerText: 'Vyplň jen to důležité. Po uložení dostaneš odkaz, který můžeš rovnou poslat do skupiny.',
+    composerExpand: 'Rozbalit',
+    composerCollapse: 'Sbalit',
     organizerName: 'Tvoje jméno (organizátor)',
     pinPlaceholder: 'Např. 1234',
     pinHint: '4 číslice. Bude potřeba pro vstup do správy akce.',

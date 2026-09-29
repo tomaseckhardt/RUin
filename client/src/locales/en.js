@@ -127,6 +127,8 @@ export default {
     composerEyebrow: 'Composer',
     composerTitle: 'Put your event together',
     composerText: 'Fill in just the essentials. Once it’s saved, you get a link you can send straight to the group.',
+    composerExpand: 'Show more',
+    composerCollapse: 'Show less',
     organizerName: 'Your name (organizer)',
     pinPlaceholder: 'e.g. 1234',
     pinHint: '4 digits. You’ll need it to get into event management.',

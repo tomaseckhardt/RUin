@@ -51,6 +51,11 @@ const initialForm = {
   enableStops: true,
 }
 
+// Tlačítka pro rozbalení/sbalení composeru mají barvy aktivní volby z přepínačů v hlavičce (ToggleSwitch).
+const composerToggleClassName =
+  'inline-flex items-center justify-center rounded-full px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-soft)]'
+const composerToggleStyle = { background: '#6f4cff', boxShadow: '0 4px 12px -4px rgba(111, 76, 255, 0.6)' }
+
 function CreateEventPage() {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -77,6 +82,7 @@ function CreateEventPage() {
   const [templateName, setTemplateName] = useState('')
   const [showOwnerAccessModal, setShowOwnerAccessModal] = useState(false)
   const [pendingOwnerCheckbox, setPendingOwnerCheckbox] = useState(null)
+  const [isComposerExpanded, setIsComposerExpanded] = useState(false)
 
   const whyItWorks = t('createEvent.whyItWorks')
 
@@ -220,6 +226,17 @@ function CreateEventPage() {
     }
 
     setShowAfterparty((current) => !current)
+  }
+
+  // Sbalený composer je na xl useknutý ve výšce levého sloupce - když se
+  // klávesnicí dostaneš na pole pod tou hranou, composer se rozbalí, ať ho vidíš.
+  function handleComposerFocus(event) {
+    const composer = event.currentTarget
+    const visibleBottom = composer.getBoundingClientRect().top + composer.clientHeight
+
+    if (event.target.getBoundingClientRect().bottom + composer.scrollTop > visibleBottom) {
+      setIsComposerExpanded(true)
+    }
   }
 
   function updateField(field) {
@@ -459,286 +476,325 @@ function CreateEventPage() {
           </section>
         </section>
 
-        <aside id="create-form" className="panel order-1 h-fit xl:order-2 xl:sticky xl:top-6">
-          <div className="mb-6">
-            <CollapsibleCard eyebrow={t('createEvent.recentEyebrow')} title={t('createEvent.recentTitle')} defaultOpen={false}>
-              {isLoadingRecentEvents ? <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentLoading')}</p> : null}
+        {/* Sbalený composer se na xl vytáhne z toku (absolute), takže výšku řádku
+            určuje jen levý sloupec a composer se usekne přesně na jeho spodní hraně. */}
+        <div className="relative order-1 xl:order-2">
+          <aside
+            id="create-form"
+            className={`panel ${isComposerExpanded ? '' : 'xl:absolute xl:inset-0 xl:overflow-hidden'}`}
+            onFocus={handleComposerFocus}>
+            <div className="mb-6">
+              <CollapsibleCard eyebrow={t('createEvent.recentEyebrow')} title={t('createEvent.recentTitle')} defaultOpen={false}>
+                {isLoadingRecentEvents ? <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentLoading')}</p> : null}
 
-              {!isLoadingRecentEvents && recentEvents.length === 0 ? (
-                <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentEmpty')}</p>
-              ) : null}
-
-              {!isLoadingRecentEvents && recentEvents.length > 0 ? (
-                <div className="space-y-3">
-                  {recentEvents.map(({ id: eventId, event }) => (
-                    <article key={eventId} className="rounded-2xl border border-slate-200 bg-white/65 p-3 dark:border-slate-700 dark:bg-slate-950/35">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {formatDateTime(event.datetime)} · {event.location}
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Link to={`/event/${eventId}/manage`} className="secondary-button px-3 py-1.5 text-xs">
-                          {t('createEvent.openManage')}
-                        </Link>
-                        <Link to={`/event/${eventId}`} className="secondary-button px-3 py-1.5 text-xs">
-                          {t('common.openInvite')}
-                        </Link>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : null}
-            </CollapsibleCard>
-          </div>
-
-          <div className="mb-6">
-            <TemplatesPanel templates={ownerPayload.templates} isLoading={isLoadingOwnerPayload} onUseTemplate={handleUseTemplate} />
-          </div>
-
-          <div className="mb-6">
-            <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('createEvent.composerEyebrow')}</p>
-            <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{t('createEvent.composerTitle')}</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.composerText')}</p>
-          </div>
-
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createEvent.organizerName')}</label>
-                <input
-                  className="field"
-                  value={form.organizerName}
-                  onChange={updateField('organizerName')}
-                  placeholder={t('common.namePlaceholder')}
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('pin.label')}</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  pattern="[0-9]{4}"
-                  maxLength={4}
-                  className="field"
-                  value={form.organizerPin}
-                  onChange={updateField('organizerPin')}
-                  placeholder={t('createEvent.pinPlaceholder')}
-                  required
-                />
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.pinHint')}</p>
-              </div>
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.name')}</label>
-              <input className="field" value={form.name} onChange={updateField('name')} placeholder={t('createEvent.namePlaceholder')} required />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.location')}</label>
-              <input
-                className="field"
-                value={form.location}
-                onChange={updateField('location')}
-                placeholder={t('createEvent.locationPlaceholder')}
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.dateTime')}</label>
-              <EventDateTimePicker value={form.datetime} onChange={(nextValue) => setForm((current) => ({ ...current, datetime: nextValue }))} />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.description')}</label>
-              <textarea
-                className="field min-h-32"
-                value={form.description}
-                onChange={updateField('description')}
-                placeholder={t('eventForm.descriptionPlaceholder')}
-                required
-              />
-            </div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                checked={form.requirePhone}
-                onChange={(e) => setForm((current) => ({ ...current, requirePhone: e.target.checked }))}
-              />
-              <div>
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.requirePhone')}</p>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.requirePhoneHint')}</p>
-              </div>
-            </label>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                  checked={form.enableBringList}
-                  onChange={(e) => setForm((current) => ({ ...current, enableBringList: e.target.checked }))}
-                />
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.bringList')}</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.bringListHint')}</p>
-                </div>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                  checked={form.enableCarpool}
-                  onChange={(e) => setForm((current) => ({ ...current, enableCarpool: e.target.checked }))}
-                />
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.carpool')}</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.carpoolHint')}</p>
-                </div>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                  checked={form.enableStops}
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    setForm((current) => ({ ...current, enableStops: checked }))
-                    if (!checked) {
-                      setShowAfterparty(false)
-                    }
-                  }}
-                />
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.stops')}</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.stopsHint')}</p>
-                </div>
-              </label>
-            </div>
-
-            {form.enableBringList ? (
-              <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.bringList')}</p>
-                <div className="mt-3">
-                  <SignupItemEditor category="bring" items={bringItems} onChange={setBringItems} disabled={isSubmitting} />
-                </div>
-              </div>
-            ) : null}
-
-            {form.enableCarpool ? (
-              <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.carpool')}</p>
-                <div className="mt-3">
-                  <SignupItemEditor category="ride" items={rideItems} onChange={setRideItems} disabled={isSubmitting} />
-                </div>
-              </div>
-            ) : null}
-
-            <CollapsibleCard eyebrow={t('createEvent.extrasEyebrow')} title={t('createEvent.extrasTitle')} defaultOpen={false}>
-              <div className="space-y-4">
-                {form.enableStops ? (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={handleAfterpartyClick}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-black tracking-[-0.01em] text-white shadow-lg"
-                      style={{
-                        background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
-                        animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
-                      }}>
-                      🎉 {showAfterparty ? t('createEvent.afterpartyClose') : t('createEvent.afterpartyOpen')} 🎉
-                    </button>
-
-                    {showAfterparty ? (
-                      <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
-                            {t('createEvent.afterpartyLocation')}
-                          </label>
-                          <input
-                            className="field"
-                            value={afterpartyLocation}
-                            onChange={(event) => setAfterpartyLocation(event.target.value)}
-                            placeholder={t('createEvent.afterpartyLocationPlaceholder')}
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('common.time')}</label>
-                          <input type="time" className="field" value={afterpartyTime} onChange={(event) => setAfterpartyTime(event.target.value)} />
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
+                {!isLoadingRecentEvents && recentEvents.length === 0 ? (
+                  <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentEmpty')}</p>
                 ) : null}
 
-                <div>
-                  <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvites((current) => !current)}>
-                    {showInvites ? t('createEvent.invitesClose') : t('createEvent.invitesOpen')}
-                  </button>
-
-                  {showInvites ? (
-                    <div className="mt-3 space-y-4 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-                      <GroupPicker groups={ownerPayload.groups} onPick={handlePickGroup} disabled={isSubmitting} />
-                      <InviteListEditor invitees={invitees} onChange={setInvitees} disabled={isSubmitting} />
-
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                          checked={saveAsGroup}
-                          onChange={(event) => handleToggleSaveAsGroup(event.target.checked)}
-                          disabled={isSubmitting}
-                        />
-                        <div className="w-full">
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('createEvent.saveAsGroup')}</p>
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.saveAsGroupHint')}</p>
-                          {saveAsGroup ? (
-                            <input
-                              className="field mt-3"
-                              value={groupName}
-                              onChange={(event) => setGroupName(event.target.value)}
-                              placeholder={t('createEvent.groupNamePlaceholder')}
-                              disabled={isSubmitting}
-                            />
-                          ) : null}
+                {!isLoadingRecentEvents && recentEvents.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentEvents.map(({ id: eventId, event }) => (
+                      <article
+                        key={eventId}
+                        className="rounded-2xl border border-slate-200 bg-white/65 p-3 dark:border-slate-700 dark:bg-slate-950/35">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{event.name}</p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {formatDateTime(event.datetime)} · {event.location}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Link to={`/event/${eventId}/manage`} className="secondary-button px-3 py-1.5 text-xs">
+                            {t('createEvent.openManage')}
+                          </Link>
+                          <Link to={`/event/${eventId}`} className="secondary-button px-3 py-1.5 text-xs">
+                            {t('common.openInvite')}
+                          </Link>
                         </div>
-                      </label>
-                    </div>
-                  ) : null}
-                </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </CollapsibleCard>
+            </div>
 
+            <div className="mb-6">
+              <TemplatesPanel templates={ownerPayload.templates} isLoading={isLoadingOwnerPayload} onUseTemplate={handleUseTemplate} />
+            </div>
+
+            <div className="mb-6">
+              <p className="accent-copy text-sm font-medium uppercase tracking-[0.25em]">{t('createEvent.composerEyebrow')}</p>
+              <h2 className="mt-2 text-3xl font-black tracking-[-0.03em] text-slate-950 dark:text-slate-50">{t('createEvent.composerTitle')}</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.composerText')}</p>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createEvent.organizerName')}</label>
+                  <input
+                    className="field"
+                    value={form.organizerName}
+                    onChange={updateField('organizerName')}
+                    placeholder={t('common.namePlaceholder')}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('pin.label')}</label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]{4}"
+                    maxLength={4}
+                    className="field"
+                    value={form.organizerPin}
+                    onChange={updateField('organizerPin')}
+                    placeholder={t('createEvent.pinPlaceholder')}
+                    required
+                  />
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.pinHint')}</p>
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.name')}</label>
+                <input className="field" value={form.name} onChange={updateField('name')} placeholder={t('createEvent.namePlaceholder')} required />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.location')}</label>
+                <input
+                  className="field"
+                  value={form.location}
+                  onChange={updateField('location')}
+                  placeholder={t('createEvent.locationPlaceholder')}
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.dateTime')}</label>
+                <EventDateTimePicker value={form.datetime} onChange={(nextValue) => setForm((current) => ({ ...current, datetime: nextValue }))} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.description')}</label>
+                <textarea
+                  className="field min-h-32"
+                  value={form.description}
+                  onChange={updateField('description')}
+                  placeholder={t('eventForm.descriptionPlaceholder')}
+                  required
+                />
+              </div>
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                  checked={form.requirePhone}
+                  onChange={(e) => setForm((current) => ({ ...current, requirePhone: e.target.checked }))}
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.requirePhone')}</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.requirePhoneHint')}</p>
+                </div>
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-3">
                 <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
                   <input
                     type="checkbox"
                     className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                    checked={saveAsTemplate}
-                    onChange={(event) => handleToggleSaveAsTemplate(event.target.checked)}
-                    disabled={isSubmitting}
+                    checked={form.enableBringList}
+                    onChange={(e) => setForm((current) => ({ ...current, enableBringList: e.target.checked }))}
                   />
-                  <div className="w-full">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('createEvent.saveAsTemplate')}</p>
-                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.saveAsTemplateHint')}</p>
-                    {saveAsTemplate ? (
-                      <input
-                        className="field mt-3"
-                        value={templateName}
-                        onChange={(event) => setTemplateName(event.target.value)}
-                        placeholder={t('createEvent.templateNamePlaceholder')}
-                        disabled={isSubmitting}
-                      />
-                    ) : null}
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.bringList')}</p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.bringListHint')}</p>
+                  </div>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                    checked={form.enableCarpool}
+                    onChange={(e) => setForm((current) => ({ ...current, enableCarpool: e.target.checked }))}
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.carpool')}</p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.carpoolHint')}</p>
+                  </div>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                    checked={form.enableStops}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setForm((current) => ({ ...current, enableStops: checked }))
+                      if (!checked) {
+                        setShowAfterparty(false)
+                      }
+                    }}
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.stops')}</p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.stopsHint')}</p>
                   </div>
                 </label>
               </div>
-            </CollapsibleCard>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
-                {isSubmitting ? t('createEvent.submitting') : t('createEvent.submit')}
+              {form.enableBringList ? (
+                <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.bringList')}</p>
+                  <div className="mt-3">
+                    <SignupItemEditor category="bring" items={bringItems} onChange={setBringItems} disabled={isSubmitting} />
+                  </div>
+                </div>
+              ) : null}
+
+              {form.enableCarpool ? (
+                <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.carpool')}</p>
+                  <div className="mt-3">
+                    <SignupItemEditor category="ride" items={rideItems} onChange={setRideItems} disabled={isSubmitting} />
+                  </div>
+                </div>
+              ) : null}
+
+              <CollapsibleCard eyebrow={t('createEvent.extrasEyebrow')} title={t('createEvent.extrasTitle')} defaultOpen={false}>
+                <div className="space-y-4">
+                  {form.enableStops ? (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={handleAfterpartyClick}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-black tracking-[-0.01em] text-white shadow-lg"
+                        style={{
+                          background: 'linear-gradient(135deg, #6f4cff, #a78bfa, #f472b6)',
+                          animation: showAfterparty ? 'none' : 'party-pulse 1.8s ease-in-out infinite',
+                        }}>
+                        🎉 {showAfterparty ? t('createEvent.afterpartyClose') : t('createEvent.afterpartyOpen')} 🎉
+                      </button>
+
+                      {showAfterparty ? (
+                        <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+                              {t('createEvent.afterpartyLocation')}
+                            </label>
+                            <input
+                              className="field"
+                              value={afterpartyLocation}
+                              onChange={(event) => setAfterpartyLocation(event.target.value)}
+                              placeholder={t('createEvent.afterpartyLocationPlaceholder')}
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('common.time')}</label>
+                            <input type="time" className="field" value={afterpartyTime} onChange={(event) => setAfterpartyTime(event.target.value)} />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvites((current) => !current)}>
+                      {showInvites ? t('createEvent.invitesClose') : t('createEvent.invitesOpen')}
+                    </button>
+
+                    {showInvites ? (
+                      <div className="mt-3 space-y-4 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+                        <GroupPicker groups={ownerPayload.groups} onPick={handlePickGroup} disabled={isSubmitting} />
+                        <InviteListEditor invitees={invitees} onChange={setInvitees} disabled={isSubmitting} />
+
+                        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                            checked={saveAsGroup}
+                            onChange={(event) => handleToggleSaveAsGroup(event.target.checked)}
+                            disabled={isSubmitting}
+                          />
+                          <div className="w-full">
+                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('createEvent.saveAsGroup')}</p>
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.saveAsGroupHint')}</p>
+                            {saveAsGroup ? (
+                              <input
+                                className="field mt-3"
+                                value={groupName}
+                                onChange={(event) => setGroupName(event.target.value)}
+                                placeholder={t('createEvent.groupNamePlaceholder')}
+                                disabled={isSubmitting}
+                              />
+                            ) : null}
+                          </div>
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
+                      checked={saveAsTemplate}
+                      onChange={(event) => handleToggleSaveAsTemplate(event.target.checked)}
+                      disabled={isSubmitting}
+                    />
+                    <div className="w-full">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('createEvent.saveAsTemplate')}</p>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.saveAsTemplateHint')}</p>
+                      {saveAsTemplate ? (
+                        <input
+                          className="field mt-3"
+                          value={templateName}
+                          onChange={(event) => setTemplateName(event.target.value)}
+                          placeholder={t('createEvent.templateNamePlaceholder')}
+                          disabled={isSubmitting}
+                        />
+                      ) : null}
+                    </div>
+                  </label>
+                </div>
+              </CollapsibleCard>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button type="submit" className="primary-button w-full" disabled={isSubmitting}>
+                  {isSubmitting ? t('createEvent.submitting') : t('createEvent.submit')}
+                </button>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{t('createEvent.submitHint')}</p>
+              </div>
+            </form>
+
+            {isComposerExpanded ? (
+              <div className="mt-6 hidden justify-center xl:flex">
+                <button
+                  type="button"
+                  className={composerToggleClassName}
+                  style={composerToggleStyle}
+                  onClick={() => setIsComposerExpanded(false)}
+                  aria-expanded="true"
+                  aria-controls="create-form">
+                  {t('createEvent.composerCollapse')}
+                </button>
+              </div>
+            ) : null}
+          </aside>
+
+          {isComposerExpanded ? null : (
+            <div
+              className="pointer-events-none absolute inset-x-px bottom-px hidden h-44 items-end justify-center rounded-b-[1.75rem] pb-6 xl:flex"
+              style={{ background: 'linear-gradient(to top, var(--panel-bg) 40%, transparent)' }}>
+              <button
+                type="button"
+                className={`pointer-events-auto ${composerToggleClassName}`}
+                style={composerToggleStyle}
+                onClick={() => setIsComposerExpanded(true)}
+                aria-expanded="false"
+                aria-controls="create-form">
+                {t('createEvent.composerExpand')}
               </button>
-              <p className="text-sm text-slate-500 dark:text-slate-400">{t('createEvent.submitHint')}</p>
             </div>
-          </form>
-        </aside>
+          )}
+        </div>
       </main>
 
       <ConfettiBurst origin={confettiOrigin} burstKey={burstKey} />
