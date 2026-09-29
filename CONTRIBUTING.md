@@ -53,7 +53,7 @@ Lint a testy spouští i CI u každého pull requestu do `main` - PR s chybou v 
 - Když měníš UI, ověř desktop i mobil, světlý i tmavý režim a češtinu i angličtinu.
 - Když měníš přístupnost, doplň nebo uprav testy.
 - Texty v UI nepiš natvrdo do komponent - přidej klíč do `client/src/locales/cs.js` i `en.js` a použij `t()` (viz [Lokalizace v README](README.md#lokalizace-čeština-a-angličtina)).
-- Změny databáze patří přímo do `supabase/sql/all-phases.sql`, psané idempotentně. Každou novou `raise exception` hlášku doplň do `client/src/locales/serverMessages.en.js`, jinak spadne test.
+- Změny databáze patří přímo do `supabase/sql/all-phases.sql`, na místo, kde je daný objekt definovaný (soubor drží jen aktuální stav, historie je v gitu). Piš je idempotentně, jak popisuje hlavička souboru. Každou novou `raise exception` hlášku doplň do `client/src/locales/serverMessages.en.js`, jinak spadne test.
 
 ## Konvence commitů
 

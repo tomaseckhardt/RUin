@@ -53,7 +53,7 @@ CI also runs lint and tests on every pull request to `main` - a PR with a lint o
 - When you change the UI, check desktop and mobile, light and dark mode, and both Czech and English.
 - When you change accessibility, add or update the tests.
 - Don't hardcode UI texts in components - add a key to both `client/src/locales/cs.js` and `en.js` and use `t()` (see [Localization in the README](README.en.md#localization-czech-and-english)).
-- Database changes go straight into `supabase/sql/all-phases.sql`, written to be idempotent. Add every new `raise exception` message to `client/src/locales/serverMessages.en.js`, otherwise a test fails.
+- Database changes go straight into `supabase/sql/all-phases.sql`, where the object is defined (the file holds only the current state; git keeps the history). Write them idempotently, as the file's header describes. Add every new `raise exception` message to `client/src/locales/serverMessages.en.js`, otherwise a test fails.
 
 ## Commit conventions
 

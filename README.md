@@ -147,7 +147,7 @@ Celé databázové schéma žije v jednom souboru:
 supabase/sql/all-phases.sql
 ```
 
-Žádné samostatné "fáze" k ručnímu skládání - `all-phases.sql` je jediný zdroj pravdy a při každé další změně schématu se upravuje přímo on (ne nový soubor vedle). Je napsaný idempotentně (`create table if not exists`, `create or replace function`, `drop policy/trigger if exists` před každým `create`, `on conflict do nothing` u jediného top-level insertu), takže ho lze bezpečně spustit znovu celý i na projektu, který už část schématu má - Postgres jen přeskočí nebo nahradí to, co už existuje. Uvnitř je rozdělený do očíslovaných sekcí (`-- Phase N: ...`), jejichž komentáře vysvětlují, proč daná změna vznikla.
+`all-phases.sql` je jediný zdroj pravdy: celé schéma v aktuální podobě, každá tabulka, funkce a politika jen jednou. Při změně schématu se upravuje přímo on (ne nový soubor vedle), a to na místě, kde je daný objekt definovaný. Hlavička souboru popisuje, jak na to u funkcí a tabulek. Celý běží v jedné transakci a je idempotentní (`create table if not exists`, `create or replace function`, `drop policy/trigger if exists` před každým `create`), takže ho lze kdykoli spustit znovu celý, na novém i existujícím projektu. Když cokoli selže, nezmění se nic. Historie změn je v gitu. Sekce "Retired objects" na konci odstraní objekty, které starší verze souboru vytvořily a nic je už nepoužívá.
 
 Co všechno `all-phases.sql` obsahuje:
 
@@ -163,7 +163,7 @@ Co všechno `all-phases.sql` obsahuje:
 - Bezpečnostní hardening: `_random_token` přes `pgcrypto`/`gen_random_bytes()` místo nekryptografického `random()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` vrací telefonní čísla jen s platným `p_organizer_token`; opravená race podmínka v `moderate_attendee`; srozumitelná hláška místo syrové Postgres chyby při konfliktu telefonního čísla. Záměrně neřeší: `organizer_token` zůstává čitelný (ne hash), protože appka přes PIN umí "obnovit" zapomenutý manage odkaz a to s jednosměrným hashem nejde bez přestavby celého recovery flow. Celý model identity/autorizace (appka nemá auth vůbec, jediná "oprávnění" jsou tokeny v odkazech, RLS musí defaultně vše zamítat) je sepsaný v [SECURITY_MODEL.md](SECURITY_MODEL.md).
 - Mazání fotek ze Storage - ručně přes Edge Function `delete-event-data`, která ověřuje organizátorský token nebo mazací token fotky toho, kdo ji nahrál, automaticky po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` - a vlastní životní cyklus anket (nevyhodnocená zanikne 14 dní od vytvoření, vyhodnocená automaticky spolu s akcí, co z ní vznikla).
 - Blokace přihlášení řidiče na vlastní nabídku odvozu + možnost odebrat konkrétního spolujezdce z vlastní nabídky.
-- Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé `select` politiky jsou `using (false)`), realtime běží přes `event_realtime_ticks`.
+- Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé čtení tabulek RLS nepovolí), realtime běží přes `event_realtime_ticks`.
 - Organizátor jako samostatná identita (`events.organizer_name`) - chat, šťouchnutí, fotky i položky ze správy akce se podepisují jménem organizátora.
 - Serverové omezení uploadu fotek (bucket `event-photos`: max 10 MB, jen obrázky, nejvýše 50 fotek na akci a upload pouze do složky existující akce).
 - Lajky a komentáře u fotek (`event_photo_likes`, `event_photo_comments`): číst i zapisovat jdou jen přes RPC (`get_event_photo_likes`, `get_event_photo_comments`, `toggle_event_photo_like`, `add_event_photo_comment`, `delete_event_photo_comment`), jeden lajk na jméno a fotku, komentář max 500 znaků, max 200 komentářů na fotku, mazat komentáře smí jen organizátor. Otevřená alba se obnovují přes realtime ticky `photo`, `photo_like` a `photo_comment`.
@@ -340,7 +340,7 @@ Bez kroků 3-5 se tlačítko připomínky v appce zobrazí a subscription se ulo
 
 Připomínka "den předem" se pošle, když do akce zbývá 2-24 hodin, a podle data zní "Dnes v 18:00" nebo "Zítra v 18:00". Když do akce zbývají méně než 2 hodiny, přijde jen připomínka "hodinu předem" ("Za 45 min: …"). Každá push zpráva má TTL do začátku akce, takže se na offline zařízení nedoručí až po ní. Texty připomínek skládá Edge Function a jsou zatím jen česky.
 
-Při nasazení změny "Push reminders per event" nejdřív spusť SQL fázi, pak znovu nasaď `send-event-reminders` a teprve potom klienta (merge do `main`). SQL jde spustit kdykoli dřív, stará funkce i starý klient s ním fungují dál. Nová funkce ale potřebuje nové sloupce z `get_pending_event_reminders()` a nový klient volá `is_push_subscribed()`.
+Po změně připomínek nejdřív spusť aktuální `all-phases.sql`, pak znovu nasaď `send-event-reminders` a teprve potom klienta (merge do `main`): funkce i klient volají RPC, které přidává SQL (`claim_event_reminder_deliveries`, `is_push_subscribed` apod.).
 
 ### Automatický úklid expirovaných akcí (a jejich fotek)
 
@@ -385,7 +385,7 @@ Organizátorovo ruční mazání používá Edge Function se service-role klíč
 supabase functions deploy delete-event-data --no-verify-jwt
 ```
 
-Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba. Jednu fotku smí smazat i ten, kdo ji nahrál: pošle mazací token, který si jeho prohlížeč pro fotku uložil při nahrání, a oprávnění ověří `authorize_event_photo_delete()` v databázi (viz [SECURITY_MODEL.md](SECURITY_MODEL.md)). Při nasazení téhle změny nejdřív spusť SQL fázi "Uploaders can delete their own photos", pak funkci znovu nasaď a teprve potom nasaď klienta (merge do `main`). SQL jde spustit kdykoli dřív, protože nové parametry mají výchozí hodnotu a staré volání dál funguje. Opačně ne: nový klient posílá `p_delete_token`, který starý `record_event_photo` nezná, takže by nahrávání fotek selhalo, a nová funkce volá `authorize_event_photo_delete()`, bez které by selhalo mazání fotek.
+Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba. Jednu fotku smí smazat i ten, kdo ji nahrál: pošle mazací token, který si jeho prohlížeč pro fotku uložil při nahrání, a oprávnění ověří `authorize_event_photo_delete()` v databázi (viz [SECURITY_MODEL.md](SECURITY_MODEL.md)). Obecně platí pořadí: nejdřív SQL, pak Edge Functions, nakonec klient (merge do `main`), protože novější funkce a klient volají RPC, které přidává až SQL.
 
 ## Lokalizace (čeština a angličtina)
 

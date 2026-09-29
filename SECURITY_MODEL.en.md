@@ -44,10 +44,11 @@ guesses) the name of another guest, visible publicly on the event page, can in
 theory call the same RPC under that name - that isn't a bug that can be "fixed"
 in one function, it's a consequence of the app having no auth layer at all. A
 concrete example where this difference (between "checking that a field doesn't
-play two roles" and "actually verifying identity") came up is described right
-in the code at `unclaim_signup_item` (the "Realtime read hardening" phase,
-`supabase/sql/all-phases.sql`) - it's worth reading as a precise statement of
-this model's limits.
+play two roles" and "actually verifying identity") came up is
+`unclaim_signup_item`: it takes the name of the person being removed and the
+caller's name, and requires them to match. That stops one field from playing
+two roles, but it doesn't verify identity - whoever sends someone else's name
+twice gets through.
 
 What this means for new code: never assume that `p_attendee_name`,
 `p_sender_name` etc. prove who actually made the call. They're just a label the
@@ -59,8 +60,7 @@ caller made up.
 
 An event's organizer has no account or password - they just have **the event
 management link** (`.../#/event/:eventId/manage?token=...`). That `token` is a
-random string (`_random_token()` via `pgcrypto`/`gen_random_bytes()`, see the
-"Security hardening" phase), stored in `events.organizer_token` and sent in the
+random string (`_random_token()` via `pgcrypto`/`gen_random_bytes()`), stored in `events.organizer_token` and sent in the
 link's query string in plain text.
 
 The key property: **whoever has this URL is the organizer** - no session, no
@@ -82,10 +82,9 @@ That's a conscious trade-off, not an oversight - the "forgot the management link
 enter the PIN" flow returns **the original token back to the user** after
 verifying the PIN, so they can open event management again. That isn't possible
 with a one-way hash - a hash can't be turned back into the original. Exactly this
-trade-off (and why fixing it would mean rebuilding the whole recovery flow, not
-just one function) is documented in the comment on phase 14
-(`-- Phase 14: Security/correctness hardening...`) in
-`supabase/sql/all-phases.sql`.
+trade-off (and why fixing it would mean rebuilding the whole recovery flow in
+`get_organizer_path_with_pin`, not just one function) is a deliberate
+decision.
 
 ### Poll creator: `event_polls.creator_token`
 
@@ -143,12 +142,14 @@ authorization is gone.
 
 The established pattern in `supabase/sql/all-phases.sql` is:
 
-- SELECT/INSERT/UPDATE/DELETE policies for `anon`/`authenticated` on sensitive
-  tables are `using (false)` (or `with check (false)`) - no direct access from
-  the client is allowed at all. They're easy to find:
+- RLS is on for every table (`alter table ... enable row level security`),
+  and without a policy Postgres denies `anon`/`authenticated` everything.
+  There are only three allowing policies: reading `event_realtime_ticks`
+  (realtime), and reading and uploading in the `event-photos` bucket. To list
+  them all:
 
   ```bash
-  grep -n "using (false)" supabase/sql/all-phases.sql
+  grep -n "create policy" supabase/sql/all-phases.sql
   ```
 
 - All reads and writes go through `SECURITY DEFINER` RPC functions
@@ -172,20 +173,19 @@ The established pattern in `supabase/sql/all-phases.sql` is:
   the first thing it does is this comparison check.
 
 Why this matters so much has its own story in the app, not just theory: the
-"Realtime read hardening" phase (`-- ==================== Realtime read
-hardening ====================` in `supabase/sql/all-phases.sql`) describes
-exactly this kind of bug, found and fixed on nine tables at once
+"Realtime read hardening" change (in the git history of
+`supabase/sql/all-phases.sql`) fixed exactly this kind of bug on nine tables at
+once
 (`event_polls`/`event_poll_options`/`event_poll_votes`, `event_photos`,
 `event_chat_messages`/`event_chat_message_reactions`,
 `event_signup_items`/`event_signup_claims`, `event_stops`) - the policies were
 `using (true)` or `using (event_exists(event_id))` (which, thanks to the FK, is
 trivially true for every existing row), so a direct REST query without an
 `event_id` filter could read the chat, photos, polls and lists of ALL events in
-the app at once, not just the one the caller has a link to. The comment on that
-phase is worth reading in full - it also explains why the tables with realtime
-subscriptions (chat, signup lists, stops) couldn't simply be locked down to
-`using (false)`, and an RPC layer plus a switch to the "listen to
-`event_realtime_ticks`, then fetch the data again" pattern had to be introduced.
+the app at once, not just the one the caller has a link to. For the tables with
+realtime subscriptions (chat, signup lists, stops), reads couldn't simply be
+denied; an RPC layer and the "listen to `event_realtime_ticks`, then fetch the
+data again" pattern had to be introduced.
 
 ## 4. The rule for new code
 
@@ -194,9 +194,8 @@ When you add a new table or RPC function:
 1. **Never trust an `event_id`, token or name sent by the client as proof of
    identity or ownership on its own.** It's just an input parameter, not a
    verified fact.
-2. A new table has `using (false)` (and `with check (false)` for writes) by
-   default on SELECT/INSERT/UPDATE/DELETE for `anon`/`authenticated`, until
-   there's a concrete reason otherwise.
+2. A new table gets `alter table ... enable row level security` and no policy,
+   until there's a concrete reason for direct access from the client.
 3. Reads and writes go through a `SECURITY DEFINER` RPC that:
    - is `language plpgsql security definer set search_path = public`,
    - checks authorization inside its body - typically `if v_event.organizer_token
@@ -238,7 +237,7 @@ function in `supabase/sql/all-phases.sql`.
   verified in any way (no SMS) - whoever registers a number first owns the
   account for it. The name is simply overwritten on sign-in.
 - `/feedback` is public on purpose - anyone can read every report, names
-  included (phase 21 in `all-phases.sql`).
+  included (`get_feedback_reports` in `all-phases.sql`).
 - Other specific findings (a missing ownership check in one RPC, missing
   server-side upload validation, etc.) are tracked as issues/findings in
   [CODE_REVIEW.en.md](CODE_REVIEW.en.md), not duplicated here - this document
