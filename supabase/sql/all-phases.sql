@@ -312,6 +312,139 @@ set search_path = public
 as $$
 declare
   v_source_name text := nullif(trim(p_source_name), '');
+  v_message text := nullif(trim(coalesce(p_message, '')), '');
+  v_attendee public.attendees%rowtype;
+  v_ping_count integer;
+begin
+  if not exists (select 1 from public.events e where e.id = p_event_id) then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if v_source_name is null then
+    raise exception 'Vyplň svoje jméno pro šťouchnutí.';
+  end if;
+
+  if v_message is not null and length(v_message) > 280 then
+    raise exception 'Zpráva ke šťouchnutí může mít maximálně 280 znaků.';
+  end if;
+
+  select *
+  into v_attendee
+  from public.attendees a
+  where a.event_id = p_event_id and a.id = p_target_attendee_id;
+
+  if not found then
+    raise exception 'Účastník nebyl nalezen.';
+  end if;
+
+  if lower(trim(v_attendee.name)) = lower(v_source_name) then
+    raise exception 'Nemůžeš šťouchnout sám sebe.';
+  end if;
+
+  if v_attendee.status not in ('excused', 'excused_rejected') then
+    raise exception 'Šťouchnout jde jen účastníka, který nejde.';
+  end if;
+
+  insert into public.attendee_pings (event_id, target_attendee_id, source_name, message)
+  values (p_event_id, p_target_attendee_id, v_source_name, v_message)
+  on conflict (event_id, target_attendee_id, lower(source_name)) do nothing;
+
+  if not found then
+    raise exception 'Tohle šťouchnutí už od tebe dorazilo.';
+  end if;
+
+  select count(*)::integer
+  into v_ping_count
+  from public.attendee_pings ap
+  where ap.event_id = p_event_id and ap.target_attendee_id = p_target_attendee_id;
+
+  return jsonb_build_object(
+    'success', true,
+    'pingCount', coalesce(v_ping_count, 0),
+    'lastMessage', v_message
+  );
+end;
+$$;
+
+create or replace function public.create_event(
+  p_name text,
+  p_location text,
+  p_datetime timestamp without time zone,
+  p_description text,
+  p_organizer_name text,
+  p_organizer_pin text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(trim(p_name), '');
+  v_location text := nullif(trim(p_location), '');
+  v_description text := nullif(trim(p_description), '');
+  v_organizer_name text := nullif(trim(p_organizer_name), '');
+  v_organizer_pin text := nullif(trim(p_organizer_pin), '');
+  v_id text;
+  v_token text;
+  v_attempts integer := 0;
+begin
+  if v_name is null or v_location is null or p_datetime is null or v_description is null or v_organizer_name is null then
+    raise exception 'Vyplň svoje jméno, název, místo, datum a stručný popis akce.';
+  end if;
+
+  if v_organizer_pin is null or v_organizer_pin !~ '^[0-9]{4}$' then
+    raise exception 'Správcovský PIN musí mít přesně 4 číslice.';
+  end if;
+
+  loop
+    v_attempts := v_attempts + 1;
+    if v_attempts > 20 then
+      raise exception 'Nepodařilo se vytvořit jedinečný identifikátor akce.';
+    end if;
+
+    v_id := public._random_token(10);
+    exit when not exists (select 1 from public.events e where e.id = v_id);
+  end loop;
+
+  loop
+    v_token := public._random_token(24);
+    exit when not exists (select 1 from public.events e where e.organizer_token = v_token);
+  end loop;
+
+  insert into public.events (
+    id,
+    name,
+    location,
+    datetime,
+    description,
+    organizer_token,
+    organizer_pin_hash,
+    organizer_pin_failed_attempts,
+    organizer_pin_locked_until
+  )
+  values (
+    v_id,
+    v_name,
+    v_location,
+    p_datetime,
+    v_description,
+    v_token,
+    extensions.crypt(v_organizer_pin, extensions.gen_salt('bf')),
+    0,
+    null
+  );
+
+  insert into public.attendees (event_id, name, status, excuse_reason)
+  values (v_id, v_organizer_name, 'confirmed', null);
+
+  return jsonb_build_object(
+    'event', jsonb_build_object(
+      'id', v_id,
+      'name', v_name,
+      'location', v_location,
+      'datetime', p_datetime,
+      'description', v_description
     ),
     'guestPath', '/event/' || v_id,
     'organizerPath', '/event/' || v_id || '/manage?token=' || v_token
@@ -2185,128 +2318,6 @@ begin;
 alter table public.attendees
   add column if not exists checked_in_at timestamptz;
 
-/*
-create or replace function public.check_in_attendee(
-  p_event_id text,
-  p_attendee_name text
-)
-returns jsonb
-language plpgsql
-security definer
-
--- ==================== Reliable push reminder delivery ====================
--- Lease each event/reminder/endpoint independently. Concurrent Edge Function
--- runs skip rows leased by another run; successful endpoints stay complete,
--- while transient failures become eligible on the next scheduled run.
-
-begin;
-
-create or replace function public.claim_event_reminder_deliveries(
-  p_event_id text,
-  p_reminder_type text
-)
-
-  where a.event_id = p_event_id
-    and lower(trim(a.name)) = lower(v_name)
-    and a.status = 'confirmed';
-
-  if not found then
-    raise exception 'Nejdřív potvrď účast, pak se můžeš odbavit.';
-  end if;
-
-  update public.attendees
-  set checked_in_at = now()
-  where id = v_attendee.id;
-
-  perform public.emit_event_realtime_tick(p_event_id, 'attendee');
-
-  return jsonb_build_object('success', true);
-end;
-$$;
-
-grant execute on function public.check_in_attendee(text, text) to anon, authenticated;
-
-create or replace function public.get_event_payload(p_event_id text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_event public.events%rowtype;
-  v_attendees jsonb;
-  v_summary jsonb;
-begin
-  select * into v_event from public.events e where e.id = p_event_id;
-
-  if not found then
-    raise exception 'Tahle akce už neexistuje.';
-  end if;
-
-  select coalesce(jsonb_agg(
-    jsonb_build_object(
-      'id', a.id,
-      'event_id', a.event_id,
-      'name', a.name,
-      'status', a.status,
-      'excuse_reason', a.excuse_reason,
-      'phone', a.phone,
-      'created_at', a.created_at,
-      'checked_in_at', a.checked_in_at,
-      'ping_count', coalesce(p.ping_count, 0),
-      'ping_last_source_name', p.last_source_name,
-      'ping_last_message', p.last_message,
-      'ping_last_created_at', p.last_created_at
-    ) order by
-      case a.status
-        when 'confirmed' then 1
-        when 'excused' then 2
-        when 'excused_accepted' then 3
-        when 'excused_rejected' then 4
-        else 5
-      end,
-      a.created_at asc,
-      a.name asc
-  ), '[]'::jsonb)
-  into v_attendees
-  from public.attendees a
-  left join lateral (
-    select
-      (select count(*)::integer from public.attendee_pings ap where ap.event_id = p_event_id and ap.target_attendee_id = a.id) as ping_count,
-      (select ap.source_name from public.attendee_pings ap where ap.event_id = p_event_id and ap.target_attendee_id = a.id order by ap.created_at desc limit 1) as last_source_name,
-      (select ap.message from public.attendee_pings ap where ap.event_id = p_event_id and ap.target_attendee_id = a.id order by ap.created_at desc limit 1) as last_message,
-      (select ap.created_at from public.attendee_pings ap where ap.event_id = p_event_id and ap.target_attendee_id = a.id order by ap.created_at desc limit 1) as last_created_at
-  ) p on true
-  where a.event_id = p_event_id;
-
-  select jsonb_build_object(
-    'confirmed', count(*) filter (where a.status = 'confirmed'),
-    'excused', count(*) filter (where a.status in ('excused', 'excused_accepted')),
-    'rejected', count(*) filter (where a.status = 'excused_rejected')
-  ) into v_summary
-  from public.attendees a
-  where a.event_id = p_event_id;
-
-  return jsonb_build_object(
-    'event', jsonb_build_object(
-      'id', v_event.id,
-      'name', v_event.name,
-      'location', v_event.location,
-      'datetime', v_event.datetime,
-      'description', v_event.description,
-      'createdAt', v_event.created_at,
-      'requirePhone', v_event.require_phone
-    ),
-    'attendees', v_attendees,
-    'summary', v_summary
-  );
-end;
-$$;
-
-grant execute on function public.get_event_payload(text) to anon, authenticated;
-
-*/
-
 create or replace function public.check_in_attendee(
   p_event_id text,
   p_attendee_name text
@@ -2480,6 +2491,163 @@ begin
     raise exception 'Chybí jméno pro reakci.';
   end if;
 
+  if p_emoji not in ('👍', '❤️', '😂', '🎉', '🍻') then
+    raise exception 'Tenhle emoji není podporovaný.';
+  end if;
+
+  if not exists (select 1 from public.event_chat_messages m where m.id = p_message_id) then
+    raise exception 'Zpráva nebyla nalezena.';
+  end if;
+
+  select id into v_existing
+  from public.event_chat_message_reactions
+  where message_id = p_message_id and sender_name = v_name and emoji = p_emoji;
+
+  if v_existing is not null then
+    delete from public.event_chat_message_reactions where id = v_existing;
+    return jsonb_build_object('success', true, 'action', 'removed');
+  end if;
+
+  insert into public.event_chat_message_reactions (message_id, sender_name, emoji)
+  values (p_message_id, v_name, p_emoji);
+
+  return jsonb_build_object('success', true, 'action', 'added');
+end;
+$$;
+
+grant execute on function public.toggle_chat_reaction(bigint, text, text) to anon, authenticated;
+
+-- ==================== Signup lists (bring-list + carpool) ====================
+
+create table if not exists public.event_signup_items (
+  id bigint generated always as identity primary key,
+  event_id text not null references public.events(id) on delete cascade,
+  category text not null check (category in ('bring', 'ride')),
+  label text not null check (length(trim(label)) between 1 and 120),
+  capacity integer not null default 1 check (capacity > 0 and capacity <= 20),
+  note text,
+  created_by text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists event_signup_items_event_idx
+  on public.event_signup_items (event_id);
+
+create table if not exists public.event_signup_claims (
+  id bigint generated always as identity primary key,
+  item_id bigint not null references public.event_signup_items(id) on delete cascade,
+  attendee_name text not null,
+  seats integer not null default 1 check (seats > 0),
+  created_at timestamptz not null default now(),
+  unique (item_id, attendee_name)
+);
+
+alter table public.event_signup_items enable row level security;
+alter table public.event_signup_claims enable row level security;
+
+drop policy if exists "event_signup_items_select" on public.event_signup_items;
+create policy "event_signup_items_select" on public.event_signup_items for select to anon, authenticated using (true);
+drop policy if exists "event_signup_items_no_direct_write" on public.event_signup_items;
+create policy "event_signup_items_no_direct_write" on public.event_signup_items for insert to anon, authenticated with check (false);
+drop policy if exists "event_signup_items_no_direct_delete" on public.event_signup_items;
+create policy "event_signup_items_no_direct_delete" on public.event_signup_items for delete to anon, authenticated using (false);
+
+drop policy if exists "event_signup_claims_select" on public.event_signup_claims;
+create policy "event_signup_claims_select" on public.event_signup_claims for select to anon, authenticated using (true);
+drop policy if exists "event_signup_claims_no_direct_write" on public.event_signup_claims;
+create policy "event_signup_claims_no_direct_write" on public.event_signup_claims for insert to anon, authenticated with check (false);
+drop policy if exists "event_signup_claims_no_direct_delete" on public.event_signup_claims;
+create policy "event_signup_claims_no_direct_delete" on public.event_signup_claims for delete to anon, authenticated using (false);
+
+create or replace function public.add_signup_item(
+  p_event_id text,
+  p_category text,
+  p_label text,
+  p_capacity integer,
+  p_note text,
+  p_created_by text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_label text := nullif(trim(p_label), '');
+  v_created_by text := nullif(trim(p_created_by), '');
+  v_id bigint;
+begin
+  if not exists (select 1 from public.events e where e.id = p_event_id) then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if p_category not in ('bring', 'ride') then
+    raise exception 'Neplatná kategorie položky.';
+  end if;
+
+  if v_label is null then
+    raise exception 'Napiš, co se má přinést nebo zajistit.';
+  end if;
+
+  if v_created_by is null then
+    raise exception 'Chybí jméno.';
+  end if;
+
+  insert into public.event_signup_items (event_id, category, label, capacity, note, created_by)
+  values (p_event_id, p_category, v_label, greatest(coalesce(p_capacity, 1), 1), nullif(trim(coalesce(p_note, '')), ''), v_created_by)
+  returning id into v_id;
+
+  return jsonb_build_object('success', true, 'id', v_id);
+end;
+$$;
+
+create or replace function public.claim_signup_item(
+  p_item_id bigint,
+  p_attendee_name text,
+  p_seats integer default 1
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(trim(p_attendee_name), '');
+  v_item public.event_signup_items%rowtype;
+  v_claimed_seats integer;
+begin
+  if v_name is null then
+    raise exception 'Chybí jméno.';
+  end if;
+
+  select * into v_item from public.event_signup_items where id = p_item_id;
+
+  if not found then
+    raise exception 'Položka nebyla nalezena.';
+  end if;
+
+  select coalesce(sum(seats), 0) into v_claimed_seats
+  from public.event_signup_claims
+  where item_id = p_item_id and attendee_name <> v_name;
+
+  if v_claimed_seats + greatest(coalesce(p_seats, 1), 1) > v_item.capacity then
+    raise exception 'Už je to obsazené.';
+  end if;
+
+  insert into public.event_signup_claims (item_id, attendee_name, seats)
+  values (p_item_id, v_name, greatest(coalesce(p_seats, 1), 1))
+  on conflict (item_id, attendee_name) do update
+    set seats = excluded.seats;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+create or replace function public.unclaim_signup_item(
+  p_item_id bigint,
+  p_attendee_name text
+)
+returns jsonb
 language plpgsql
 security definer
 set search_path = public
@@ -7129,6 +7297,7 @@ grant execute on function public.get_pending_event_reminders() to service_role;
 commit;
 
 -- ==================== Reliable push reminder delivery ====================
+-- Lease each event/reminder/endpoint independently. Concurrent Edge Function
 -- runs skip rows leased by another run; successful endpoints stay complete,
 -- while transient failures become eligible on the next scheduled run.
 
