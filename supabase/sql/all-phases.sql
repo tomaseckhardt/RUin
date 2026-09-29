@@ -2859,8 +2859,12 @@ begin
     raise exception 'Vyplň svoje jméno a název ankety.';
   end if;
 
-  if jsonb_array_length(p_options) < 2 then
+  if p_options is null or jsonb_typeof(p_options) <> 'array' then
     raise exception 'Přidej aspoň dvě možnosti.';
+  end if;
+
+  if jsonb_array_length(p_options) < 2 or jsonb_array_length(p_options) > 5 then
+    raise exception 'Anketa může mít 2 až 5 možností.';
   end if;
 
   loop
@@ -2880,6 +2884,12 @@ begin
 
   for v_option in select * from jsonb_array_elements(p_options)
   loop
+    if jsonb_typeof(v_option) <> 'object'
+      or nullif(trim(v_option->>'datetime'), '') is null
+      or nullif(trim(v_option->>'location'), '') is null then
+      raise exception 'Každá možnost musí mít platné datum a místo.';
+    end if;
+
     insert into public.event_poll_options (poll_id, datetime, location, note)
     values (
       v_id,
@@ -3870,8 +3880,12 @@ begin
     raise exception 'Vyplň svoje jméno a název ankety.';
   end if;
 
-  if jsonb_array_length(p_options) < 2 then
+  if p_options is null or jsonb_typeof(p_options) <> 'array' then
     raise exception 'Přidej aspoň dvě možnosti.';
+  end if;
+
+  if jsonb_array_length(p_options) < 2 or jsonb_array_length(p_options) > 5 then
+    raise exception 'Anketa může mít 2 až 5 možností.';
   end if;
 
   loop
@@ -3891,6 +3905,12 @@ begin
 
   for v_option in select * from jsonb_array_elements(p_options)
   loop
+    if jsonb_typeof(v_option) <> 'object'
+      or nullif(trim(v_option->>'datetime'), '') is null
+      or nullif(trim(v_option->>'location'), '') is null then
+      raise exception 'Každá možnost musí mít platné datum a místo.';
+    end if;
+
     insert into public.event_poll_options (poll_id, datetime, location, note)
     values (
       v_id,
