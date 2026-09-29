@@ -4431,7 +4431,10 @@ grant execute on function public.get_event_stops(text) to anon, authenticated;
 
 alter table public.event_realtime_ticks drop constraint if exists event_realtime_ticks_reason_check;
 alter table public.event_realtime_ticks add constraint event_realtime_ticks_reason_check
-  check (reason in ('event', 'attendee', 'ping', 'chat_message', 'chat_reaction', 'signup_item', 'signup_claim', 'stop'));
+  check (reason in (
+    'event', 'attendee', 'ping', 'chat_message', 'chat_reaction', 'signup_item', 'signup_claim', 'stop',
+    'photo', 'photo_like', 'photo_comment'
+  ));
 
 create or replace function public.emit_event_realtime_tick_from_chat_messages()
 returns trigger
