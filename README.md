@@ -92,7 +92,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
   - `public/` - service worker (`sw.js`), ikony a manifest
   - `scripts/run-vite-safe.mjs` - spouští Vite z dočasné kopie projektu (viz [NPM skripty](#npm-skripty))
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
-- `supabase/functions/` - Edge Functions (`send-event-reminders` pro push připomínky, `cleanup-expired-events` pro úklid expirovaných akcí)
+- `supabase/functions/` - Edge Functions (`send-event-reminders` pro push připomínky, `cleanup-expired-events` pro úklid expirovaných akcí, `delete-event-data` pro ruční mazání fotek a akcí)
 - `scripts/audit-a11y.mjs` - a11y audit postaveného buildu (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) a šablony pro issues a pull requesty
 - `CNAME` - vlastní doména pro GitHub Pages
@@ -158,7 +158,7 @@ Co všechno `all-phases.sql` obsahuje:
 - Case-insensitive hlasování v anketách.
 - Šťouchnutí s opakovatelným 10minutovým cooldownem místo "jednou navždy" (atomický `on conflict ... do update ... where`), s RLS na `attendee_pings`.
 - Bezpečnostní hardening: `_random_token` přes `pgcrypto`/`gen_random_bytes()` místo nekryptografického `random()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` vrací telefonní čísla jen s platným `p_organizer_token`; opravená race podmínka v `moderate_attendee`; srozumitelná hláška místo syrové Postgres chyby při konfliktu telefonního čísla. Záměrně neřeší: `organizer_token` zůstává čitelný (ne hash), protože appka přes PIN umí "obnovit" zapomenutý manage odkaz a to s jednosměrným hashem nejde bez přestavby celého recovery flow. Celý model identity/autorizace (appka nemá auth vůbec, jediná "oprávnění" jsou tokeny v odkazech, RLS musí defaultně vše zamítat) je sepsaný v [SECURITY_MODEL.md](SECURITY_MODEL.md).
-- Mazání fotek ze Storage při zániku akce - ruční mazání jde přes klientské Storage API, automatické po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` (viz [Automatický úklid expirovaných akcí](#automatický-úklid-expirovaných-akcí-a-jejich-fotek)) - a vlastní životní cyklus anket (nevyhodnocená zanikne 14 dní od vytvoření, vyhodnocená automaticky spolu s akcí, co z ní vznikla).
+- Mazání fotek ze Storage - ručně přes Edge Function `delete-event-data`, která ověřuje organizátorský token, automaticky po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` - a vlastní životní cyklus anket (nevyhodnocená zanikne 14 dní od vytvoření, vyhodnocená automaticky spolu s akcí, co z ní vznikla).
 - Blokace přihlášení řidiče na vlastní nabídku odvozu + možnost odebrat konkrétního spolujezdce z vlastní nabídky.
 - Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé `select` politiky jsou `using (false)`), realtime běží přes `event_realtime_ticks`.
 - Organizátor jako samostatná identita (`events.organizer_name`) - chat, šťouchnutí, fotky i položky ze správy akce se podepisují jménem organizátora.
@@ -336,7 +336,17 @@ select cron.schedule(
 );
 ```
 
-Bez tohohle kroku se expirované akce nemažou vůbec - dřívější automatické mazání přímo v SQL (`_delete_expired_events()`) bylo odstraněné, protože nemohlo mazat fotky ze Storage. Ankety mají vlastní úklid, který řeší databáze sama: nevyhodnocená anketa zanikne 14 dní od založení, vyhodnocená spolu s akcí, která z ní vznikla. Ruční mazání (organizátor smaže akci/fotku z appky) na téhle Edge Function nezávisí - jde přes klientské Storage API rovnou (`client/src/lib/supabase.js`).
+Bez tohohle kroku se expirované akce nemažou vůbec - dřívější automatické mazání přímo v SQL (`_delete_expired_events()`) bylo odstraněné, protože nemohlo mazat fotky ze Storage. Ankety mají vlastní úklid, který řeší databáze sama: nevyhodnocená anketa zanikne 14 dní od založení, vyhodnocená spolu s akcí, která z ní vznikla.
+
+### Ruční mazání fotek a akcí
+
+Organizátorovo ruční mazání používá Edge Function se service-role klíčem, aby se Storage objekty skutečně odstranily. Nasaď ji po aktualizaci SQL schématu:
+
+```bash
+supabase functions deploy delete-event-data --no-verify-jwt
+```
+
+Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba.
 
 ## Lokalizace (čeština a angličtina)
 

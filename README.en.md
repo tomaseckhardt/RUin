@@ -92,7 +92,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
   - `public/` - service worker (`sw.js`), icons and the manifest
   - `scripts/run-vite-safe.mjs` - runs Vite from a temporary copy of the project (see [NPM scripts](#npm-scripts))
 - `supabase/sql/all-phases.sql` - the whole database schema, a single SQL file
-- `supabase/functions/` - Edge Functions (`send-event-reminders` for push reminders, `cleanup-expired-events` for cleaning up expired events)
+- `supabase/functions/` - Edge Functions (`send-event-reminders` for push reminders, `cleanup-expired-events` for cleaning up expired events, `delete-event-data` for manual photo/event deletion)
 - `scripts/audit-a11y.mjs` - a11y audit of the built app (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) and the issue and pull request templates
 - `CNAME` - the custom domain for GitHub Pages
@@ -158,7 +158,7 @@ What `all-phases.sql` contains:
 - Case-insensitive voting in polls.
 - Nudges with a repeatable 10-minute cooldown instead of "once, forever" (an atomic `on conflict ... do update ... where`), with RLS on `attendee_pings`.
 - Security hardening: `_random_token` via `pgcrypto`/`gen_random_bytes()` instead of the non-cryptographic `random()` (the token is the only authorization for `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` returns phone numbers only with a valid `p_organizer_token`; a fixed race condition in `moderate_attendee`; a readable message instead of a raw Postgres error on a phone number conflict. Deliberately not addressed: `organizer_token` stays readable (not hashed), because the app can "recover" a forgotten manage link via the PIN, and that isn't possible with a one-way hash without rebuilding the whole recovery flow. The whole identity/authorization model (the app has no auth at all, the only "permissions" are tokens in links, RLS must deny everything by default) is written up in [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md).
-- Deleting photos from Storage when an event goes away - manual deletion goes through the client Storage API, automatic deletion after 7 days through `get_expired_event_ids()` and the `cleanup-expired-events` Edge Function (see [Automatic cleanup of expired events](#automatic-cleanup-of-expired-events-and-their-photos)) - and a lifecycle of their own for polls (an undecided poll expires 14 days after it was created, a decided one is removed automatically together with the event it created).
+- Deleting photos from Storage - manual deletion goes through the `delete-event-data` Edge Function, which validates the organizer token; automatic deletion after 7 days goes through `get_expired_event_ids()` and the `cleanup-expired-events` Edge Function - and polls have their own lifecycle (an undecided poll expires 14 days after it was created, a decided one is removed automatically together with the event it created).
 - Blocking a driver from signing up for their own ride offer + the option to remove a specific passenger from your own offer.
 - Read hardening: chat, photos, polls, lists and stops can only be read through RPCs scoped to a specific event (the direct `select` policies are `using (false)`), and realtime goes through `event_realtime_ticks`.
 - The organizer as a separate identity (`events.organizer_name`) - chat messages, nudges, photos and items from event management are signed with the organizer's name.
@@ -336,7 +336,17 @@ select cron.schedule(
 );
 ```
 
-Without this step, expired events aren't deleted at all - the earlier automatic deletion straight in SQL (`_delete_expired_events()`) was removed because it couldn't delete photos from Storage. Polls have a cleanup of their own that the database handles by itself: an undecided poll expires 14 days after it was created, a decided one together with the event it created. Manual deletion (an organizer deletes an event/photo in the app) doesn't depend on this Edge Function - it goes straight through the client Storage API (`client/src/lib/supabase.js`).
+Without this step, expired events aren't deleted at all - the earlier automatic deletion straight in SQL (`_delete_expired_events()`) was removed because it couldn't delete photos from Storage. Polls have a cleanup of their own that the database handles by itself: an undecided poll expires 14 days after it was created, a decided one together with the event it created.
+
+### Manual deletion of photos and events
+
+Manual organizer deletion uses an Edge Function with the service-role key so Storage objects are actually removed. Deploy it after applying the SQL schema update:
+
+```bash
+supabase functions deploy delete-event-data --no-verify-jwt
+```
+
+The function validates the organizer token against the requested event; it needs no schedule, and the service-role key never goes to the client.
 
 ## Localization (Czech and English)
 

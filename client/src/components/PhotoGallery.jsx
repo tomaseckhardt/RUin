@@ -4,7 +4,6 @@ import JSZip from 'jszip'
 import ModalOverlay from './ModalOverlay.jsx'
 import { deleteEventPhoto, getEventPhotoUrl, getEventPhotos, recordEventPhoto, uploadEventPhoto } from '../lib/api.js'
 import { useI18n } from '../lib/i18n.js'
-import { supabase } from '../lib/supabase.js'
 
 function normalizeName(value) {
   return (value || '').trim().toLocaleLowerCase('cs-CZ')
@@ -105,12 +104,6 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     }
 
     try {
-      const { error: storageError } = await supabase.storage.from('event-photos').remove([photo.storage_path])
-
-      if (storageError) {
-        toast.warning(t('photos.storageDeleteFailed'))
-      }
-
       await deleteEventPhoto(eventId, organizerToken, photo.id)
       await loadPhotos()
     } catch (error) {
