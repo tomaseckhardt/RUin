@@ -4,10 +4,12 @@ import { HashRouter } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import './index.css'
 import App from './App.jsx'
+import { installEnterToSubmit } from './lib/enterToSubmit.js'
 import { ensurePushServiceWorker } from './lib/push.js'
 
 if (typeof window !== 'undefined') {
   ensurePushServiceWorker().catch(() => {})
+  installEnterToSubmit()
 }
 
 createRoot(document.getElementById('root')).render(
