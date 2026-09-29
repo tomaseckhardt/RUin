@@ -111,6 +111,9 @@ function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel
           </div>
         )}
         <main>{children}</main>
+        <footer className="mt-auto pt-10 text-center text-xs font-medium uppercase tracking-[0.24em]" style={{ color: 'var(--text-soft)' }}>
+          {t('shell.madeBy')}
+        </footer>
       </div>
     </div>
   )

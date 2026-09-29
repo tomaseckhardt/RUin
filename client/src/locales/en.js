@@ -34,6 +34,7 @@ export default {
     language: 'Language',
     theme: 'Theme',
     offline: 'You’re offline - some things won’t be saved until you reconnect.',
+    madeBy: 'Made by EKI',
   },
 
   eventForm: {
