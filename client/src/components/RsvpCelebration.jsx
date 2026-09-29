@@ -1,5 +1,11 @@
 import { useI18n } from '../lib/i18n.js'
 
+const RUBY_GIF_PATH = `${import.meta.env.BASE_URL || '/'}RUdy/`
+
+// Původní animace (konfety, fajfka, palec dolů) je dočasně nahrazená GIFy s Ruby.
+// Nechávám ji zakomentovanou, ať se k ní dá kdykoliv vrátit - stačí odkomentovat
+// tahle data a bloky označené "Původní animace" níž a smazat <img> s GIFem.
+/*
 const CONFETTI_DOTS = [
   {
     left: '20%',
@@ -56,12 +62,14 @@ const SAD_PARTICLES = [
   { left: '50%', top: '25%', size: 4, delay: '0.5s', duration: '1.8s' },
   { left: '70%', top: '35%', size: 5, delay: '0.4s', duration: '1.6s' },
 ]
+*/
 
 export function ConfirmCelebration({ name }) {
   const { t } = useI18n()
 
   return (
     <section className="panel relative overflow-hidden py-12 text-center" style={{ animation: 'scale-in 0.4s ease both' }}>
+      {/* Původní animace - konfety:
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {CONFETTI_DOTS.map((dot, index) => (
           <span
@@ -79,8 +87,10 @@ export function ConfirmCelebration({ name }) {
           />
         ))}
       </div>
+      */}
 
       <div className="relative">
+        {/* Původní animace - fajfka:
         <div
           className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
           style={{
@@ -112,6 +122,8 @@ export function ConfirmCelebration({ name }) {
             />
           </svg>
         </div>
+        */}
+        <img src={`${RUBY_GIF_PATH}ruby-party.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
         <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'float-up 0.4s ease 0.5s both', opacity: 0 }}>
           {name ? t('celebration.confirmTitleWithName', { name }) : t('celebration.confirmTitle')}
         </h3>
@@ -128,6 +140,7 @@ export function DeclineCelebration({ name }) {
 
   return (
     <section className="panel relative overflow-hidden py-12 text-center" style={{ animation: 'scale-in 0.4s ease both' }}>
+      {/* Původní animace - smutné částice:
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {SAD_PARTICLES.map((particle, index) => (
           <span
@@ -144,8 +157,10 @@ export function DeclineCelebration({ name }) {
           />
         ))}
       </div>
+      */}
 
       <div className="relative">
+        {/* Původní animace - palec dolů:
         <div
           className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
           style={{
@@ -154,6 +169,8 @@ export function DeclineCelebration({ name }) {
           }}>
           <span className="text-3xl leading-none">👎</span>
         </div>
+        */}
+        <img src={`${RUBY_GIF_PATH}ruby-rejected.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
         <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'float-up 0.4s ease 0.5s both', opacity: 0 }}>
           {name ? t('celebration.declineTitleWithName', { name }) : t('celebration.declineTitle')}
         </h3>
