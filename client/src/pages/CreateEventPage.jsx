@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
 import CollapsibleCard from '../components/CollapsibleCard.jsx'
 import ConfettiBurst from '../components/ConfettiBurst.jsx'
-import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
+import EventFormFields from '../components/EventFormFields.jsx'
 import GroupPicker from '../components/GroupPicker.jsx'
 import InviteListEditor from '../components/InviteListEditor.jsx'
 import OwnerAccessModal from '../components/OwnerAccessModal.jsx'
@@ -23,20 +23,12 @@ import {
   getOwnerPayload,
   inviteAttendees,
 } from '../lib/api.js'
-import { formatDateTime, parseLocalDateTime } from '../lib/format.js'
+import { formatDateTime, parseLocalDateTime, parseOrganizerToken } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 import { createEmptyInvitee, getFilledInvitees, mergeInvitees } from '../lib/invitees.js'
 import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
 import { getSavedOwner } from '../lib/ownerLinkStorage.js'
 import { createEmptySignupPrefillItem, getFilledSignupPrefillItems } from '../lib/signupPrefillItems.js'
-
-function parseTokenFromPath(path) {
-  try {
-    return new URL(path, window.location.origin).searchParams.get('token') || ''
-  } catch {
-    return ''
-  }
-}
 
 const initialForm = {
   organizerName: '',
@@ -55,14 +47,16 @@ const initialForm = {
 const composerToggleClassName =
   'inline-flex items-center justify-center rounded-full px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-soft)]'
 const composerToggleStyle = { background: '#6f4cff', boxShadow: '0 4px 12px -4px rgba(111, 76, 255, 0.6)' }
+const HERO_STATS = ['speed', 'flow', 'status']
+const STEPS = ['Share', 'Collect', 'Decide']
 
 function CreateEventPage() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [recentEvents, setRecentEvents] = useState([])
-  const [isLoadingRecentEvents, setIsLoadingRecentEvents] = useState(true)
+  // null until the events saved in this browser have loaded.
+  const [recentEvents, setRecentEvents] = useState(null)
   const [showAfterparty, setShowAfterparty] = useState(false)
   const [afterpartyLocation, setAfterpartyLocation] = useState('')
   const [afterpartyTime, setAfterpartyTime] = useState('')
@@ -80,8 +74,8 @@ function CreateEventPage() {
   const [groupName, setGroupName] = useState('')
   const [saveAsTemplate, setSaveAsTemplate] = useState(false)
   const [templateName, setTemplateName] = useState('')
-  const [showOwnerAccessModal, setShowOwnerAccessModal] = useState(false)
-  const [pendingOwnerCheckbox, setPendingOwnerCheckbox] = useState(null)
+  // 'group' or 'template' while OwnerAccessModal asks for the owner account.
+  const [pendingOwnerOption, setPendingOwnerOption] = useState(null)
   const [isComposerExpanded, setIsComposerExpanded] = useState(false)
 
   const whyItWorks = t('createEvent.whyItWorks')
@@ -105,9 +99,9 @@ function CreateEventPage() {
 
     try {
       const payload = await createEvent(form)
-      const organizerToken = parseTokenFromPath(payload.organizerPath)
+      const organizerToken = parseOrganizerToken(payload.organizerPath)
 
-      if (showAfterparty && afterpartyLocation.trim() && afterpartyTime && organizerToken) {
+      if (form.enableStops && showAfterparty && afterpartyLocation.trim() && afterpartyTime && organizerToken) {
         try {
           await addEventStop(payload.event.id, organizerToken, {
             name: 'Afterparty',
@@ -198,18 +192,6 @@ function CreateEventPage() {
       }
 
       toast.success(t('createEvent.created'))
-      setForm(initialForm)
-      setShowAfterparty(false)
-      setAfterpartyLocation('')
-      setAfterpartyTime('')
-      setShowInvites(false)
-      setInvitees([createEmptyInvitee()])
-      setBringItems([createEmptySignupPrefillItem()])
-      setRideItems([createEmptySignupPrefillItem()])
-      setSaveAsGroup(false)
-      setGroupName('')
-      setSaveAsTemplate(false)
-      setTemplateName('')
       navigate(payload.organizerPath)
     } catch (error) {
       toast.error(error.message)
@@ -248,37 +230,22 @@ function CreateEventPage() {
     }
   }
 
-  function handleToggleSaveAsGroup(checked) {
+  const ownerOptionSetters = { group: setSaveAsGroup, template: setSaveAsTemplate }
+
+  // Groups and templates are saved to an owner account: ask for one first.
+  function handleToggleOwnerOption(option, checked) {
     if (checked && !owner) {
-      setPendingOwnerCheckbox('group')
-      setShowOwnerAccessModal(true)
+      setPendingOwnerOption(option)
       return
     }
 
-    setSaveAsGroup(checked)
-  }
-
-  function handleToggleSaveAsTemplate(checked) {
-    if (checked && !owner) {
-      setPendingOwnerCheckbox('template')
-      setShowOwnerAccessModal(true)
-      return
-    }
-
-    setSaveAsTemplate(checked)
+    ownerOptionSetters[option](checked)
   }
 
   function handleOwnerAccessGranted(nextOwner) {
     setOwner(nextOwner)
-    setShowOwnerAccessModal(false)
-
-    if (pendingOwnerCheckbox === 'group') {
-      setSaveAsGroup(true)
-    } else if (pendingOwnerCheckbox === 'template') {
-      setSaveAsTemplate(true)
-    }
-
-    setPendingOwnerCheckbox(null)
+    ownerOptionSetters[pendingOwnerOption]?.(true)
+    setPendingOwnerOption(null)
   }
 
   function handlePickGroup(group) {
@@ -335,49 +302,24 @@ function CreateEventPage() {
 
   useEffect(() => {
     let cancelled = false
+    const ids = getSavedOrganizerEventIds().slice(-6).reverse()
 
-    async function loadRecentEvents() {
-      setIsLoadingRecentEvents(true)
+    // An event that no longer loads is forgotten.
+    Promise.allSettled(ids.map((eventId) => getEvent(eventId))).then((results) => {
+      const nextEvents = []
 
-      try {
-        const ids = getSavedOrganizerEventIds().slice(-6).reverse()
-
-        if (ids.length === 0) {
-          if (!cancelled) {
-            setRecentEvents([])
-          }
-
-          return
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value?.event) {
+          nextEvents.push({ id: ids[index], event: result.value.event })
+        } else {
+          clearSavedOrganizerToken(ids[index])
         }
+      })
 
-        const results = await Promise.allSettled(ids.map((eventId) => getEvent(eventId)))
-        const nextEvents = []
-
-        results.forEach((result, index) => {
-          const eventId = ids[index]
-
-          if (result.status === 'fulfilled' && result.value?.event) {
-            nextEvents.push({
-              id: eventId,
-              event: result.value.event,
-            })
-            return
-          }
-
-          clearSavedOrganizerToken(eventId)
-        })
-
-        if (!cancelled) {
-          setRecentEvents(nextEvents)
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingRecentEvents(false)
-        }
+      if (!cancelled) {
+        setRecentEvents(nextEvents)
       }
-    }
-
-    loadRecentEvents()
+    })
 
     return () => {
       cancelled = true
@@ -423,27 +365,17 @@ function CreateEventPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-                <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">
-                    {t('createEvent.speedLabel')}
+                {HERO_STATS.map((stat) => (
+                  <div key={stat} className="stat-tile">
+                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">
+                      {t(`createEvent.${stat}Label`)}
+                    </div>
+                    <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">
+                      {t(`createEvent.${stat}Value`)}
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t(`createEvent.${stat}Text`)}</p>
                   </div>
-                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.speedValue')}</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.speedText')}</p>
-                </div>
-                <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">
-                    {t('createEvent.flowLabel')}
-                  </div>
-                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.flowValue')}</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.flowText')}</p>
-                </div>
-                <div className="stat-tile">
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">
-                    {t('createEvent.statusLabel')}
-                  </div>
-                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{t('createEvent.statusValue')}</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.statusText')}</p>
-                </div>
+                ))}
               </div>
             </div>
           </article>
@@ -458,21 +390,13 @@ function CreateEventPage() {
           </section>
 
           <section className="grid gap-4 md:grid-cols-3">
-            <article className="panel">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">01</p>
-              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">{t('createEvent.stepShareTitle')}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.stepShareText')}</p>
-            </article>
-            <article className="panel">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">02</p>
-              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">{t('createEvent.stepCollectTitle')}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.stepCollectText')}</p>
-            </article>
-            <article className="panel">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">03</p>
-              <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">{t('createEvent.stepDecideTitle')}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('createEvent.stepDecideText')}</p>
-            </article>
+            {STEPS.map((step, index) => (
+              <article key={step} className="panel">
+                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">0{index + 1}</p>
+                <h3 className="mt-3 text-xl font-bold text-slate-950 dark:text-slate-50">{t(`createEvent.step${step}Title`)}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t(`createEvent.step${step}Text`)}</p>
+              </article>
+            ))}
           </section>
         </section>
 
@@ -485,13 +409,11 @@ function CreateEventPage() {
             onFocus={handleComposerFocus}>
             <div className="mb-6">
               <CollapsibleCard eyebrow={t('createEvent.recentEyebrow')} title={t('createEvent.recentTitle')}>
-                {isLoadingRecentEvents ? <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentLoading')}</p> : null}
+                {recentEvents === null ? <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentLoading')}</p> : null}
 
-                {!isLoadingRecentEvents && recentEvents.length === 0 ? (
-                  <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentEmpty')}</p>
-                ) : null}
+                {recentEvents?.length === 0 ? <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentEmpty')}</p> : null}
 
-                {!isLoadingRecentEvents && recentEvents.length > 0 ? (
+                {recentEvents?.length > 0 ? (
                   <div className="space-y-3">
                     {recentEvents.map(({ id: eventId, event }) => (
                       <article
@@ -554,91 +476,7 @@ function CreateEventPage() {
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('createEvent.pinHint')}</p>
                 </div>
               </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.name')}</label>
-                <input className="field" value={form.name} onChange={updateField('name')} placeholder={t('createEvent.namePlaceholder')} required />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.location')}</label>
-                <input
-                  className="field"
-                  value={form.location}
-                  onChange={updateField('location')}
-                  placeholder={t('createEvent.locationPlaceholder')}
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.dateTime')}</label>
-                <EventDateTimePicker value={form.datetime} onChange={(nextValue) => setForm((current) => ({ ...current, datetime: nextValue }))} />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('eventForm.description')}</label>
-                <textarea
-                  className="field min-h-32"
-                  value={form.description}
-                  onChange={updateField('description')}
-                  placeholder={t('eventForm.descriptionPlaceholder')}
-                  required
-                />
-              </div>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                  checked={form.requirePhone}
-                  onChange={(e) => setForm((current) => ({ ...current, requirePhone: e.target.checked }))}
-                />
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.requirePhone')}</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.requirePhoneHint')}</p>
-                </div>
-              </label>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                    checked={form.enableBringList}
-                    onChange={(e) => setForm((current) => ({ ...current, enableBringList: e.target.checked }))}
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.bringList')}</p>
-                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.bringListHint')}</p>
-                  </div>
-                </label>
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                    checked={form.enableCarpool}
-                    onChange={(e) => setForm((current) => ({ ...current, enableCarpool: e.target.checked }))}
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.carpool')}</p>
-                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.carpoolHint')}</p>
-                  </div>
-                </label>
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 transition hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/30">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
-                    checked={form.enableStops}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      setForm((current) => ({ ...current, enableStops: checked }))
-                      if (!checked) {
-                        setShowAfterparty(false)
-                      }
-                    }}
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('eventForm.stops')}</p>
-                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('eventForm.stopsHint')}</p>
-                  </div>
-                </label>
-              </div>
+              <EventFormFields form={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
 
               {form.enableBringList ? (
                 <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30">
@@ -710,7 +548,7 @@ function CreateEventPage() {
                             type="checkbox"
                             className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
                             checked={saveAsGroup}
-                            onChange={(event) => handleToggleSaveAsGroup(event.target.checked)}
+                            onChange={(event) => handleToggleOwnerOption('group', event.target.checked)}
                             disabled={isSubmitting}
                           />
                           <div className="w-full">
@@ -736,7 +574,7 @@ function CreateEventPage() {
                       type="checkbox"
                       className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-600"
                       checked={saveAsTemplate}
-                      onChange={(event) => handleToggleSaveAsTemplate(event.target.checked)}
+                      onChange={(event) => handleToggleOwnerOption('template', event.target.checked)}
                       disabled={isSubmitting}
                     />
                     <div className="w-full">
@@ -799,14 +637,7 @@ function CreateEventPage() {
 
       <ConfettiBurst origin={confettiOrigin} burstKey={burstKey} />
 
-      <OwnerAccessModal
-        open={showOwnerAccessModal}
-        onClose={() => {
-          setShowOwnerAccessModal(false)
-          setPendingOwnerCheckbox(null)
-        }}
-        onAccessGranted={handleOwnerAccessGranted}
-      />
+      <OwnerAccessModal open={pendingOwnerOption !== null} onClose={() => setPendingOwnerOption(null)} onAccessGranted={handleOwnerAccessGranted} />
     </PageShell>
   )
 }

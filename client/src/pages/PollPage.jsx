@@ -24,9 +24,7 @@ function PollPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [voterName, setVoterName] = useState(() => readStoredValue(voterStorageKey(id)) || '')
-  const [selectedOptionId, setSelectedOptionId] = useState(null)
-  const [hasSelectedManually, setHasSelectedManually] = useState(false)
-  const [lastAutoSelectedId, setLastAutoSelectedId] = useState(null)
+  const [pickedOptionId, setPickedOptionId] = useState(null)
   const [isVoting, setIsVoting] = useState(false)
   const [finalizingOptionId, setFinalizingOptionId] = useState(null)
   const [organizerPin, setOrganizerPin] = useState('')
@@ -58,15 +56,13 @@ function PollPage() {
       ? payload.options.find((option) => option.votes.some((voterEntry) => normalizeName(voterEntry) === normalizedVoterName))
       : null
 
-  if (!hasSelectedManually && myExistingVoteOption && myExistingVoteOption.id !== lastAutoSelectedId) {
-    setLastAutoSelectedId(myExistingVoteOption.id)
-    setSelectedOptionId(myExistingVoteOption.id)
-  }
+  // Until the voter picks an option, their existing vote is preselected.
+  const chosenId = pickedOptionId ?? myExistingVoteOption?.id ?? null
 
   async function handleVote(event) {
     event.preventDefault()
 
-    if (!voterName.trim() || !selectedOptionId) {
+    if (!voterName.trim() || !chosenId) {
       toast.error(t('poll.nameAndOptionRequired'))
       return
     }
@@ -74,7 +70,7 @@ function PollPage() {
     setIsVoting(true)
 
     try {
-      await votePoll(id, selectedOptionId, voterName)
+      await votePoll(id, chosenId, voterName)
       writeStoredValue(voterStorageKey(id), voterName.trim())
       toast.success(t('poll.voteSaved'))
       await loadPoll()
@@ -141,7 +137,7 @@ function PollPage() {
           <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('poll.options')}</p>
           <div className="mt-4 space-y-3">
             {options.map((option) => {
-              const isHighlighted = isCreator ? finalizingOptionId === option.id : selectedOptionId === option.id
+              const isHighlighted = isCreator ? finalizingOptionId === option.id : chosenId === option.id
 
               return (
                 <label
@@ -153,11 +149,8 @@ function PollPage() {
                         type="radio"
                         name="poll-option"
                         className="h-4 w-4 accent-fuchsia-600"
-                        checked={selectedOptionId === option.id}
-                        onChange={() => {
-                          setHasSelectedManually(true)
-                          setSelectedOptionId(option.id)
-                        }}
+                        checked={chosenId === option.id}
+                        onChange={() => setPickedOptionId(option.id)}
                       />
                     ) : null}
                     <div>

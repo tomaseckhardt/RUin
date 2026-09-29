@@ -4,8 +4,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AttendeeList from '../components/AttendeeList.jsx'
 import AddToCalendarButton from '../components/AddToCalendarButton.jsx'
 import EventChat from '../components/EventChat.jsx'
+import EventOverviewModal from '../components/EventOverviewModal.jsx'
 import ModalOverlay from '../components/ModalOverlay.jsx'
 import PageShell from '../components/PageShell.jsx'
+import PingComposerModal from '../components/PingComposerModal.jsx'
+import { PinUnlockModal } from '../components/PinUnlockForm.jsx'
 import { ConfirmCelebration, DeclineCelebration } from '../components/RsvpCelebration.jsx'
 import ShareInviteModal from '../components/ShareInviteModal.jsx'
 import WeatherWidget from '../components/WeatherWidget.jsx'
@@ -38,9 +41,12 @@ const PING_SEEN_STORAGE_PREFIX = 'ruin-event-last-seen-ping'
 const PING_COOLDOWN_STORAGE_PREFIX = 'ruin-event-ping-cooldown'
 const PING_COOLDOWN_MS = 10 * 60 * 1000
 const REFRESH_ERROR_TOAST_ID = 'event-refresh-error'
-const MODAL_CARD_CLASS_NAME =
-  'h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6'
 const SUMMARY_STATUS_GROUPS = ['confirmed', 'excused', 'excused_accepted', 'excused_rejected']
+// Form status -> key prefix of its option label and hint under event.
+const RESPONSE_OPTIONS = [
+  ['confirmed', 'confirm'],
+  ['excused', 'excuse'],
+]
 
 function identityStorageKey(eventId) {
   return `${IDENTITY_STORAGE_PREFIX}:${eventId}`
@@ -70,10 +76,6 @@ function attendeeStatusToFormStatus(status) {
   return status === 'confirmed' ? 'confirmed' : 'excused'
 }
 
-async function fetchEventPayload(id) {
-  return getEvent(id)
-}
-
 function EventPage() {
   const { t } = useI18n()
   const { id } = useParams()
@@ -86,18 +88,16 @@ function EventPage() {
   const [selectedStatus, setSelectedStatus] = useState('confirmed')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // The name this browser answered as; the form's name field is locked to it.
   const [sessionName, setSessionName] = useState(initialIdentity)
-  const [isIdentityLocked, setIsIdentityLocked] = useState(Boolean(initialIdentity))
+  const isIdentityLocked = Boolean(sessionName)
   const [pingBusyId, setPingBusyId] = useState(null)
   const [incomingPing, setIncomingPing] = useState(null)
   const [isUnlockingManage, setIsUnlockingManage] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
   const [showOverviewModal, setShowOverviewModal] = useState(false)
   const [showPingModal, setShowPingModal] = useState(false)
-  const [showPingComposerModal, setShowPingComposerModal] = useState(false)
   const [pingTargetId, setPingTargetId] = useState(null)
-  const [pingMessageInput, setPingMessageInput] = useState('')
-  const [managePin, setManagePin] = useState('')
   const [error, setError] = useState('')
   const [isEditingResponse, setIsEditingResponse] = useState(false)
   const [showConfirmCelebration, setShowConfirmCelebration] = useState(false)
@@ -123,18 +123,15 @@ function EventPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(storedIdentity)
     setSessionName(storedIdentity)
-    setIsIdentityLocked(Boolean(storedIdentity))
   }, [id])
 
   const hasLoadedOnceRef = useRef(false)
   const latestRequestIdRef = useRef(0)
   const sessionNameRef = useRef(sessionName)
-  const isIdentityLockedRef = useRef(isIdentityLocked)
 
   useEffect(() => {
     sessionNameRef.current = sessionName
-    isIdentityLockedRef.current = isIdentityLocked
-  }, [sessionName, isIdentityLocked])
+  }, [sessionName])
 
   useEffect(() => {
     if (!isReminderSupported()) {
@@ -206,7 +203,7 @@ function EventPage() {
         return
       }
 
-      const activeName = forcedSessionName || (isIdentityLockedRef.current ? sessionNameRef.current : '')
+      const activeName = forcedSessionName || sessionNameRef.current
 
       if (!activeName) {
         return
@@ -247,7 +244,7 @@ function EventPage() {
       const requestId = ++latestRequestIdRef.current
 
       try {
-        const nextPayload = await fetchEventPayload(id)
+        const nextPayload = await getEvent(id)
 
         if (requestId !== latestRequestIdRef.current) {
           return
@@ -275,96 +272,17 @@ function EventPage() {
   )
 
   useEffect(() => {
-    let cancelled = false
-
-    async function hydrateEvent() {
-      const requestId = ++latestRequestIdRef.current
-
-      try {
-        const nextPayload = await fetchEventPayload(id)
-
-        if (cancelled || requestId !== latestRequestIdRef.current) {
-          return
-        }
-
-        setPayload(nextPayload)
-        hasLoadedOnceRef.current = true
-        maybeShowIncomingPing(nextPayload)
-        setError('')
-      } catch (loadError) {
-        if (cancelled || requestId !== latestRequestIdRef.current) {
-          return
-        }
-
-        if (hasLoadedOnceRef.current) {
-          toast.error(loadError.message, { id: REFRESH_ERROR_TOAST_ID })
-        } else {
-          setError(loadError.message)
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    hydrateEvent()
+    // Load now and on every realtime tick, plus a low-frequency safety net in
+    // case ticks are missed or the realtime connection silently drops.
+    loadEvent()
+    const intervalId = setInterval(() => document.visibilityState === 'visible' && loadEvent(), AUTO_REFRESH_MS)
+    const unsubscribe = subscribeToEventTicks(id, ['event', 'attendee', 'ping'], loadEvent)
 
     return () => {
-      cancelled = true
-    }
-  }, [id, maybeShowIncomingPing])
-
-  useEffect(() => {
-    return subscribeToEventTicks(id, ['event', 'attendee', 'ping'], loadEvent)
-  }, [id, loadEvent])
-
-  // Low-frequency safety net in case realtime ticks are missed or the
-  // realtime connection silently drops; subscribeToEventTicks above is the
-  // primary refresh mechanism.
-  useEffect(() => {
-    let cancelled = false
-    let inFlight = false
-
-    async function refreshEvent() {
-      if (inFlight || document.visibilityState !== 'visible') {
-        return
-      }
-
-      inFlight = true
-      const requestId = ++latestRequestIdRef.current
-
-      try {
-        const nextPayload = await fetchEventPayload(id)
-
-        if (cancelled || requestId !== latestRequestIdRef.current) {
-          return
-        }
-
-        setPayload(nextPayload)
-        hasLoadedOnceRef.current = true
-        maybeShowIncomingPing(nextPayload)
-        setError('')
-      } catch (refreshError) {
-        if (!cancelled && requestId === latestRequestIdRef.current) {
-          if (hasLoadedOnceRef.current) {
-            toast.error(refreshError.message, { id: REFRESH_ERROR_TOAST_ID })
-          } else {
-            setError(refreshError.message)
-          }
-        }
-      } finally {
-        inFlight = false
-      }
-    }
-
-    const intervalId = setInterval(refreshEvent, AUTO_REFRESH_MS)
-
-    return () => {
-      cancelled = true
       clearInterval(intervalId)
+      unsubscribe()
     }
-  }, [id, maybeShowIncomingPing])
+  }, [id, loadEvent])
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -382,7 +300,6 @@ function EventPage() {
       writeStoredValue(identityStorageKey(id), normalizedName)
       setSessionName(normalizedName)
       setName(normalizedName)
-      setIsIdentityLocked(true)
       setIsEditingResponse(false)
       setExcuseReason('')
       setPhone('')
@@ -407,38 +324,20 @@ function EventPage() {
     return Math.max(0, readPingCooldownUntil(id, targetAttendeeId) - pingCooldownTick)
   }
 
-  function handlePing(attendeeId) {
-    setPingTargetId(attendeeId)
-    setPingMessageInput('')
-    setShowPingComposerModal(true)
-  }
-
   function closePingComposerModal() {
-    if (pingBusyId !== null) {
-      return
+    if (pingBusyId === null) {
+      setPingTargetId(null)
     }
-
-    setShowPingComposerModal(false)
-    setPingTargetId(null)
-    setPingMessageInput('')
   }
 
-  async function handleSubmitPing(event) {
-    event.preventDefault()
-
-    if (pingTargetId === null) {
-      return
-    }
-
+  async function handleSubmitPing(message) {
     setPingBusyId(pingTargetId)
 
     try {
-      await pingAttendee(id, pingTargetId, sessionName || name, pingMessageInput)
+      await pingAttendee(id, pingTargetId, sessionName || name, message)
       writePingCooldownUntil(id, pingTargetId, Date.now() + PING_COOLDOWN_MS)
       toast.success(t('ping.sent'))
-      setShowPingComposerModal(false)
       setPingTargetId(null)
-      setPingMessageInput('')
       await loadEvent()
     } catch (pingError) {
       // Matched against the database's original text - error.message may
@@ -459,7 +358,6 @@ function EventPage() {
       removeStoredValue(pingSeenStorageKey(id, sessionName))
     }
 
-    setIsIdentityLocked(false)
     setSessionName('')
     setName('')
     setSelectedStatus('confirmed')
@@ -473,29 +371,18 @@ function EventPage() {
     setIncomingPing(null)
   }
 
-  function openManageModal() {
-    setManagePin('')
-    setShowManageModal(true)
-  }
-
   function closeManageModal() {
-    if (isUnlockingManage) {
-      return
+    if (!isUnlockingManage) {
+      setShowManageModal(false)
     }
-
-    setShowManageModal(false)
-    setManagePin('')
   }
 
-  async function handleUnlockManage(event) {
-    event.preventDefault()
+  async function handleUnlockManage(pin) {
     setIsUnlockingManage(true)
 
     try {
-      const response = await unlockManageWithPin(id, managePin)
+      const response = await unlockManageWithPin(id, pin)
       toast.success(t('event.manageUnlocked'))
-      setShowManageModal(false)
-      setManagePin('')
       navigate(response.organizerPath)
     } catch (unlockError) {
       toast.error(unlockError.message)
@@ -569,7 +456,7 @@ function EventPage() {
           <button
             type="button"
             className="secondary-button border-transparent bg-transparent shadow-none hover:bg-slate-100 dark:hover:bg-slate-800"
-            onClick={openManageModal}>
+            onClick={() => setShowManageModal(true)}>
             {t('event.manage')}
           </button>
         </section>
@@ -587,18 +474,16 @@ function EventPage() {
               {event.description}
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <div className="stat-tile">
-                <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">{t('event.statComing')}</div>
-                <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{summary.confirmed}</div>
-              </div>
-              <div className="stat-tile">
-                <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">{t('event.statExcuses')}</div>
-                <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{summary.excused}</div>
-              </div>
-              <div className="stat-tile">
-                <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">{t('event.statRejected')}</div>
-                <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{summary.rejected}</div>
-              </div>
+              {[
+                ['statComing', summary.confirmed],
+                ['statExcuses', summary.excused],
+                ['statRejected', summary.rejected],
+              ].map(([key, count]) => (
+                <div key={key} className="stat-tile">
+                  <div className="text-sm uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">{t(`event.${key}`)}</div>
+                  <div className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 dark:text-slate-50">{count}</div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -662,28 +547,20 @@ function EventPage() {
                   ) : null}
 
                   <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={t('event.attendanceStatus')}>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={selectedStatus === 'confirmed'}
-                      className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'confirmed' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
-                      onClick={() => setSelectedStatus('confirmed')}>
-                      <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
-                        {t('event.confirmOption')}
-                      </span>
-                      <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">{t('event.confirmOptionHint')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={selectedStatus === 'excused'}
-                      className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === 'excused' ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
-                      onClick={() => setSelectedStatus('excused')}>
-                      <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
-                        {t('event.excuseOption')}
-                      </span>
-                      <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">{t('event.excuseOptionHint')}</span>
-                    </button>
+                    {RESPONSE_OPTIONS.map(([status, key]) => (
+                      <button
+                        key={status}
+                        type="button"
+                        role="radio"
+                        aria-checked={selectedStatus === status}
+                        className={`rounded-[1.75rem] border px-4 py-4 text-left transition ${selectedStatus === status ? 'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(122,28,63,0.12),rgba(111,76,255,0.08))] text-slate-950 dark:border-fuchsia-500/60 dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.32),rgba(111,76,255,0.28))] dark:text-slate-50' : 'border-slate-200 bg-white/60 text-slate-700 hover:border-fuchsia-200 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300'}`}
+                        onClick={() => setSelectedStatus(status)}>
+                        <span className="block text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
+                          {t(`event.${key}Option`)}
+                        </span>
+                        <span className="mt-2 block text-sm text-slate-500 dark:text-slate-200">{t(`event.${key}OptionHint`)}</span>
+                      </button>
+                    ))}
                   </div>
 
                   {selectedStatus === 'excused' ? (
@@ -767,7 +644,7 @@ function EventPage() {
             attendees={attendees}
             summary={summary}
             showPing
-            onPing={handlePing}
+            onPing={setPingTargetId}
             pingBusyId={pingBusyId}
             canPing={Boolean(name.trim())}
             currentName={sessionName || name}
@@ -801,51 +678,17 @@ function EventPage() {
           <EventChat eventId={id} currentName={sessionName} canSend={isIdentityLocked && Boolean(sessionName.trim())} />
         </div>
 
-        <ModalOverlay open={showManageModal} onClose={closeManageModal} labelledBy="manage-modal-title">
-          <div className={MODAL_CARD_CLASS_NAME}>
-            <div className="mb-5">
-              <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('pin.eyebrow')}</p>
-              <h3 id="manage-modal-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-                {t('pin.title')}
-              </h3>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('pin.hint')}</p>
-            </div>
-
-            <form className="space-y-4" onSubmit={handleUnlockManage}>
-              <div>
-                <label htmlFor="manage-pin" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {t('pin.label')}
-                </label>
-                <input
-                  id="manage-pin"
-                  type="password"
-                  inputMode="numeric"
-                  pattern="[0-9]{4}"
-                  maxLength={4}
-                  className="field"
-                  value={managePin}
-                  onChange={(event) => setManagePin(event.target.value)}
-                  placeholder="1234"
-                  required
-                  autoFocus
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button type="button" className="secondary-button flex-1 justify-center" disabled={isUnlockingManage} onClick={closeManageModal}>
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="primary-button flex-1" disabled={isUnlockingManage}>
-                  {isUnlockingManage ? t('common.verifying') : t('pin.enter')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </ModalOverlay>
+        <PinUnlockModal
+          open={showManageModal}
+          onClose={closeManageModal}
+          hint={t('pin.hint')}
+          onSubmit={handleUnlockManage}
+          isUnlocking={isUnlockingManage}
+        />
 
         <ModalOverlay open={showPingModal && Boolean(incomingPing)} onClose={closePingModal} labelledBy="incoming-ping-title">
           {incomingPing ? (
-            <div className={MODAL_CARD_CLASS_NAME}>
+            <div className="modal-card">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('ping.incomingEyebrow')}</p>
               <h3 id="incoming-ping-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
                 {incomingPing.sourceName}
@@ -860,50 +703,12 @@ function EventPage() {
           ) : null}
         </ModalOverlay>
 
-        <ModalOverlay open={showPingComposerModal} onClose={closePingComposerModal} labelledBy="ping-composer-title">
-          <div className={MODAL_CARD_CLASS_NAME}>
-            <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('ping.composerEyebrow')}</p>
-            <h3 id="ping-composer-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-              {t('ping.composerTitle')}
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t('ping.composerHint')}</p>
-
-            <form className="mt-4 space-y-4" onSubmit={handleSubmitPing}>
-              <div>
-                <label htmlFor="ping-message" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {t('ping.messageLabel')}
-                </label>
-                <textarea
-                  id="ping-message"
-                  className="field min-h-24"
-                  value={pingMessageInput}
-                  onChange={(event) => setPingMessageInput(event.target.value.slice(0, 280))}
-                  placeholder={t('ping.messagePlaceholder')}
-                  disabled={pingBusyId !== null}
-                  autoFocus
-                />
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  {t('common.charactersLeft', {
-                    count: 280 - pingMessageInput.length,
-                  })}
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  className="secondary-button flex-1 justify-center"
-                  disabled={pingBusyId !== null}
-                  onClick={closePingComposerModal}>
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="primary-button flex-1" disabled={pingBusyId !== null}>
-                  {pingBusyId !== null ? t('ping.sending') : t('common.send')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </ModalOverlay>
+        <PingComposerModal
+          open={pingTargetId !== null}
+          onClose={closePingComposerModal}
+          onSubmit={handleSubmitPing}
+          isSending={pingBusyId !== null}
+        />
 
         <ShareInviteModal
           open={showShareModal}
@@ -914,51 +719,7 @@ function EventPage() {
           datetime={event.datetime}
         />
 
-        <ModalOverlay open={showOverviewModal} onClose={() => setShowOverviewModal(false)} labelledBy="overview-modal-title">
-          <div className={`${MODAL_CARD_CLASS_NAME} sm:max-w-lg`}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('overview.title')}</p>
-                <h3 id="overview-modal-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">
-                  {event.name}
-                </h3>
-              </div>
-              <button type="button" className="secondary-button shrink-0" onClick={() => setShowOverviewModal(false)}>
-                {t('common.close')}
-              </button>
-            </div>
-
-            <div className="space-y-5 max-h-[60vh] overflow-y-auto">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('overview.note')}</p>
-                <p className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
-                  {event.description || t('overview.noNote')}
-                </p>
-              </div>
-              {SUMMARY_STATUS_GROUPS.map((statusGroup) => {
-                const group = attendees.filter((a) => a.status === statusGroup)
-                if (group.length === 0) return null
-
-                return (
-                  <div key={statusGroup}>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                      {t(`overview.groups.${statusGroup}`)} ({group.length})
-                    </p>
-                    <ul className="space-y-2">
-                      {group.map((a) => (
-                        <li
-                          key={a.id}
-                          className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/60">
-                          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{a.name}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </ModalOverlay>
+        <EventOverviewModal open={showOverviewModal} onClose={() => setShowOverviewModal(false)} event={event} attendees={attendees} />
       </main>
     </PageShell>
   )

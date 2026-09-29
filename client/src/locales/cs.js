@@ -246,8 +246,6 @@ export default {
     unlockedAndSaved: 'Správa odemčená. Přihlášení je uložené pro příště.',
     editTitle: 'Změň základní údaje',
     editHint: 'Můžeš přepsat název, místo i termín. Změna se hned promítne do pozvánky.',
-    editNamePlaceholder: 'Např. Letní gril',
-    editLocationPlaceholder: 'Např. Stromovka',
     saveChanges: 'Uložit změny',
     unlockModalHint: 'PIN zadáš jednou. Přihlášení se uloží na tomto zařízení.',
   },

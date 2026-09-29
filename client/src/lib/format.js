@@ -41,6 +41,15 @@ export function buildAbsoluteUrl(path) {
   return new URL(`${import.meta.env.BASE_URL}#${path}`, window.location.origin).href
 }
 
+// The token in an organizerPath such as `/event/${id}/manage?token=…`.
+export function parseOrganizerToken(path) {
+  try {
+    return new URL(path, window.location.origin).searchParams.get('token') || ''
+  } catch {
+    return ''
+  }
+}
+
 export function summaryText(summary) {
   return t('attendees.summary', { confirmed: summary.confirmed, excused: summary.excused })
 }

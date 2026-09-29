@@ -244,8 +244,6 @@ export default {
     unlockedAndSaved: 'Management unlocked. You’ll stay signed in next time.',
     editTitle: 'Change the basics',
     editHint: 'You can change the name, location and date. The invite updates right away.',
-    editNamePlaceholder: 'e.g. Summer barbecue',
-    editLocationPlaceholder: 'e.g. Stromovka park',
     saveChanges: 'Save changes',
     unlockModalHint: 'You only enter the PIN once. The login is saved on this device.',
   },
