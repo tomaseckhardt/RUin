@@ -585,7 +585,6 @@ export default {
   },
 
   weather: {
-    title: 'Počasí',
     conditions: {
       clear: 'Jasno',
       mostlyClear: 'Skoro jasno',

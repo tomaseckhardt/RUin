@@ -484,7 +484,7 @@ function CreateEventPage() {
             className={`panel ${isComposerExpanded ? '' : 'xl:absolute xl:inset-0 xl:overflow-hidden'}`}
             onFocus={handleComposerFocus}>
             <div className="mb-6">
-              <CollapsibleCard eyebrow={t('createEvent.recentEyebrow')} title={t('createEvent.recentTitle')} defaultOpen={false}>
+              <CollapsibleCard eyebrow={t('createEvent.recentEyebrow')} title={t('createEvent.recentTitle')}>
                 {isLoadingRecentEvents ? <p className="text-sm text-slate-600 dark:text-slate-300">{t('createEvent.recentLoading')}</p> : null}
 
                 {!isLoadingRecentEvents && recentEvents.length === 0 ? (
@@ -658,7 +658,7 @@ function CreateEventPage() {
                 </div>
               ) : null}
 
-              <CollapsibleCard eyebrow={t('createEvent.extrasEyebrow')} title={t('createEvent.extrasTitle')} defaultOpen={false}>
+              <CollapsibleCard eyebrow={t('createEvent.extrasEyebrow')} title={t('createEvent.extrasTitle')}>
                 <div className="space-y-4">
                   {form.enableStops ? (
                     <div>

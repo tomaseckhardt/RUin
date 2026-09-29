@@ -16,15 +16,13 @@ import {
   toggleEventPhotoLike,
   uploadEventPhoto,
 } from '../lib/api.js'
+import { downloadBlob } from '../lib/download.js'
 import { useI18n } from '../lib/i18n.js'
 import { clearPhotoDeleteToken, getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
+import { normalizeName } from '../lib/normalizeName.js'
 
 const NO_ROWS = []
-
-function normalizeName(value) {
-  return (value || '').trim().toLocaleLowerCase('cs-CZ')
-}
 
 function groupByPhoto(rows, pick) {
   const groups = new Map()
@@ -133,14 +131,9 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   }
 
   useEffect(() => {
-    // Fetch-on-mount-and-eventId-change, refreshed again by the realtime
-    // tick subscription below.
+    // Load now, and again whenever a realtime tick says the photos changed.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPhotos()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId])
-
-  useEffect(() => {
     return subscribeToEventTicks(eventId, ['photo', 'photo_like', 'photo_comment'], loadPhotos)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
@@ -314,15 +307,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         }),
       )
 
-      const zipBlob = await zip.generateAsync({ type: 'blob' })
-      const url = URL.createObjectURL(zipBlob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = t('photos.zipFileName', { id: eventId })
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      downloadBlob(await zip.generateAsync({ type: 'blob' }), t('photos.zipFileName', { id: eventId }))
 
       toast.success(t('photos.downloaded', { count: othersPhotos.length }))
     } catch (error) {

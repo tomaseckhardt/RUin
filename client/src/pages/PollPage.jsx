@@ -6,12 +6,9 @@ import { finalizePoll, getPollPayload, votePoll } from '../lib/api.js'
 import { readStoredValue, writeStoredValue } from '../lib/browserStorage.js'
 import { formatDateTime } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
+import { normalizeName } from '../lib/normalizeName.js'
 
 const VOTER_STORAGE_PREFIX = 'ruin-poll-voter'
-
-function normalizeName(value) {
-  return value.trim().toLocaleLowerCase('cs-CZ')
-}
 
 function voterStorageKey(pollId) {
   return `${VOTER_STORAGE_PREFIX}:${pollId}`

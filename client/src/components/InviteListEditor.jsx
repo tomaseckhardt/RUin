@@ -1,67 +1,24 @@
+import RowListEditor from './RowListEditor.jsx'
 import { useI18n } from '../lib/i18n.js'
 
-function InviteListEditor({ invitees, onChange, disabled = false, maxRows = 30 }) {
+function InviteListEditor({ invitees, onChange, disabled = false }) {
   const { t } = useI18n()
 
-  function updateRow(index, patch) {
-    onChange(invitees.map((invitee, i) => (i === index ? { ...invitee, ...patch } : invitee)))
-  }
-
-  function addRow() {
-    if (invitees.length >= maxRows) {
-      return
-    }
-
-    onChange([...invitees, { key: crypto.randomUUID(), name: '', phone: '' }])
-  }
-
-  function removeRow(index) {
-    onChange(invitees.filter((_, i) => i !== index))
-  }
-
   return (
-    <div className="space-y-3">
-      {invitees.map((invitee, index) => (
-        <div key={invitee.key} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <div>
-            <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('common.name')}</label>
-            <input
-              className="field"
-              value={invitee.name}
-              onChange={(event) => updateRow(index, { name: event.target.value })}
-              placeholder={t('invites.namePlaceholder')}
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('common.phone')}</label>
-            <input
-              className="field"
-              type="tel"
-              value={invitee.phone}
-              onChange={(event) => updateRow(index, { phone: event.target.value })}
-              placeholder={t('common.phonePlaceholder')}
-              disabled={disabled}
-            />
-          </div>
-          <button
-            type="button"
-            className="text-xs text-rose-600 hover:underline dark:text-rose-300 sm:mb-3"
-            onClick={() => removeRow(index)}
-            disabled={disabled}>
-            {t('common.remove')}
-          </button>
-        </div>
-      ))}
-
-      {invitees.length < maxRows ? (
-        <button type="button" className="secondary-button" onClick={addRow} disabled={disabled}>
-          {t('invites.addInvitee')}
-        </button>
-      ) : null}
-
-      <p className="text-xs text-slate-500 dark:text-slate-400">{t('invites.phoneHint', { option: t('eventForm.requirePhone') })}</p>
-    </div>
+    <RowListEditor
+      rows={invitees}
+      onChange={onChange}
+      fields={[
+        { name: 'name', label: t('common.name'), placeholder: t('invites.namePlaceholder') },
+        { name: 'phone', label: t('common.phone'), type: 'tel', placeholder: t('common.phonePlaceholder') },
+      ]}
+      newRow={() => ({ key: crypto.randomUUID(), name: '', phone: '' })}
+      addLabel={t('invites.addInvitee')}
+      hint={t('invites.phoneHint', { option: t('eventForm.requirePhone') })}
+      gridClassName="sm:grid-cols-[1fr_1fr_auto]"
+      maxRows={30}
+      disabled={disabled}
+    />
   )
 }
 

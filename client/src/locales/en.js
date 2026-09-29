@@ -583,7 +583,6 @@ export default {
   },
 
   weather: {
-    title: 'Weather',
     conditions: {
       clear: 'Clear',
       mostlyClear: 'Mostly clear',

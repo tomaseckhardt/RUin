@@ -5,7 +5,7 @@ function TemplatesPanel({ templates, isLoading, onUseTemplate }) {
   const { t } = useI18n()
 
   return (
-    <CollapsibleCard eyebrow={t('templates.eyebrow')} title={t('templates.title')} defaultOpen={false}>
+    <CollapsibleCard eyebrow={t('templates.eyebrow')} title={t('templates.title')}>
       {isLoading ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">{t('templates.loading')}</p>
       ) : templates.length === 0 ? (

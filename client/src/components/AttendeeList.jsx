@@ -1,5 +1,6 @@
 import { summaryText } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
+import { normalizeName } from '../lib/normalizeName.js'
 
 function formatCooldownRemaining(ms) {
   const totalSeconds = Math.ceil(ms / 1000)
@@ -54,7 +55,7 @@ function AttendeeList({
   getPingCooldownRemainingMs,
 }) {
   const { t } = useI18n()
-  const normalizedCurrentName = currentName.trim().toLocaleLowerCase('cs-CZ')
+  const normalizedCurrentName = normalizeName(currentName)
 
   return (
     <section className="panel">
@@ -95,9 +96,11 @@ function AttendeeList({
           const acceptedExcuse = attendee.status === 'excused_accepted'
           const pingCount = attendee.ping_count ?? 0
           const pingLastMessage = attendee.ping_last_message
-          const pingable = attendee.status === 'excused' || attendee.status === 'excused_rejected'
-          const isSelf = normalizedCurrentName !== '' && attendee.name.trim().toLocaleLowerCase('cs-CZ') === normalizedCurrentName
+          const pingable = attendee.status === 'excused' || rejected
+          const isSelf = normalizedCurrentName !== '' && normalizeName(attendee.name) === normalizedCurrentName
           const showPingAction = showPing && pingable && !isSelf
+          const isExcused = attendee.status === 'excused'
+          const cooldownMs = showPingAction ? (getPingCooldownRemainingMs?.(attendee.id) ?? 0) : 0
 
           return (
             <article key={attendee.id} className={`rounded-[1.75rem] border p-4 shadow-sm transition hover:-translate-y-0.5 ${config.accent}`}>
@@ -142,22 +145,26 @@ function AttendeeList({
                   ) : null}
                 </div>
 
-                {showModeration && attendee.status === 'excused' ? (
+                {showModeration && (isExcused || showDelete) ? (
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="secondary-button border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
-                      disabled={busyId === attendee.id}
-                      onClick={() => onModerate(attendee.id, 'excused_accepted')}>
-                      {t('attendees.accept')}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                      disabled={busyId === attendee.id}
-                      onClick={() => onModerate(attendee.id, 'excused_rejected')}>
-                      {t('attendees.reject')}
-                    </button>
+                    {isExcused ? (
+                      <>
+                        <button
+                          type="button"
+                          className="secondary-button border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
+                          disabled={busyId === attendee.id}
+                          onClick={() => onModerate(attendee.id, 'excused_accepted')}>
+                          {t('attendees.accept')}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                          disabled={busyId === attendee.id}
+                          onClick={() => onModerate(attendee.id, 'excused_rejected')}>
+                          {t('attendees.reject')}
+                        </button>
+                      </>
+                    ) : null}
                     {showDelete ? (
                       <button
                         type="button"
@@ -170,38 +177,19 @@ function AttendeeList({
                   </div>
                 ) : null}
 
-                {showModeration && attendee.status !== 'excused' && showDelete ? (
+                {showPingAction ? (
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <button
                       type="button"
-                      className="secondary-button danger-button"
-                      disabled={deleteBusyId === attendee.id}
-                      onClick={() => onDelete(attendee.id, attendee.name)}>
-                      {t('common.delete')}
+                      className="secondary-button border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 hover:bg-fuchsia-100 dark:border-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200"
+                      disabled={!canPing || pingBusyId === attendee.id || cooldownMs > 0}
+                      onClick={() => onPing(attendee.id)}>
+                      {pingBusyId === attendee.id
+                        ? t('ping.sending')
+                        : cooldownMs > 0
+                          ? t('attendees.pingAgainIn', { time: formatCooldownRemaining(cooldownMs) })
+                          : t('attendees.ping')}
                     </button>
-                  </div>
-                ) : null}
-
-                {showPingAction ? (
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    {(() => {
-                      const cooldownMs = getPingCooldownRemainingMs?.(attendee.id) ?? 0
-                      const onCooldown = cooldownMs > 0
-
-                      return (
-                        <button
-                          type="button"
-                          className="secondary-button border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 hover:bg-fuchsia-100 dark:border-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200"
-                          disabled={!canPing || pingBusyId === attendee.id || onCooldown}
-                          onClick={() => onPing(attendee.id)}>
-                          {pingBusyId === attendee.id
-                            ? t('ping.sending')
-                            : onCooldown
-                              ? t('attendees.pingAgainIn', { time: formatCooldownRemaining(cooldownMs) })
-                              : t('attendees.ping')}
-                        </button>
-                      )
-                    })()}
                   </div>
                 ) : null}
               </div>

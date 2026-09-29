@@ -555,7 +555,7 @@ function ManageEventPage() {
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       actions={
         <>
-          <WeatherWidget location={event.location} datetime={event.datetime} compact />
+          <WeatherWidget location={event.location} datetime={event.datetime} />
           <AddToCalendarButton eventData={event} />
         </>
       }>

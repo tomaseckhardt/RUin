@@ -27,6 +27,7 @@ import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 import { getPushEndpoint, isReminderSupported, subscribeToEventReminders } from '../lib/push.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
+import { normalizeName } from '../lib/normalizeName.js'
 
 // Realtime (subscribeToEventTicks below) is the primary refresh mechanism.
 // This is now just a low-frequency safety net for missed/dropped realtime
@@ -40,10 +41,6 @@ const REFRESH_ERROR_TOAST_ID = 'event-refresh-error'
 const MODAL_CARD_CLASS_NAME =
   'h-[100dvh] w-full max-w-none overflow-y-auto rounded-none border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.75rem] sm:p-6'
 const SUMMARY_STATUS_GROUPS = ['confirmed', 'excused', 'excused_accepted', 'excused_rejected']
-
-function normalizeName(value) {
-  return value.trim().toLocaleLowerCase('cs-CZ')
-}
 
 function identityStorageKey(eventId) {
   return `${IDENTITY_STORAGE_PREFIX}:${eventId}`
@@ -555,7 +552,7 @@ function EventPage() {
       title={event.name}
       subtitle={`${event.location} · ${formatDateTime(event.datetime)}`}
       mergeNextPanel
-      actions={<WeatherWidget location={event.location} datetime={event.datetime} compact />}>
+      actions={<WeatherWidget location={event.location} datetime={event.datetime} />}>
       <main className="grid gap-6">
         <section className="panel order-0 rounded-t-none border-t-0 flex flex-wrap items-center gap-2 sm:gap-3">
           <AddToCalendarButton eventData={event} />
