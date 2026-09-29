@@ -37,6 +37,7 @@ export default {
     language: 'Jazyk',
     theme: 'Vzhled',
     offline: 'Jsi offline - některé věci se neuloží, dokud se nepřipojíš.',
+    madeBy: 'Made by EKI',
   },
 
   eventForm: {
