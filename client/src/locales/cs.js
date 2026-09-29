@@ -621,6 +621,7 @@ export default {
     requestFailed: 'Požadavek se nepovedl.',
     imageOnly: 'Nahrát lze jen obrázky.',
     photoTooBig: 'Fotka je moc velká (limit je 10 MB).',
+    photoLimitReached: 'Akce už dosáhla limitu 50 fotek.',
     uploadFailed: 'Nahrání fotky selhalo.',
     chatNameRequired: 'Pro odeslání zprávy vyplň svoje jméno.',
     chatMessageRequired: 'Napiš zprávu do chatu.',

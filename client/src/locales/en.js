@@ -619,6 +619,7 @@ export default {
     requestFailed: 'The request failed.',
     imageOnly: 'Only images can be uploaded.',
     photoTooBig: 'The photo is too big (the limit is 10 MB).',
+    photoLimitReached: 'This event has reached its 50-photo limit.',
     uploadFailed: 'Photo upload failed.',
     chatNameRequired: 'Fill in your name to send a message.',
     chatMessageRequired: 'Write a message for the chat.',
