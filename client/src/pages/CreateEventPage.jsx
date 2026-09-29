@@ -46,9 +46,9 @@ const initialForm = {
   datetime: '',
   description: '',
   requirePhone: false,
-  enableBringList: true,
-  enableCarpool: true,
-  enableStops: true,
+  enableBringList: false,
+  enableCarpool: false,
+  enableStops: false,
 }
 
 // Tlačítka pro rozbalení/sbalení composeru mají barvy aktivní volby z přepínačů v hlavičce (ToggleSwitch).
