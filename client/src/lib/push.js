@@ -94,7 +94,10 @@ export async function subscribeToEventReminders() {
   }
 }
 
-export async function unsubscribeFromEventReminders() {
+// The browser's push endpoint, or null without a subscription. All events
+// share it (the server keeps one row per event and endpoint), so turning
+// reminders off for one event leaves the subscription itself alone.
+export async function getPushEndpoint() {
   if (!isPushSupported()) {
     return null
   }
@@ -102,11 +105,5 @@ export async function unsubscribeFromEventReminders() {
   const registration = await navigator.serviceWorker.getRegistration(APP_BASE_PATH)
   const subscription = await registration?.pushManager.getSubscription()
 
-  if (!subscription) {
-    return null
-  }
-
-  const endpoint = subscription.endpoint
-  await subscription.unsubscribe()
-  return endpoint
+  return subscription?.endpoint ?? null
 }

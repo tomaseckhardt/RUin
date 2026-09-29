@@ -208,7 +208,6 @@ export default {
     reminderBusy: 'One moment…',
     reminderOn: '🔔 Reminder on (click to turn off)',
     reminderOff: '🔔 Remind me a day and an hour before',
-    reminderOffLocalOnly: 'We turned the reminder off in this browser only - the server doesn’t know yet. Please try again.',
     reminderTurnedOff: 'Reminder turned off.',
     reminderTurnedOn: 'We’ll remind you a day and an hour before.',
     notMe: 'That’s not me',

@@ -45,14 +45,32 @@ if (hasRequiredSecrets) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
 }
 
+// Worded by when the event really starts (starts_in_seconds, starts_today and
+// starts_at_label come from get_pending_event_reminders()): a day-before
+// reminder can also go out on the event's own day, and an hour-before one
+// anywhere within that last hour.
 function buildNotificationPayload(reminder) {
-  const isHourBefore = reminder.reminder_type === 'hour_before'
+  const url = `#/event/${reminder.event_id}`
+  const tag = `reminder-${reminder.event_id}-${reminder.reminder_type}`
+
+  if (reminder.reminder_type === 'hour_before') {
+    const minutes = Math.max(1, Math.round(reminder.starts_in_seconds / 60))
+
+    return {
+      title: `Za ${minutes} min: ${reminder.name}`,
+      body: `Akce začíná v ${reminder.starts_at_label} — ${reminder.location}`,
+      url,
+      tag,
+    }
+  }
+
+  const day = reminder.starts_today ? 'Dnes' : 'Zítra'
 
   return {
-    title: isHourBefore ? `Za hodinu: ${reminder.name}` : `Zítra: ${reminder.name}`,
-    body: isHourBefore ? `Akce začíná už za hodinu — ${reminder.location}` : `Akce je zítra v plánu — ${reminder.location}`,
-    url: `#/event/${reminder.event_id}`,
-    tag: `reminder-${reminder.event_id}-${reminder.reminder_type}`,
+    title: `${day} v ${reminder.starts_at_label}: ${reminder.name}`,
+    body: `Akce je ${day.toLowerCase()} v ${reminder.starts_at_label} — ${reminder.location}`,
+    url,
+    tag,
   }
 }
 
@@ -67,6 +85,10 @@ async function processReminder(reminder) {
   }
 
   const payload = JSON.stringify(buildNotificationPayload(reminder))
+  // The push service keeps an undelivered message for its TTL (4 weeks by
+  // default); a reminder that can't reach the device before the event
+  // starts is better dropped than shown afterwards.
+  const pushOptions = { TTL: Math.max(60, reminder.starts_in_seconds) }
   let sentCount = 0
   let failedCount = 0
 
@@ -77,7 +99,7 @@ async function processReminder(reminder) {
     }
 
     try {
-      await webpush.sendNotification(pushSubscription, payload)
+      await webpush.sendNotification(pushSubscription, payload, pushOptions)
       sentCount += 1
     } catch (sendError) {
       failedCount += 1

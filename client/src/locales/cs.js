@@ -210,7 +210,6 @@ export default {
     reminderBusy: 'Chvilku…',
     reminderOn: '🔔 Připomínka zapnutá (klikni pro vypnutí)',
     reminderOff: '🔔 Připomenout den a hodinu předem',
-    reminderOffLocalOnly: 'Připomínku jsme vypnuli jen v tomhle prohlížeči, server o tom neví. Zkus to prosím znovu.',
     reminderTurnedOff: 'Připomínku jsme vypnuli.',
     reminderTurnedOn: 'Připomeneme ti to den i hodinu předem.',
     notMe: 'Nejsem to já',

@@ -404,8 +404,14 @@ export function registerPushSubscription(eventId, subscription) {
   )
 }
 
-export function unregisterPushSubscription(endpoint) {
-  return callRpc('unregister_push_subscription', { p_endpoint: endpoint }, t('api.errors.unregisterPushSubscription'))
+// Turns reminders off for this one event; the endpoint stays registered for
+// any others.
+export function unregisterPushSubscription(endpoint, eventId) {
+  return callRpc('unregister_push_subscription', { p_endpoint: endpoint, p_event_id: eventId }, t('api.errors.unregisterPushSubscription'))
+}
+
+export function isPushSubscribed(eventId, endpoint) {
+  return callRpc('is_push_subscribed', { p_event_id: eventId, p_endpoint: endpoint })
 }
 
 export function checkInAttendee(eventId, attendeeName) {

@@ -21,6 +21,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 - [Deploying to GitHub Pages](#deploying-to-github-pages)
 - [How routing works on Pages](#how-routing-works-on-pages)
 - [Service worker, offline mode and push notifications](#service-worker-offline-mode-and-push-notifications)
+  - [The key for scheduled Edge Functions](#the-key-for-scheduled-edge-functions)
   - [Automatic event reminders](#automatic-event-reminders-a-day-and-an-hour-before)
   - [Automatic cleanup of expired events](#automatic-cleanup-of-expired-events-and-their-photos)
 - [Localization (Czech and English)](#localization-czech-and-english)
@@ -263,9 +264,30 @@ The app uses `HashRouter` (`/#/`), which is the right choice for GitHub Pages wi
 
 If push notifications don't arrive, the usual cause is missing configuration in Supabase or missing notification permission in the browser.
 
+### The key for scheduled Edge Functions
+
+`send-event-reminders` and `cleanup-expired-events` are started by cron. Both run with `--no-verify-jwt` and compare the `Authorization: Bearer <key>` header themselves with the `SUPABASE_SERVICE_ROLE_KEY` variable that Supabase gives the functions. A caller without that key gets 401.
+
+- **Which key:** exactly the value the functions have in `SUPABASE_SERVICE_ROLE_KEY`. In a project with the new API keys (this one), that's the secret key `sb_secret_…` from `Project Settings -> API Keys -> Secret keys`, not the legacy `service_role` key `eyJ…`. With the legacy key the functions return 401.
+- **How to check without printing the key:** `supabase secrets list` shows only a SHA-256 digest for each variable. Compare the digest of `SUPABASE_SERVICE_ROLE_KEY` with the output of `printf %s 'sb_secret_…' | sha256sum`.
+- **Where to keep it:** in Supabase Vault, once per project. The cron jobs below read it from there, so the key isn't visible in the job definition, and changing it only means updating Vault:
+
+```sql
+select vault.create_secret('sb_secret_…', 'ruin_service_role_key', 'Bearer token the pg_cron jobs send to the scheduled Edge Functions');
+-- later, when the key changes:
+select vault.update_secret(id, 'sb_secret_…') from vault.secrets where name = 'ruin_service_role_key';
+```
+
+The jobs need the `pg_cron` and `pg_net` extensions (`Database -> Extensions`). Times in `cron.schedule` are in UTC. Whether the jobs went through shows in the functions' latest responses:
+
+```sql
+select jobname, schedule, active from cron.job;
+select status_code, content, created from net._http_response order by created desc limit 10;
+```
+
 ### Automatic event reminders (a day and an hour before)
 
-After RSVPing, a guest can turn on the "🔔 Remind me a day and an hour before" button in the app - that registers a Web Push subscription for the event. The notification itself is sent by the scheduled Edge Function `send-event-reminders`, which needs a one-time setup:
+After RSVPing, a guest can turn on the "🔔 Remind me a day and an hour before" button in the app - that registers a Web Push subscription for the event. The browser has one push subscription for the whole app, but the database keeps one row per event (`push_subscriptions` with a unique `event_id` + `endpoint` pair), so reminders can be turned on and off for each event separately. The notification itself is sent by the scheduled Edge Function `send-event-reminders`, which needs a one-time setup:
 
 **1. Generate VAPID keys** (only once per project):
 
@@ -292,9 +314,7 @@ supabase secrets set VAPID_SUBJECT=mailto:you@example.com
 supabase functions deploy send-event-reminders --no-verify-jwt
 ```
 
-**5. Schedule it to run regularly** (e.g. every 15-30 minutes), so both the "a day before" and the "an hour before" notifications go out on time. The function runs with `--no-verify-jwt`, so it requires the `Authorization: Bearer <service-role-key>` header itself - without it, it returns 401 (see the comment in `index.ts`). When you set up the schedule (e.g. `*/15 * * * *`) in the Supabase dashboard (`Edge Functions -> send-event-reminders -> Cron Jobs`), you have to add this header by hand in the cron job's "HTTP Headers" section.
-
-Alternatively via SQL (if the project has the `pg_cron` + `pg_net` extensions enabled in `Database -> Extensions`) - this already includes the header:
+**5. Schedule it to run regularly** (e.g. every 15-30 minutes), so both the "a day before" and the "an hour before" notifications go out on time. The function wants the header with the key from [Vault](#the-key-for-scheduled-edge-functions); without it, it returns 401. Run this in the SQL Editor (the same statement also updates an existing job with the same name):
 
 ```sql
 select cron.schedule(
@@ -303,13 +323,23 @@ select cron.schedule(
   $$
   select net.http_post(
     url := 'https://<project-ref>.supabase.co/functions/v1/send-event-reminders',
-    headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>')
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'ruin_service_role_key')
+    ),
+    timeout_milliseconds := 60000
   );
   $$
 );
 ```
 
-Without steps 3-5, the reminder button shows up in the app and the subscription gets saved, but no notification ever arrives - until the Edge Function runs on a schedule, nothing picks up `get_pending_event_reminders()` and sends them. The reminder texts are put together by the Edge Function and are only in Czech for now.
+You can also set up the cron in the dashboard (`Integrations -> Cron`), but then the header holds the key in plain text in the job.
+
+Without steps 3-5, the reminder button shows up in the app and the subscription gets saved, but no notification ever arrives - until the Edge Function runs on a schedule, nothing picks up `get_pending_event_reminders()` and sends them.
+
+The "a day before" reminder goes out when the event is 2-24 hours away and, depending on the date, reads "Today at 18:00" or "Tomorrow at 18:00" (in Czech). When the event is less than 2 hours away, only the "an hour before" reminder arrives ("In 45 min: …"). Every push message has a TTL until the event starts, so an offline device doesn't get it after the event. The reminder texts are put together by the Edge Function and are only in Czech for now.
+
+When deploying the "Push reminders per event" change, run the SQL phase first, then redeploy `send-event-reminders`, and only then deploy the client (merge into `main`). The SQL can run any time before that; the old function and the old client keep working with it. The new function, however, needs the new columns from `get_pending_event_reminders()`, and the new client calls `is_push_subscribed()`.
 
 ### Automatic cleanup of expired events (and their photos)
 
@@ -321,9 +351,7 @@ Events that are 7+ days past their date (in Europe/Prague time) are deleted by t
 supabase functions deploy cleanup-expired-events --no-verify-jwt
 ```
 
-**2. Schedule it to run regularly** (once a day is plenty, expiry isn't time-critical). The function requires the same `Authorization: Bearer <service-role-key>` header as `send-event-reminders` above. In the Supabase dashboard (`Edge Functions -> cleanup-expired-events -> Cron Jobs`, schedule e.g. `0 3 * * *`), add it by hand in the "HTTP Headers" section.
-
-Alternatively via SQL (`pg_cron` + `pg_net`) - this already includes the header:
+**2. Schedule it to run regularly** (once a day is plenty, expiry isn't time-critical). The function wants the same header with the key from [Vault](#the-key-for-scheduled-edge-functions) as `send-event-reminders`. This job runs at 3:00 UTC:
 
 ```sql
 select cron.schedule(
@@ -332,11 +360,19 @@ select cron.schedule(
   $$
   select net.http_post(
     url := 'https://<project-ref>.supabase.co/functions/v1/cleanup-expired-events',
-    headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>')
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'ruin_service_role_key')
+    ),
+    timeout_milliseconds := 60000
   );
   $$
 );
 ```
+
+`timeout_milliseconds` raises the default 5 seconds `pg_net` waits for the function's response. Without it, `net._http_response` would show a timeout instead of the result.
+
+The cleanup only deletes photos of events that are in the database. A folder in the `event-photos` bucket left by an event deleted before the photo cleanup existed stays there and has to be deleted by hand (`Storage -> event-photos`).
 
 Without this step, expired events aren't deleted at all - the earlier automatic deletion straight in SQL (`_delete_expired_events()`) was removed because it couldn't delete photos from Storage. Polls have a cleanup of their own that the database handles by itself: an undecided poll expires 14 days after it was created, a decided one together with the event it created.
 
