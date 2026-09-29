@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -88,7 +89,10 @@ function ModalOverlay({ open, onClose, labelledBy, children }) {
     return null
   }
 
-  return (
+  // Rendered into <body>: a modal opened from inside a .panel (e.g. the photo
+  // lightbox) would otherwise be positioned against that panel, because its
+  // backdrop-filter makes it the containing block for `fixed` descendants.
+  return createPortal(
     <section
       ref={containerRef}
       tabIndex={-1}
@@ -102,7 +106,8 @@ function ModalOverlay({ open, onClose, labelledBy, children }) {
         }
       }}>
       {children}
-    </section>
+    </section>,
+    document.body,
   )
 }
 

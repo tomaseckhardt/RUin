@@ -593,11 +593,7 @@ function ManageEventPage() {
             <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
               {t('manage.whoShouldCome')}
             </button>
-            <button
-              type="button"
-              className="secondary-button w-full justify-center border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
-              onClick={handleDelete}
-              disabled={isDeleting}>
+            <button type="button" className="secondary-button danger-button w-full justify-center" onClick={handleDelete} disabled={isDeleting}>
               {isDeleting ? t('manage.deleting') : t('manage.deleteEvent')}
             </button>
           </div>
@@ -670,11 +666,7 @@ function ManageEventPage() {
               <button type="button" className="secondary-button w-full justify-center" onClick={() => setShowInvitePeopleModal(true)}>
                 {t('manage.whoShouldCome')}
               </button>
-              <button
-                type="button"
-                className="secondary-button w-full justify-center border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
-                onClick={handleDelete}
-                disabled={isDeleting}>
+              <button type="button" className="secondary-button danger-button w-full justify-center" onClick={handleDelete} disabled={isDeleting}>
                 {isDeleting ? t('manage.deleting') : t('manage.deleteEvent')}
               </button>
             </div>

@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import { toast } from 'sonner'
 import { localizeServerMessage, t } from './i18n.js'
+import { hashPhotoDeleteToken } from './photoDeleteTokens.js'
 
 const RETRY_QUEUE_STORAGE_KEY = 'ruin-retry-queue'
 
@@ -549,10 +550,10 @@ export function finalizePoll(pollId, token, optionId, organizerPin, description)
   )
 }
 
-export function recordEventPhoto(eventId, storagePath, uploadedBy) {
+export function recordEventPhoto(eventId, storagePath, uploadedBy, deleteToken) {
   return callRpc(
     'record_event_photo',
-    { p_event_id: eventId, p_storage_path: storagePath, p_uploaded_by: uploadedBy },
+    { p_event_id: eventId, p_storage_path: storagePath, p_uploaded_by: uploadedBy, p_delete_token: deleteToken },
     t('api.errors.recordEventPhoto'),
   )
 }
@@ -571,9 +572,66 @@ export function deleteEventPhoto(eventId, token, photoId) {
   return callDeleteEventData({ action: 'delete_photo', eventId, token, photoId }, t('api.errors.deleteEventPhoto'))
 }
 
+// For the guest who uploaded the photo: photoToken is the delete token saved
+// in this browser at upload time (lib/photoDeleteTokens.js).
+export function deleteOwnEventPhoto(eventId, photoId, photoToken) {
+  return callDeleteEventData({ action: 'delete_photo', eventId, photoId, photoToken }, t('api.errors.deleteEventPhoto'))
+}
+
+export async function getEventPhotoLikes(eventId) {
+  const { data, error } = await supabase.rpc('get_event_photo_likes', { p_event_id: eventId })
+
+  if (error) {
+    throw toRequestError(error, t('api.errors.getEventPhotoLikes'))
+  }
+
+  return data ?? []
+}
+
+export async function getEventPhotoComments(eventId) {
+  const { data, error } = await supabase.rpc('get_event_photo_comments', { p_event_id: eventId })
+
+  if (error) {
+    throw toRequestError(error, t('api.errors.getEventPhotoComments'))
+  }
+
+  return data ?? []
+}
+
+// Resolves to { liked }: whether the photo is now liked under this name.
+export function toggleEventPhotoLike(eventId, photoId, likerName) {
+  return callRpc(
+    'toggle_event_photo_like',
+    { p_event_id: eventId, p_photo_id: photoId, p_liker_name: likerName },
+    t('api.errors.toggleEventPhotoLike'),
+  )
+}
+
+export async function addEventPhotoComment(eventId, photoId, authorName, message) {
+  const data = await callRpc(
+    'add_event_photo_comment',
+    { p_event_id: eventId, p_photo_id: photoId, p_author_name: authorName, p_message: message },
+    t('api.errors.addEventPhotoComment'),
+  )
+
+  return data?.[0]
+}
+
+export function deleteEventPhotoComment(eventId, token, commentId) {
+  return callRpc(
+    'delete_event_photo_comment',
+    { p_event_id: eventId, p_token: token, p_comment_id: commentId },
+    t('api.errors.deleteEventPhotoComment'),
+  )
+}
+
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
-export async function uploadEventPhoto(eventId, file) {
+// deleteToken is the photo's delete token (lib/photoDeleteTokens.js). The file
+// is named after its hash, which ties the token to this upload:
+// record_event_photo only accepts the token whose hash is the file name, so
+// nobody who merely sees the file in the bucket can claim it.
+export async function uploadEventPhoto(eventId, file, deleteToken) {
   if (!file.type.startsWith('image/')) {
     throw new Error(t('api.imageOnly'))
   }
@@ -583,7 +641,7 @@ export async function uploadEventPhoto(eventId, file) {
   }
 
   const fileExt = file.name.split('.').pop()
-  const storagePath = `${eventId}/${crypto.randomUUID()}.${fileExt}`
+  const storagePath = `${eventId}/${await hashPhotoDeleteToken(deleteToken)}.${fileExt}`
 
   const { error: uploadError } = await supabase.storage.from('event-photos').upload(storagePath, file)
 

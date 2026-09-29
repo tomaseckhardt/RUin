@@ -305,7 +305,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                     {isOrganizer ? (
                       <button
                         type="button"
-                        className="secondary-button border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+                        className="secondary-button danger-button px-3 py-1.5 text-xs"
                         disabled={busyItemId === item.id}
                         onClick={() => handleDelete(item)}>
                         {t('common.delete')}

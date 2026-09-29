@@ -18,8 +18,8 @@ který musí mít v hlavě každý, kdo přidává novou tabulku, RPC funkci neb
   různé osoby si můžou obě napsat "Petr" a appka je nedokáže rozlišit.
 - Výjimkou jsou náhodné tokeny, které fungují jako bearer credential:
   `organizer_token` (správa akce), `event_polls.creator_token` (vyhodnocení
-  ankety) a `owners.token` (skupiny kontaktů a šablony akcí). Kdo token má, má
-  danou roli, tečka.
+  ankety), `owners.token` (skupiny kontaktů a šablony akcí) a mazací token
+  fotky (smazání vlastní nahrané fotky). Kdo token má, má danou roli, tečka.
 - Protože klient nemá nic silnějšího než "napsal jsem svoje jméno" nebo "mám
   tenhle token", **RLS na všech tabulkách musí defaultně vše zamítat** a
   **veškerá autorizace se ověřuje uvnitř SECURITY DEFINER RPC funkcí**, ne přes
@@ -29,7 +29,8 @@ který musí mít v hlavě každý, kdo přidává novou tabulku, RPC funkci neb
 
 RUin nepoužívá Supabase Auth, žádné uživatelské účty, hesla ani session tokeny
 vázané na uživatele. Jméno účastníka v RSVP formuláři, jméno odesílatele v chatu,
-jméno "kdo si bere co" v seznamu na sraz, jméno u šťouchnutí (ping) - to všechno
+jméno "kdo si bere co" v seznamu na sraz, jméno u šťouchnutí (ping), jméno u
+lajku nebo komentáře fotky - to všechno
 je prostý text, který si autor sám napsal do inputu a appka ho bez ověření uloží.
 
 Důsledek: pokud dva lidé na stejné akci napíšou stejné jméno (schválně, nebo
@@ -95,6 +96,30 @@ stejným zamykáním po chybných pokusech jako PIN. Funkce vrátí `ownerId` a
 `token`, klient je uloží do `localStorage` (`ruin-owner-identity`) a každá RPC
 nad skupinami a šablonami je ověřuje (`v_owner.token <> p_token`). Token se při
 dalším přihlášení nemění.
+
+### Kdo nahrál fotku: mazací token fotky
+
+Fotku může smazat organizátor a ten, kdo ji nahrál. Jméno nahrávajícího
+(`event_photos.uploaded_by`) je jen popisek, takže vlastnictví dokazuje token:
+prohlížeč před nahráním vygeneruje pro každou fotku náhodný token
+(`crypto.randomUUID()`), uloží si ho do `localStorage`
+(`ruin-photo-delete-tokens`, podle cesty fotky ve Storage) a soubor pojmenuje
+podle SHA-256 hashe tokenu. Databáze drží jen ten hash
+(`event_photos.delete_token_hash`), protože token se nikdy nemusí vracet
+zpátky.
+
+- Pojmenování podle hashe váže token ke konkrétnímu nahrání. Bucket
+  `event-photos` si může vylistovat kdokoli, takže kdyby `record_event_photo`
+  bral libovolný token, mohl by si cizí čerstvě nahranou fotku zapsat se svým
+  tokenem dřív než ten, kdo ji nahrál, a pak ji smazat. `record_event_photo`
+  proto uloží hash jen tomu, kdo zná token, jehož hash je název souboru.
+- Kdo smí fotku smazat, rozhoduje `authorize_event_photo_delete()` (jen pro
+  service role) a totéž znovu ověří `delete_event_photo()`: platný
+  organizátorský token, nebo mazací token s odpovídajícím hashem. Edge Function
+  `delete-event-data` se nejdřív zeptá první funkce, pak smaže soubor ze
+  Storage a nakonec zavolá druhou.
+- Fotky nahrané před zavedením tokenu, nebo z jiného zařízení, smaže jen
+  organizátor.
 
 ## 3. Proto: RLS musí defaultně vše zamítat, RPC ověřuje autorizaci sama
 

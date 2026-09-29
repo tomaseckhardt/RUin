@@ -322,6 +322,11 @@ textarea {
     @apply inline-flex items-center justify-center rounded-full border px-5 py-3 font-medium transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
+  /* Destructive actions (delete, remove), on top of .secondary-button. */
+  .danger-button {
+    @apply border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200;
+  }
+
   .status-chip {
     @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold;
   }

@@ -1,3 +1,4 @@
+import { webcrypto } from 'node:crypto'
 import { TextDecoder, TextEncoder } from 'node:util'
 import '@testing-library/jest-dom'
 
@@ -7,6 +8,11 @@ if (typeof globalThis.TextEncoder === 'undefined') {
 }
 if (typeof globalThis.TextDecoder === 'undefined') {
   globalThis.TextDecoder = TextDecoder
+}
+
+// jsdom's crypto has no SubtleCrypto; lib/photoDeleteTokens.js hashes with it.
+if (!globalThis.crypto?.subtle) {
+  Object.defineProperty(globalThis.crypto, 'subtle', { value: webcrypto.subtle })
 }
 
 // jsdom doesn't implement matchMedia; PageShell reads prefers-color-scheme.

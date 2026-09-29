@@ -578,7 +578,7 @@ function EventPage() {
         </section>
 
         <section className="panel relative order-1 overflow-hidden">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[linear-gradient(135deg,rgba(122,28,63,0.14),rgba(111,76,255,0.1))] [mask-image:linear-gradient(to_bottom,black,transparent)] dark:bg-[linear-gradient(135deg,rgba(122,28,63,0.26),rgba(111,76,255,0.16))]" />
           <div className="relative">
             <p className="accent-copy text-sm font-semibold uppercase tracking-[0.25em]">{t('event.note')}</p>
             <p

@@ -40,6 +40,7 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 - šťouchnutí (ping) se vzkazem pro ty, kdo nejdou (stejnou osobu lze šťouchnout znovu až po 10 minutách)
 - chat k akci s emoji reakcemi na zprávy
 - album fotek z akce s rozklikávacím náhledem (šipky mezi fotkami) a hromadným stažením fotek ostatních (jedním klikem jako ZIP, bez těch, které nahrál přihlášený uživatel sám)
+- lajky a komentáře u fotek: kdokoli s pozvánkou může fotku pod svým jménem lajknout a okomentovat, počty jsou vidět rovnou v albu
 - předpověď počasí pro místo a čas akce (Open-Meteo, až 16 dní dopředu)
 - přidání do kalendáře (Google Kalendář, na iPhonu `.ics` soubor s upozorněním 2 dny předem) a na plochu telefonu (PWA)
 - sdílení pozvánky (odkaz, QR kód, QR plakátek ke stažení)
@@ -47,7 +48,7 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 
 **Pro organizátora**
 
-- správa akce: úprava detailů (název, místo, termín, popis, povinný telefon, moduly), schvalování a zamítání omluvenek, mazání účastníků, zastávek, položek a fotek, odebrání kohokoli z položky, smazání celé akce
+- správa akce: úprava detailů (název, místo, termín, popis, povinný telefon, moduly), schvalování a zamítání omluvenek, mazání účastníků, zastávek, položek, fotek a komentářů u fotek, odebrání kohokoli z položky, smazání celé akce
 - vstup do správy přes odkaz s tokenem, nebo z pozvánky zadáním PINu; přihlášení si prohlížeč pamatuje a po opakovaných chybných pokusech se PIN dočasně zablokuje
 - "Moje poslední akce" na úvodní stránce - rychlý vstup do správy akcí založených v tomhle prohlížeči
 - pozvání lidí předem (jméno + telefon) - v seznamu se ukážou jako "Pozváno", dokud sami neodpoví
@@ -92,7 +93,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
   - `public/` - service worker (`sw.js`), ikony a manifest
   - `scripts/run-vite-safe.mjs` - spouští Vite z dočasné kopie projektu (viz [NPM skripty](#npm-skripty))
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
-- `supabase/functions/` - Edge Functions (`send-event-reminders` pro push připomínky, `cleanup-expired-events` pro úklid expirovaných akcí, `delete-event-data` pro ruční mazání fotek a akcí)
+- `supabase/functions/` - Edge Functions (`send-event-reminders` pro push připomínky, `cleanup-expired-events` pro úklid expirovaných akcí, `delete-event-data` pro ruční mazání fotek a akcí). Běží v Deno, ne v Node: aby je VS Code nehlásil jako chybné (`Cannot find name 'Deno'`, nenalezený import `npm:`), nainstaluj si [Deno](https://deno.com) a rozšíření Deno pro VS Code - `.vscode/settings.json` ho zapíná jen pro `supabase/functions`.
 - `scripts/audit-a11y.mjs` - a11y audit postaveného buildu (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) a šablony pro issues a pull requesty
 - `CNAME` - vlastní doména pro GitHub Pages
@@ -158,11 +159,12 @@ Co všechno `all-phases.sql` obsahuje:
 - Case-insensitive hlasování v anketách.
 - Šťouchnutí s opakovatelným 10minutovým cooldownem místo "jednou navždy" (atomický `on conflict ... do update ... where`), s RLS na `attendee_pings`.
 - Bezpečnostní hardening: `_random_token` přes `pgcrypto`/`gen_random_bytes()` místo nekryptografického `random()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` vrací telefonní čísla jen s platným `p_organizer_token`; opravená race podmínka v `moderate_attendee`; srozumitelná hláška místo syrové Postgres chyby při konfliktu telefonního čísla. Záměrně neřeší: `organizer_token` zůstává čitelný (ne hash), protože appka přes PIN umí "obnovit" zapomenutý manage odkaz a to s jednosměrným hashem nejde bez přestavby celého recovery flow. Celý model identity/autorizace (appka nemá auth vůbec, jediná "oprávnění" jsou tokeny v odkazech, RLS musí defaultně vše zamítat) je sepsaný v [SECURITY_MODEL.md](SECURITY_MODEL.md).
-- Mazání fotek ze Storage - ručně přes Edge Function `delete-event-data`, která ověřuje organizátorský token, automaticky po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` - a vlastní životní cyklus anket (nevyhodnocená zanikne 14 dní od vytvoření, vyhodnocená automaticky spolu s akcí, co z ní vznikla).
+- Mazání fotek ze Storage - ručně přes Edge Function `delete-event-data`, která ověřuje organizátorský token nebo mazací token fotky toho, kdo ji nahrál, automaticky po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` - a vlastní životní cyklus anket (nevyhodnocená zanikne 14 dní od vytvoření, vyhodnocená automaticky spolu s akcí, co z ní vznikla).
 - Blokace přihlášení řidiče na vlastní nabídku odvozu + možnost odebrat konkrétního spolujezdce z vlastní nabídky.
 - Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé `select` politiky jsou `using (false)`), realtime běží přes `event_realtime_ticks`.
 - Organizátor jako samostatná identita (`events.organizer_name`) - chat, šťouchnutí, fotky i položky ze správy akce se podepisují jménem organizátora.
 - Serverové omezení uploadu fotek (bucket `event-photos`: max 10 MB, jen obrázky, nejvýše 50 fotek na akci a upload pouze do složky existující akce).
+- Lajky a komentáře u fotek (`event_photo_likes`, `event_photo_comments`): číst i zapisovat jdou jen přes RPC (`get_event_photo_likes`, `get_event_photo_comments`, `toggle_event_photo_like`, `add_event_photo_comment`, `delete_event_photo_comment`), jeden lajk na jméno a fotku, komentář max 500 znaků, max 200 komentářů na fotku, mazat komentáře smí jen organizátor. Otevřená alba se obnovují přes realtime ticky `photo`, `photo_like` a `photo_comment`.
 - Feedback (hlášení chyb a nápadů): `feedback_reports` + RPC `submit_feedback_report`/`get_feedback_reports`. Čtení přes `/feedback` je záměrně veřejné bez PINu - kdokoliv na tuhle adresu uvidí jméno i text všech hlášení.
 - Skupiny kontaktů a šablony akcí (`owners`, `contact_groups`, `contact_group_members`, `event_templates`) vázané na účet podle jména, telefonu a 6místného kódu (`access_owner_account`; kód je uložený jako bcrypt hash a po opakovaných chybách se dočasně zablokuje) + hromadné pozvání lidí do akce (`invite_attendees`, stav `invited`).
 - Volitelné moduly akce (`enable_bring_list`, `enable_carpool`, `enable_stops`).
@@ -346,7 +348,7 @@ Organizátorovo ruční mazání používá Edge Function se service-role klíč
 supabase functions deploy delete-event-data --no-verify-jwt
 ```
 
-Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba.
+Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba. Jednu fotku smí smazat i ten, kdo ji nahrál: pošle mazací token, který si jeho prohlížeč pro fotku uložil při nahrání, a oprávnění ověří `authorize_event_photo_delete()` v databázi (viz [SECURITY_MODEL.md](SECURITY_MODEL.md)). Při nasazení téhle změny nejdřív spusť SQL fázi "Uploaders can delete their own photos", pak funkci znovu nasaď a teprve potom nasaď klienta (merge do `main`). SQL jde spustit kdykoli dřív, protože nové parametry mají výchozí hodnotu a staré volání dál funguje. Opačně ne: nový klient posílá `p_delete_token`, který starý `record_event_photo` nezná, takže by nahrávání fotek selhalo, a nová funkce volá `authorize_event_photo_delete()`, bez které by selhalo mazání fotek.
 
 ## Lokalizace (čeština a angličtina)
 

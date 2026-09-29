@@ -40,6 +40,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 - nudges (pings) with a message for people who aren't coming (the same person can be nudged again only after 10 minutes)
 - a chat for each event, with emoji reactions to messages
 - an event photo album with a clickable preview (arrows between photos) and a bulk download of everyone else's photos (one click, as a ZIP, without the ones the signed-in user uploaded themselves)
+- likes and comments on photos: anyone with the invite can like and comment on a photo under their name, and the counts show right in the album
 - a weather forecast for the event's place and time (Open-Meteo, up to 16 days ahead)
 - adding the event to a calendar (Google Calendar; on iPhone an `.ics` file with a reminder 2 days before) and the app to the phone's home screen (PWA)
 - sharing the invite (link, QR code, downloadable QR poster)
@@ -47,7 +48,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 
 **For organizers**
 
-- event management: editing the details (name, place, date, description, required phone, modules), accepting and rejecting excuses, removing guests, stops, items and photos, removing anyone from an item, deleting the whole event
+- event management: editing the details (name, place, date, description, required phone, modules), accepting and rejecting excuses, removing guests, stops, items, photos and photo comments, removing anyone from an item, deleting the whole event
 - getting into management through the link with its token, or from the invite by entering the PIN; the browser remembers the sign-in, and after repeated wrong attempts the PIN is temporarily locked
 - "My recent events" on the home page - a shortcut into managing the events created in this browser
 - inviting people in advance (name + phone) - they show up in the list as "Invited" until they reply themselves
@@ -92,7 +93,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
   - `public/` - service worker (`sw.js`), icons and the manifest
   - `scripts/run-vite-safe.mjs` - runs Vite from a temporary copy of the project (see [NPM scripts](#npm-scripts))
 - `supabase/sql/all-phases.sql` - the whole database schema, a single SQL file
-- `supabase/functions/` - Edge Functions (`send-event-reminders` for push reminders, `cleanup-expired-events` for cleaning up expired events, `delete-event-data` for manual photo/event deletion)
+- `supabase/functions/` - Edge Functions (`send-event-reminders` for push reminders, `cleanup-expired-events` for cleaning up expired events, `delete-event-data` for manual photo/event deletion). They run on Deno, not Node: for VS Code to stop flagging them (`Cannot find name 'Deno'`, unresolved `npm:` imports), install [Deno](https://deno.com) and the Deno extension for VS Code - `.vscode/settings.json` enables it for `supabase/functions` only.
 - `scripts/audit-a11y.mjs` - a11y audit of the built app (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) and the issue and pull request templates
 - `CNAME` - the custom domain for GitHub Pages
@@ -158,11 +159,12 @@ What `all-phases.sql` contains:
 - Case-insensitive voting in polls.
 - Nudges with a repeatable 10-minute cooldown instead of "once, forever" (an atomic `on conflict ... do update ... where`), with RLS on `attendee_pings`.
 - Security hardening: `_random_token` via `pgcrypto`/`gen_random_bytes()` instead of the non-cryptographic `random()` (the token is the only authorization for `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` returns phone numbers only with a valid `p_organizer_token`; a fixed race condition in `moderate_attendee`; a readable message instead of a raw Postgres error on a phone number conflict. Deliberately not addressed: `organizer_token` stays readable (not hashed), because the app can "recover" a forgotten manage link via the PIN, and that isn't possible with a one-way hash without rebuilding the whole recovery flow. The whole identity/authorization model (the app has no auth at all, the only "permissions" are tokens in links, RLS must deny everything by default) is written up in [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md).
-- Deleting photos from Storage - manual deletion goes through the `delete-event-data` Edge Function, which validates the organizer token; automatic deletion after 7 days goes through `get_expired_event_ids()` and the `cleanup-expired-events` Edge Function - and polls have their own lifecycle (an undecided poll expires 14 days after it was created, a decided one is removed automatically together with the event it created).
+- Deleting photos from Storage - manual deletion goes through the `delete-event-data` Edge Function, which validates the organizer token, or the delete token of whoever uploaded the photo; automatic deletion after 7 days goes through `get_expired_event_ids()` and the `cleanup-expired-events` Edge Function - and polls have their own lifecycle (an undecided poll expires 14 days after it was created, a decided one is removed automatically together with the event it created).
 - Blocking a driver from signing up for their own ride offer + the option to remove a specific passenger from your own offer.
 - Read hardening: chat, photos, polls, lists and stops can only be read through RPCs scoped to a specific event (the direct `select` policies are `using (false)`), and realtime goes through `event_realtime_ticks`.
 - The organizer as a separate identity (`events.organizer_name`) - chat messages, nudges, photos and items from event management are signed with the organizer's name.
 - Server-side limits on photo uploads (bucket `event-photos`: 10 MB max, images only, at most 50 photos per event, and uploads restricted to folders for existing events).
+- Photo likes and comments (`event_photo_likes`, `event_photo_comments`): reads and writes go through RPCs only (`get_event_photo_likes`, `get_event_photo_comments`, `toggle_event_photo_like`, `add_event_photo_comment`, `delete_event_photo_comment`), one like per name and photo, comments up to 500 characters, at most 200 comments per photo, and only the organizer can delete comments. Open albums refresh through the `photo`, `photo_like` and `photo_comment` realtime ticks.
 - Feedback (bug reports and ideas): `feedback_reports` + RPCs `submit_feedback_report`/`get_feedback_reports`. Reading them at `/feedback` is deliberately public, without a PIN - anyone at that address sees the name and text of every report.
 - Contact groups and event templates (`owners`, `contact_groups`, `contact_group_members`, `event_templates`) tied to an account identified by name, phone and a 6-digit code (`access_owner_account`; the code is stored as a bcrypt hash and is temporarily locked after repeated wrong attempts) + inviting people into an event in bulk (`invite_attendees`, status `invited`).
 - Optional event modules (`enable_bring_list`, `enable_carpool`, `enable_stops`).
@@ -346,7 +348,7 @@ Manual organizer deletion uses an Edge Function with the service-role key so Sto
 supabase functions deploy delete-event-data --no-verify-jwt
 ```
 
-The function validates the organizer token against the requested event; it needs no schedule, and the service-role key never goes to the client.
+The function validates the organizer token against the requested event; it needs no schedule, and the service-role key never goes to the client. A single photo can also be deleted by whoever uploaded it: they send the delete token their browser saved for the photo on upload, and `authorize_event_photo_delete()` checks it in the database (see [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md)). When deploying this change, run the SQL phase "Uploaders can delete their own photos" first, then redeploy the function, and only then deploy the client (merge into `main`). The SQL can run any time before that, since the new parameters have defaults and the old calls keep working. Not the other way round: the new client sends `p_delete_token`, which the old `record_event_photo` doesn't know, so photo uploads would fail, and the new function calls `authorize_event_photo_delete()`, without which photo deletes would fail.
 
 ## Localization (Czech and English)
 

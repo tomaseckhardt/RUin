@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { supabase } from '../lib/supabase.js'
 import { setLocale } from '../lib/i18n.js'
 import {
@@ -11,7 +12,14 @@ import {
   getSignupItems,
   moderateAttendee,
   removeEvent,
+  addEventPhotoComment,
   deleteEventPhoto,
+  deleteEventPhotoComment,
+  deleteOwnEventPhoto,
+  getEventPhotoComments,
+  getEventPhotoLikes,
+  toggleEventPhotoLike,
+  recordEventPhoto,
   replayRetryQueue,
   sendEventChatMessage,
   submitRsvp,
@@ -78,6 +86,16 @@ describe('deleteEventData', () => {
     })
   })
 
+  it('calls the server-side handler to delete a guest’s own photo with its delete token', async () => {
+    supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
+
+    await deleteOwnEventPhoto('event-1', 12, 'delete-token-1')
+
+    expect(supabase.functions.invoke).toHaveBeenCalledWith('delete-event-data', {
+      body: { action: 'delete_photo', eventId: 'event-1', photoId: 12, photoToken: 'delete-token-1' },
+    })
+  })
+
   it('calls the server-side handler to delete a photo', async () => {
     supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
 
@@ -85,6 +103,21 @@ describe('deleteEventData', () => {
 
     expect(supabase.functions.invoke).toHaveBeenCalledWith('delete-event-data', {
       body: { action: 'delete_photo', eventId: 'event-1', token: 'organizer-token', photoId: 12 },
+    })
+  })
+})
+
+describe('recordEventPhoto', () => {
+  it('sends the photo’s delete token so the uploader can delete it later', async () => {
+    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+
+    await recordEventPhoto('event-1', 'event-1/photo.jpg', 'Alice', 'delete-token-1')
+
+    expect(supabase.rpc).toHaveBeenCalledWith('record_event_photo', {
+      p_event_id: 'event-1',
+      p_storage_path: 'event-1/photo.jpg',
+      p_uploaded_by: 'Alice',
+      p_delete_token: 'delete-token-1',
     })
   })
 })
@@ -278,5 +311,59 @@ describe('moderateAttendee/claimSignupItem numeric ids', () => {
       p_attendee_name: 'Alice',
       p_seats: 1,
     })
+  })
+})
+
+describe('uploadEventPhoto file name', () => {
+  it('names the file after the SHA-256 hash of the photo’s delete token', async () => {
+    const upload = jest.fn().mockResolvedValue({ error: null })
+    supabase.storage.from.mockReturnValue({ upload })
+    const file = { type: 'image/jpeg', size: 1024, name: 'party.JPG' }
+
+    const storagePath = await uploadEventPhoto('event-1', file, 'delete-token-1')
+
+    const expectedHash = createHash('sha256').update('delete-token-1').digest('hex')
+    expect(storagePath).toBe(`event-1/${expectedHash}.JPG`)
+    expect(upload).toHaveBeenCalledWith(storagePath, file)
+  })
+})
+
+describe('photo likes and comments', () => {
+  it('reads likes and comments through event-scoped RPCs', async () => {
+    supabase.rpc.mockResolvedValue({ data: [], error: null })
+
+    await getEventPhotoLikes('event-1')
+    await getEventPhotoComments('event-1')
+
+    expect(supabase.rpc).toHaveBeenCalledWith('get_event_photo_likes', { p_event_id: 'event-1' })
+    expect(supabase.rpc).toHaveBeenCalledWith('get_event_photo_comments', { p_event_id: 'event-1' })
+  })
+
+  it('toggles a like under the given name', async () => {
+    supabase.rpc.mockResolvedValue({ data: { success: true, liked: true }, error: null })
+
+    await expect(toggleEventPhotoLike('event-1', 12, 'Alice')).resolves.toEqual({ success: true, liked: true })
+    expect(supabase.rpc).toHaveBeenCalledWith('toggle_event_photo_like', { p_event_id: 'event-1', p_photo_id: 12, p_liker_name: 'Alice' })
+  })
+
+  it('returns the saved comment row', async () => {
+    const row = { id: 3, photo_id: 12, author_name: 'Alice', message: 'Hezká', created_at: 'now' }
+    supabase.rpc.mockResolvedValue({ data: [row], error: null })
+
+    await expect(addEventPhotoComment('event-1', 12, 'Alice', 'Hezká')).resolves.toEqual(row)
+    expect(supabase.rpc).toHaveBeenCalledWith('add_event_photo_comment', {
+      p_event_id: 'event-1',
+      p_photo_id: 12,
+      p_author_name: 'Alice',
+      p_message: 'Hezká',
+    })
+  })
+
+  it('deletes a comment with the organizer token', async () => {
+    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+
+    await deleteEventPhotoComment('event-1', 'organizer-token', 3)
+
+    expect(supabase.rpc).toHaveBeenCalledWith('delete_event_photo_comment', { p_event_id: 'event-1', p_token: 'organizer-token', p_comment_id: 3 })
   })
 })
