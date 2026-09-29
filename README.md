@@ -21,6 +21,7 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 - [Nasazení na GitHub Pages](#nasazení-na-github-pages)
 - [Jak funguje routing na Pages](#jak-funguje-routing-na-pages)
 - [Service worker, offline režim a push notifikace](#service-worker-offline-režim-a-push-notifikace)
+  - [Klíč pro plánované Edge Functions](#klíč-pro-plánované-edge-functions)
   - [Automatické připomínky před akcí](#automatické-připomínky-před-akcí-den-a-hodinu-předem)
   - [Automatický úklid expirovaných akcí](#automatický-úklid-expirovaných-akcí-a-jejich-fotek)
 - [Lokalizace (čeština a angličtina)](#lokalizace-čeština-a-angličtina)
@@ -263,6 +264,27 @@ Aplikace používá `HashRouter` (`/#/`), což je správně pro GitHub Pages bez
 
 Pokud push notifikace nechodí, nejčastěji chybí správná konfigurace v Supabase nebo oprávnění notifikací v prohlížeči.
 
+### Klíč pro plánované Edge Functions
+
+`send-event-reminders` a `cleanup-expired-events` spouští cron. Obě běží s `--no-verify-jwt` a samy porovnávají hlavičku `Authorization: Bearer <klíč>` s proměnnou `SUPABASE_SERVICE_ROLE_KEY`, kterou funkcím dává Supabase. Kdo jiný klíč nepošle, dostane 401.
+
+- **Který klíč:** přesně ta hodnota, kterou mají funkce v `SUPABASE_SERVICE_ROLE_KEY`. V projektu s novými API klíči (tenhle projekt) je to secret klíč `sb_secret_…` z `Project Settings -> API Keys -> Secret keys`, ne legacy `service_role` klíč `eyJ…`. S legacy klíčem funkce vrací 401.
+- **Jak si to ověřit bez vypsání klíče:** `supabase secrets list` ukazuje u každé proměnné jen SHA-256 otisk. Porovnej otisk `SUPABASE_SERVICE_ROLE_KEY` s výstupem `printf %s 'sb_secret_…' | sha256sum`.
+- **Kam ho uložit:** do Supabase Vault, jednou za projekt. Cron joby níž si ho odtamtud berou, takže klíč není vidět v definici jobu a při jeho změně stačí upravit jen Vault:
+
+```sql
+select vault.create_secret('sb_secret_…', 'ruin_service_role_key', 'Bearer token the pg_cron jobs send to the scheduled Edge Functions');
+-- později při změně klíče:
+select vault.update_secret(id, 'sb_secret_…') from vault.secrets where name = 'ruin_service_role_key';
+```
+
+Joby potřebují rozšíření `pg_cron` a `pg_net` (`Database -> Extensions`). Časy v `cron.schedule` jsou v UTC. Jestli joby prošly, ukážou poslední odpovědi funkcí:
+
+```sql
+select jobname, schedule, active from cron.job;
+select status_code, content, created from net._http_response order by created desc limit 10;
+```
+
 ### Automatické připomínky před akcí (den a hodinu předem)
 
 Účastník si po RSVP může v appce zapnout tlačítko "🔔 Připomenout den a hodinu předem" - to zaregistruje Web Push subscription k dané akci. Skutečné odeslání notifikace zajišťuje scheduled Edge Function `send-event-reminders`, kterou je potřeba jednorázově nastavit:
@@ -292,9 +314,7 @@ supabase secrets set VAPID_SUBJECT=mailto:tvuj@email.cz
 supabase functions deploy send-event-reminders --no-verify-jwt
 ```
 
-**5. Naplánuj pravidelné spouštění** (např. každých 15-30 minut), ať se stihne poslat "den předem" i "hodinu předem" upozornění včas. Funkce běží s `--no-verify-jwt`, takže sama vyžaduje hlavičku `Authorization: Bearer <service-role-key>` - bez ní vrátí 401 (viz komentář v `index.ts`). Přes Supabase dashboard (`Edge Functions -> send-event-reminders -> Cron Jobs`) je potřeba při nastavení schedule (např. `*/15 * * * *`) tuhle hlavičku ručně přidat do "HTTP Headers" sekce cron jobu.
-
-Alternativa přes SQL (pokud má projekt zapnuté `pg_cron` + `pg_net` rozšíření v `Database -> Extensions`) - hlavičku už obsahuje:
+**5. Naplánuj pravidelné spouštění** (např. každých 15-30 minut), ať se stihne poslat "den předem" i "hodinu předem" upozornění včas. Funkce chce hlavičku s klíčem z [Vaultu](#klíč-pro-plánované-edge-functions), bez ní vrátí 401. Spusť v SQL Editoru (stejným příkazem se existující job se stejným jménem i upraví):
 
 ```sql
 select cron.schedule(
@@ -303,11 +323,17 @@ select cron.schedule(
   $$
   select net.http_post(
     url := 'https://<project-ref>.supabase.co/functions/v1/send-event-reminders',
-    headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>')
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'ruin_service_role_key')
+    ),
+    timeout_milliseconds := 60000
   );
   $$
 );
 ```
+
+Cron jde nastavit i v dashboardu (`Integrations -> Cron`), hlavička tam ale bude obsahovat klíč přímo v textu jobu.
 
 Bez kroků 3-5 se tlačítko připomínky v appce zobrazí a subscription se uloží, ale žádná notifikace nikdy nepřijde - dokud Edge Function neběží na scheduleru, nemá kdo `get_pending_event_reminders()` vyzvednout a poslat. Texty připomínek skládá Edge Function a jsou zatím jen česky.
 
@@ -321,9 +347,7 @@ Akce, kterým je 7+ dní po termínu (počítáno v čase Europe/Prague), maže 
 supabase functions deploy cleanup-expired-events --no-verify-jwt
 ```
 
-**2. Naplánuj pravidelné spouštění** (denně bohatě stačí, expirace není časově kritická). Funkce vyžaduje stejnou hlavičku `Authorization: Bearer <service-role-key>` jako `send-event-reminders` výše. Přes Supabase dashboard (`Edge Functions -> cleanup-expired-events -> Cron Jobs`, schedule např. `0 3 * * *`) ji přidej ručně do "HTTP Headers" sekce.
-
-Alternativa přes SQL (`pg_cron` + `pg_net`) - hlavičku už obsahuje:
+**2. Naplánuj pravidelné spouštění** (denně bohatě stačí, expirace není časově kritická). Funkce chce stejnou hlavičku s klíčem z [Vaultu](#klíč-pro-plánované-edge-functions) jako `send-event-reminders`. Tenhle job běží ve 3:00 UTC:
 
 ```sql
 select cron.schedule(
@@ -332,11 +356,19 @@ select cron.schedule(
   $$
   select net.http_post(
     url := 'https://<project-ref>.supabase.co/functions/v1/cleanup-expired-events',
-    headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>')
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'ruin_service_role_key')
+    ),
+    timeout_milliseconds := 60000
   );
   $$
 );
 ```
+
+`timeout_milliseconds` prodlužuje výchozích 5 sekund, po které `pg_net` čeká na odpověď funkce. Bez toho by se v `net._http_response` místo výsledku objevil timeout.
+
+Úklid maže jen fotky akcí, které jsou v databázi. Složka v bucketu `event-photos` od akce smazané dřív, než úklid fotek existoval, v něm zůstane a je potřeba ji smazat ručně (`Storage -> event-photos`).
 
 Bez tohohle kroku se expirované akce nemažou vůbec - dřívější automatické mazání přímo v SQL (`_delete_expired_events()`) bylo odstraněné, protože nemohlo mazat fotky ze Storage. Ankety mají vlastní úklid, který řeší databáze sama: nevyhodnocená anketa zanikne 14 dní od založení, vyhodnocená spolu s akcí, která z ní vznikla.
 
