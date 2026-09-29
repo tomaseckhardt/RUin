@@ -36,52 +36,67 @@ if (!supabaseUrl || !serviceRoleKey) {
 
 const supabase = supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null
 
-// Storage's list() defaults to a 100-item page - paginate so an event with
-// more than 100 photos doesn't leave the rest permanently orphaned.
-async function listAllPhotoNames(eventId) {
-  const names = []
-  let offset = 0
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
 
-  while (true) {
-    const { data: page, error: listError } = await supabase.storage.from('event-photos').list(eventId, { limit: STORAGE_LIST_PAGE_SIZE, offset })
+// Storage's list() defaults to one page of 100 entries. Walk folders and
+// paginate each one so old nested uploads are removed as well as current ones.
+async function listAllPhotoPaths(eventId) {
+  const folders: string[] = [eventId]
+  const paths: string[] = []
 
-    if (listError) {
-      throw new Error(`Failed to list photos for event ${eventId}: ${listError.message}`)
+  while (folders.length > 0) {
+    const folder = folders.shift()
+    if (!folder) {
+      continue
     }
 
-    if (!page || page.length === 0) {
-      break
+    let offset = 0
+
+    while (true) {
+      const { data: page, error: listError } = await supabase.storage.from('event-photos').list(folder, { limit: STORAGE_LIST_PAGE_SIZE, offset })
+
+      if (listError) {
+        throw new Error(`Failed to list photos for event ${eventId}: ${listError.message}`)
+      }
+
+      for (const item of page || []) {
+        const path = `${folder}/${item.name}`
+        if (item.id === null) {
+          folders.push(path)
+        } else {
+          paths.push(path)
+        }
+      }
+
+      if (!page || page.length < STORAGE_LIST_PAGE_SIZE) {
+        break
+      }
+
+      offset += STORAGE_LIST_PAGE_SIZE
     }
-
-    names.push(...page.map((file) => file.name))
-
-    if (page.length < STORAGE_LIST_PAGE_SIZE) {
-      break
-    }
-
-    offset += STORAGE_LIST_PAGE_SIZE
   }
 
-  return names
+  return paths
 }
 
 // Returns true if eventId's photos are confirmed gone (or there were none),
 // false if removal failed and the event should be retried on the next run.
 async function removeEventPhotos(eventId) {
-  let names
+  let paths
 
   try {
-    names = await listAllPhotoNames(eventId)
+    paths = await listAllPhotoPaths(eventId)
   } catch (listError) {
-    console.error(listError.message)
+    console.error(errorMessage(listError))
     return { removedCount: 0, succeeded: false }
   }
 
-  if (names.length === 0) {
+  if (paths.length === 0) {
     return { removedCount: 0, succeeded: true }
   }
 
-  const paths = names.map((name) => `${eventId}/${name}`)
   const { error: removeError } = await supabase.storage.from('event-photos').remove(paths)
 
   if (removeError) {
@@ -92,7 +107,7 @@ async function removeEventPhotos(eventId) {
   return { removedCount: paths.length, succeeded: true }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (!supabase) {
     return new Response(JSON.stringify({ error: 'Server misconfigured: missing secrets.' }), {
       status: 500,

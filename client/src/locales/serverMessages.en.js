@@ -58,6 +58,7 @@ export default {
   'Přidej aspoň dvě možnosti.': 'Add at least two options.',
   'Anketa může mít 2 až 5 možností.': 'A poll can have 2 to 5 options.',
   'Každá možnost musí mít platné datum a místo.': 'Each option must have a valid date and location.',
+  'Termín možnosti musí být v budoucnosti.': 'The option date and time must be in the future.',
   'Fotka nepatří k této akci.': 'This photo does not belong to this event.',
   'Nahraná fotka nebyla nalezena.': 'The uploaded photo could not be found.',
   'Fotka už byla přidána.': 'This photo has already been added.',

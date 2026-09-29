@@ -331,6 +331,7 @@ export default {
     submitting: 'Creating poll…',
     submit: 'Create poll',
     optionIncomplete: 'Option {number} is missing a date or place — fill it in or remove it.',
+    optionMustBeFuture: 'Option {number} is in the past. Choose a future time.',
     minTwoOptions: 'Add at least two options.',
     created: 'Your poll is ready. Share the voting link.',
   },

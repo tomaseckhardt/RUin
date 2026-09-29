@@ -25,6 +25,10 @@ function jsonResponse(payload: Record<string, unknown>, status = 200) {
   })
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 async function removeStoragePaths(paths: string[]) {
   for (let offset = 0; offset < paths.length; offset += 100) {
     const { error } = await supabase.storage.from('event-photos').remove(paths.slice(offset, offset + 100))
@@ -36,11 +40,15 @@ async function removeStoragePaths(paths: string[]) {
 }
 
 async function listAllPhotoPaths(eventId: string) {
-  const folders = [eventId]
+  const folders: string[] = [eventId]
   const paths: string[] = []
 
   while (folders.length > 0) {
     const folder = folders.shift()
+    if (!folder) {
+      continue
+    }
+
     let offset = 0
 
     while (true) {
@@ -70,7 +78,7 @@ async function listAllPhotoPaths(eventId: string) {
   return paths
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -133,7 +141,7 @@ Deno.serve(async (req) => {
     try {
       await removeStoragePaths([storagePath])
     } catch (error) {
-      return jsonResponse({ error: error.message }, 500)
+      return jsonResponse({ error: errorMessage(error) }, 500)
     }
 
     const { error: deleteError } = await supabase.rpc('delete_event_photo', credentials)
@@ -152,7 +160,7 @@ Deno.serve(async (req) => {
   try {
     await removeStoragePaths(await listAllPhotoPaths(eventId))
   } catch (error) {
-    return jsonResponse({ error: error.message }, 500)
+    return jsonResponse({ error: errorMessage(error) }, 500)
   }
 
   const { error: deleteError } = await supabase.rpc('delete_event', {
