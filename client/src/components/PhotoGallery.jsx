@@ -105,6 +105,10 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
 
     try {
       await deleteEventPhoto(eventId, organizerToken, photo.id)
+      // An open lightbox moves on to the photo that takes the deleted one's
+      // place, or closes when none is left.
+      const remainingCount = photos.length - 1
+      setLightboxIndex((current) => (current === null || remainingCount === 0 ? null : Math.min(current, remainingCount - 1)))
       await loadPhotos()
     } catch (error) {
       toast.error(error.message)
@@ -218,9 +222,19 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
               <p id="photo-lightbox-title" className="text-sm">
                 {t('photos.lightboxTitle', { name: photos[lightboxIndex].uploaded_by, index: lightboxIndex + 1, total: photos.length })}
               </p>
-              <button type="button" className="secondary-button" onClick={() => setLightboxIndex(null)}>
-                {t('common.close')}
-              </button>
+              <div className="flex shrink-0 gap-2">
+                {isOrganizer ? (
+                  <button
+                    type="button"
+                    className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+                    onClick={() => handleDelete(photos[lightboxIndex])}>
+                    {t('common.delete')}
+                  </button>
+                ) : null}
+                <button type="button" className="secondary-button" onClick={() => setLightboxIndex(null)}>
+                  {t('common.close')}
+                </button>
+              </div>
             </div>
 
             <div className="relative flex w-full flex-1 items-center justify-center">
