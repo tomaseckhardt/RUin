@@ -1,8 +1,8 @@
 import { useI18n } from '../lib/i18n.js'
 
-const RUBY_GIF_PATH = `${import.meta.env.BASE_URL || '/'}RUdy/`
+const RUDY_GIF_PATH = `${import.meta.env.BASE_URL || '/'}RUdy/`
 
-// Původní animace (konfety, fajfka, palec dolů) je dočasně nahrazená GIFy s Ruby.
+// Původní animace (konfety, fajfka, palec dolů) je dočasně nahrazená GIFy s maskotem RUdy.
 // Nechávám ji zakomentovanou, ať se k ní dá kdykoliv vrátit - stačí odkomentovat
 // tahle data a bloky označené "Původní animace" níž a smazat <img> s GIFem.
 /*
@@ -123,7 +123,7 @@ export function ConfirmCelebration({ name }) {
           </svg>
         </div>
         */}
-        <img src={`${RUBY_GIF_PATH}ruby-party.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
+        <img src={`${RUDY_GIF_PATH}RUdy-party.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
         <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'float-up 0.4s ease 0.5s both', opacity: 0 }}>
           {name ? t('celebration.confirmTitleWithName', { name }) : t('celebration.confirmTitle')}
         </h3>
@@ -170,7 +170,7 @@ export function DeclineCelebration({ name }) {
           <span className="text-3xl leading-none">👎</span>
         </div>
         */}
-        <img src={`${RUBY_GIF_PATH}ruby-rejected.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
+        <img src={`${RUDY_GIF_PATH}RUdy-rejected.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
         <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'float-up 0.4s ease 0.5s both', opacity: 0 }}>
           {name ? t('celebration.declineTitleWithName', { name }) : t('celebration.declineTitle')}
         </h3>
