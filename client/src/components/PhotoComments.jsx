@@ -59,8 +59,8 @@ function PhotoComments({ likerNames, comments, authorName, isLiked, isLikePendin
   return (
     <section
       aria-labelledby="photo-comments-title"
-      className="flex w-full flex-col rounded-2xl bg-white/95 p-4 text-slate-900 shadow-xl dark:bg-slate-900/95 dark:text-slate-100 lg:w-80 lg:shrink-0 lg:overflow-y-auto">
-      <div className="flex flex-wrap items-center gap-2">
+      className="flex min-h-0 max-h-[45dvh] w-full flex-col overflow-hidden rounded-2xl bg-white/95 p-4 text-slate-900 shadow-xl dark:bg-slate-900/95 dark:text-slate-100 lg:max-h-[78dvh] lg:w-80 lg:shrink-0">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <button
           type="button"
           aria-pressed={isLiked}
@@ -73,17 +73,17 @@ function PhotoComments({ likerNames, comments, authorName, isLiked, isLikePendin
         <span className="text-sm text-slate-600 dark:text-slate-300">{t('photos.likeCount', { count: likerNames.length })}</span>
       </div>
       {likerNames.length > 0 ? (
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('photos.likedBy', { names: likerNames.join(', ') })}</p>
+        <p className="mt-2 shrink-0 text-xs text-slate-500 dark:text-slate-400">{t('photos.likedBy', { names: likerNames.join(', ') })}</p>
       ) : null}
 
-      <h4 id="photo-comments-title" className="mt-4 text-sm font-semibold">
+      <h4 id="photo-comments-title" className="mt-4 shrink-0 text-sm font-semibold">
         {t('photos.commentsTitle')} <span className="font-normal text-slate-500 dark:text-slate-400">({comments.length})</span>
       </h4>
 
       {comments.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{t('photos.noComments')}</p>
+        <p className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain text-sm text-slate-500 dark:text-slate-400">{t('photos.noComments')}</p>
       ) : (
-        <ul className="mt-2 space-y-2">
+        <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
           {comments.map((comment) => (
             <li key={comment.id} className="rounded-xl border border-slate-200 bg-white/80 p-2.5 dark:border-slate-700 dark:bg-slate-800/60">
               <div className="flex items-center justify-between gap-2">
@@ -107,7 +107,7 @@ function PhotoComments({ likerNames, comments, authorName, isLiked, isLikePendin
         </ul>
       )}
 
-      <form className="mt-3 space-y-2" onSubmit={handleSubmit}>
+      <form className="mt-3 shrink-0 space-y-2" onSubmit={handleSubmit}>
         <label htmlFor="photo-comment-input" className="sr-only">
           {t('photos.commentLabel')}
         </label>
