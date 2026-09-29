@@ -1,5 +1,5 @@
 import { readStoredMap, readStoredValue, saveStoredMapEntry, writeStoredMap } from '../lib/browserStorage.js'
-import { getPhotoDeleteToken, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
+import { getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
 import { getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
 
 const TEST_KEY = 'ruin-test-map'
@@ -46,7 +46,7 @@ describe('browserStorage', () => {
     try {
       expect(readStoredValue(TEST_KEY)).toBeNull()
       expect(() => savePhotoDeleteToken('event-1/photo.jpg', 'delete-token-1')).not.toThrow()
-      expect(getPhotoDeleteToken('event-1/photo.jpg')).toBe('')
+      expect(getPhotoDeleteTokens()).toEqual({})
       expect(() => saveOrganizerToken('event-1', 'organizer-token')).not.toThrow()
       expect(getSavedOrganizerToken('event-1')).toBe('')
     } finally {

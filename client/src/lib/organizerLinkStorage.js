@@ -1,34 +1,7 @@
-import { readStoredMap, readStoredValue, removeStoredMapEntry, removeStoredValue, saveStoredMapEntry, writeStoredValue } from './browserStorage.js'
+import { readStoredMap, removeStoredMapEntry, saveStoredMapEntry } from './browserStorage.js'
 
-const ORGANIZER_PATH_KEY = 'ruin-organizer-path'
 const ORGANIZER_TOKENS_KEY = 'ruin-organizer-tokens'
 const MAX_SAVED_ORGANIZER_TOKENS = 30
-
-function isValidOrganizerPath(path) {
-  if (typeof path !== 'string') {
-    return false
-  }
-
-  return /^\/event\/[^/?#]+\/manage\?token=.+$/.test(path)
-}
-
-export function getSavedOrganizerPath() {
-  const value = readStoredValue(ORGANIZER_PATH_KEY) || ''
-
-  return isValidOrganizerPath(value) ? value : ''
-}
-
-export function saveOrganizerPath(path) {
-  if (!isValidOrganizerPath(path)) {
-    return
-  }
-
-  writeStoredValue(ORGANIZER_PATH_KEY, path)
-}
-
-export function clearSavedOrganizerPath() {
-  removeStoredValue(ORGANIZER_PATH_KEY)
-}
 
 export function getSavedOrganizerToken(eventId) {
   if (typeof eventId !== 'string' || eventId.trim() === '') {

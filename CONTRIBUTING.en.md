@@ -39,7 +39,6 @@ Tests and checks:
 ```bash
 npm --prefix client run lint
 npm test
-npm run audit:a11y
 npm run build
 ```
 

@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ToggleSwitch from './ToggleSwitch.jsx'
+import { readStoredValue, writeStoredValue } from '../lib/browserStorage.js'
 import { LOCALE_NAMES, LOCALE_SHORT_NAMES, SUPPORTED_LOCALES, useI18n } from '../lib/i18n.js'
 import { useOnlineStatus } from '../lib/useOnlineStatus.js'
 
 function getInitialTheme() {
-  if (typeof window === 'undefined') {
-    return 'light'
-  }
-
-  const savedTheme = window.localStorage.getItem('ruin-theme')
+  const savedTheme = readStoredValue('ruin-theme')
 
   if (savedTheme === 'light' || savedTheme === 'dark') {
     return savedTheme
@@ -51,7 +48,7 @@ function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
-    window.localStorage.setItem('ruin-theme', theme)
+    writeStoredValue('ruin-theme', theme)
   }, [theme])
 
   return (

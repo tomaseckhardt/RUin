@@ -81,7 +81,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasts), `qrcode` (QR codes), `jszip` (photo ZIPs)
 - Backend: Supabase - Postgres + RPC functions (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - External services: Open-Meteo (geocoding and weather forecast), Google Fonts (Space Grotesk)
-- Tests: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` for a11y assertions in tests, Puppeteer + `axe-puppeteer` for `npm run audit:a11y` against the build
+- Tests: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` for a11y assertions in tests (`npm --prefix client run test:a11y`)
 - Deploy: GitHub Actions -> GitHub Pages (custom domain `ruin.eckhardt.cz`)
 
 ## Repository structure
@@ -96,7 +96,6 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
   - `scripts/run-vite-safe.mjs` - runs Vite from a temporary copy of the project (see [NPM scripts](#npm-scripts))
 - `supabase/sql/all-phases.sql` - the whole database schema, a single SQL file
 - `supabase/functions/` - Edge Functions (`send-event-reminders` for push reminders, `cleanup-expired-events` for cleaning up expired events, `delete-event-data` for manual photo/event deletion). They run on Deno, not Node: for VS Code to stop flagging them (`Cannot find name 'Deno'`, unresolved `npm:` imports), install [Deno](https://deno.com) and the Deno extension for VS Code - `.vscode/settings.json` enables it for `supabase/functions` only.
-- `scripts/audit-a11y.mjs` - a11y audit of the built app (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) and the issue and pull request templates
 - `CNAME` - the custom domain for GitHub Pages
 
@@ -186,7 +185,6 @@ Repository root (`package.json`):
 - `npm run dev` - client development server
 - `npm run build` - client production build
 - `npm run test` - runs the client tests (`npm --prefix client run test`)
-- `npm run audit:a11y` - build + a11y audit script
 - `npm run install:all` / `npm run postinstall` - installs the dependencies in `client/` (runs automatically after `npm install` in the root)
 
 Client (`client/package.json`):
@@ -205,7 +203,6 @@ The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-s
 - `npm test` runs Jest (jsdom + Testing Library + `jest-axe`): unit tests for `lib/`, component tests and a11y tests.
 - The localization tests check that `cs.js` and `en.js` have the same keys and `{placeholders}`, and that every message in `all-phases.sql` has an English translation (see [Localization](#localization-czech-and-english)).
 - The Jest setup (`client/src/test/setup.js`) switches the UI to Czech - jsdom reports itself as `en-US`, so the app would otherwise run in English.
-- `npm run audit:a11y` builds the app and runs an axe audit of the home page, the invite and event management in Puppeteer.
 - CI (the `ci` job in `.github/workflows/deploy-pages.yml`) runs lint and tests on every pull request to `main` and on every push to `main`. Build and deploy run only on a push to `main` (or a manual run), and only when `ci` passes.
 - Jest doesn't work when the project path contains a `?` - see [Troubleshooting](#troubleshooting).
 

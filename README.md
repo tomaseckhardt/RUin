@@ -81,7 +81,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasty), `qrcode` (QR kódy), `jszip` (ZIP s fotkami)
 - Backend: Supabase - Postgres + RPC funkce (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - Externí služby: Open-Meteo (geokódování a předpověď počasí), Google Fonts (Space Grotesk)
-- Testy: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` pro a11y assertions v testech, Puppeteer + `axe-puppeteer` pro `npm run audit:a11y` proti buildu
+- Testy: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` pro a11y assertions v testech (`npm --prefix client run test:a11y`)
 - Deploy: GitHub Actions -> GitHub Pages (vlastní doména `ruin.eckhardt.cz`)
 
 ## Struktura repozitáře
@@ -96,7 +96,6 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
   - `scripts/run-vite-safe.mjs` - spouští Vite z dočasné kopie projektu (viz [NPM skripty](#npm-skripty))
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
 - `supabase/functions/` - Edge Functions (`send-event-reminders` pro push připomínky, `cleanup-expired-events` pro úklid expirovaných akcí, `delete-event-data` pro ruční mazání fotek a akcí). Běží v Deno, ne v Node: aby je VS Code nehlásil jako chybné (`Cannot find name 'Deno'`, nenalezený import `npm:`), nainstaluj si [Deno](https://deno.com) a rozšíření Deno pro VS Code - `.vscode/settings.json` ho zapíná jen pro `supabase/functions`.
-- `scripts/audit-a11y.mjs` - a11y audit postaveného buildu (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) a šablony pro issues a pull requesty
 - `CNAME` - vlastní doména pro GitHub Pages
 
@@ -186,7 +185,6 @@ Kořen repozitáře (`package.json`):
 - `npm run dev` - vývojový server klienta
 - `npm run build` - produkční build klienta
 - `npm run test` - spustí testy klienta (`npm --prefix client run test`)
-- `npm run audit:a11y` - build + a11y audit skript
 - `npm run install:all` / `npm run postinstall` - doinstaluje závislosti v `client/` (spouští se automaticky po `npm install` v kořeni)
 
 Klient (`client/package.json`):
@@ -205,7 +203,6 @@ Klient (`client/package.json`):
 - `npm test` spustí Jest (jsdom + Testing Library + `jest-axe`): jednotkové testy `lib/`, testy komponent a a11y testy.
 - Testy lokalizace hlídají, že `cs.js` a `en.js` mají stejné klíče i `{placeholdery}` a že každá hláška z `all-phases.sql` má anglický překlad (viz [Lokalizace](#lokalizace-čeština-a-angličtina)).
 - Jest setup (`client/src/test/setup.js`) přepíná UI do češtiny - jsdom se jinak hlásí jako `en-US` a aplikace by běžela anglicky.
-- `npm run audit:a11y` postaví aplikaci a projde úvod, pozvánku a správu akce axe auditem v Puppeteeru.
 - CI (job `ci` v `.github/workflows/deploy-pages.yml`) spouští lint a testy při každém pull requestu do `main` i při push do `main`. Build a deploy běží jen při push do `main` (nebo ručním spuštění) a jen když `ci` projde.
 - Jest nefunguje, když cesta k projektu obsahuje `?` - viz [Troubleshooting](#troubleshooting).
 

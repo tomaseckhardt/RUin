@@ -22,6 +22,7 @@ import {
   unlockManageWithPin,
   unregisterPushSubscription,
 } from '../lib/api.js'
+import { readStoredValue, removeStoredValue, writeStoredValue } from '../lib/browserStorage.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 import { getPushEndpoint, isReminderSupported, subscribeToEventReminders } from '../lib/push.js'
@@ -57,21 +58,11 @@ function pingCooldownStorageKey(eventId, targetAttendeeId) {
 }
 
 function readPingCooldownUntil(eventId, targetAttendeeId) {
-  if (typeof window === 'undefined') {
-    return 0
-  }
-
-  const raw = window.localStorage.getItem(pingCooldownStorageKey(eventId, targetAttendeeId))
-  const parsed = raw ? Number(raw) : 0
-  return Number.isFinite(parsed) ? parsed : 0
+  return Number(readStoredValue(pingCooldownStorageKey(eventId, targetAttendeeId))) || 0
 }
 
 function writePingCooldownUntil(eventId, targetAttendeeId, until) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  window.localStorage.setItem(pingCooldownStorageKey(eventId, targetAttendeeId), String(until))
+  writeStoredValue(pingCooldownStorageKey(eventId, targetAttendeeId), String(until))
 }
 
 function statusLabelKey(status) {
@@ -90,7 +81,7 @@ function EventPage() {
   const { t } = useI18n()
   const { id } = useParams()
   const navigate = useNavigate()
-  const initialIdentity = typeof window === 'undefined' ? '' : window.localStorage.getItem(identityStorageKey(id)) || ''
+  const initialIdentity = readStoredValue(identityStorageKey(id)) || ''
   const [payload, setPayload] = useState(null)
   const [name, setName] = useState(initialIdentity)
   const [phone, setPhone] = useState('')
@@ -130,7 +121,7 @@ function EventPage() {
     // link straight to another's, in the same tab, doesn't remount this
     // component, so identity state seeded from `initialIdentity` at mount
     // time would otherwise keep pointing at the previous event forever.
-    const storedIdentity = typeof window === 'undefined' ? '' : window.localStorage.getItem(identityStorageKey(id)) || ''
+    const storedIdentity = readStoredValue(identityStorageKey(id)) || ''
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(storedIdentity)
@@ -149,7 +140,7 @@ function EventPage() {
   }, [sessionName, isIdentityLocked])
 
   useEffect(() => {
-    if (!isReminderSupported() || typeof navigator === 'undefined') {
+    if (!isReminderSupported()) {
       return undefined
     }
 
@@ -214,7 +205,7 @@ function EventPage() {
 
   const maybeShowIncomingPing = useCallback(
     (nextPayload, forcedSessionName = null) => {
-      if (typeof window === 'undefined' || !nextPayload) {
+      if (!nextPayload) {
         return
       }
 
@@ -238,7 +229,7 @@ function EventPage() {
       }
 
       const key = pingSeenStorageKey(id, activeName)
-      const seenPingAt = window.localStorage.getItem(key)
+      const seenPingAt = readStoredValue(key)
 
       if (seenPingAt && new Date(lastPingAt).getTime() <= new Date(seenPingAt).getTime()) {
         return
@@ -249,7 +240,7 @@ function EventPage() {
         message: attendee.ping_last_message,
       })
       setShowPingModal(true)
-      window.localStorage.setItem(key, lastPingAt)
+      writeStoredValue(key, lastPingAt)
     },
     [id],
   )
@@ -391,7 +382,7 @@ function EventPage() {
       })
 
       const normalizedName = name.trim()
-      window.localStorage.setItem(identityStorageKey(id), normalizedName)
+      writeStoredValue(identityStorageKey(id), normalizedName)
       setSessionName(normalizedName)
       setName(normalizedName)
       setIsIdentityLocked(true)
@@ -466,9 +457,9 @@ function EventPage() {
   }
 
   function handleResetIdentity() {
-    if (typeof window !== 'undefined' && sessionName) {
-      window.localStorage.removeItem(identityStorageKey(id))
-      window.localStorage.removeItem(pingSeenStorageKey(id, sessionName))
+    if (sessionName) {
+      removeStoredValue(identityStorageKey(id))
+      removeStoredValue(pingSeenStorageKey(id, sessionName))
     }
 
     setIsIdentityLocked(false)

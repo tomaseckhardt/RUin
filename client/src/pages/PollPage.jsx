@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import PageShell from '../components/PageShell.jsx'
 import { finalizePoll, getPollPayload, votePoll } from '../lib/api.js'
+import { readStoredValue, writeStoredValue } from '../lib/browserStorage.js'
 import { formatDateTime } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 
@@ -25,7 +26,7 @@ function PollPage() {
   const [payload, setPayload] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [voterName, setVoterName] = useState(() => (typeof window === 'undefined' ? '' : window.localStorage.getItem(voterStorageKey(id)) || ''))
+  const [voterName, setVoterName] = useState(() => readStoredValue(voterStorageKey(id)) || '')
   const [selectedOptionId, setSelectedOptionId] = useState(null)
   const [hasSelectedManually, setHasSelectedManually] = useState(false)
   const [lastAutoSelectedId, setLastAutoSelectedId] = useState(null)
@@ -77,7 +78,7 @@ function PollPage() {
 
     try {
       await votePoll(id, selectedOptionId, voterName)
-      window.localStorage.setItem(voterStorageKey(id), voterName.trim())
+      writeStoredValue(voterStorageKey(id), voterName.trim())
       toast.success(t('poll.voteSaved'))
       await loadPoll()
     } catch (voteError) {

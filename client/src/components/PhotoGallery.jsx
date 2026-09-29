@@ -17,7 +17,7 @@ import {
   uploadEventPhoto,
 } from '../lib/api.js'
 import { useI18n } from '../lib/i18n.js'
-import { clearPhotoDeleteToken, createPhotoDeleteToken, getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
+import { clearPhotoDeleteToken, getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
 
 const NO_ROWS = []
@@ -170,7 +170,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         }
 
         try {
-          const deleteToken = createPhotoDeleteToken()
+          const deleteToken = crypto.randomUUID()
           const storagePath = await uploadEventPhoto(eventId, file, deleteToken)
           // Saved before recording: if the record goes through but its
           // response is lost, the token must not be lost with it.

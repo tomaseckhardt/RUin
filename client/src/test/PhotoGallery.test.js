@@ -14,7 +14,7 @@ import {
   toggleEventPhotoLike,
   uploadEventPhoto,
 } from '../lib/api.js'
-import { getPhotoDeleteToken, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
+import { getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
 import { installEnterToSubmit } from '../lib/enterToSubmit.js'
 
 jest.mock('../lib/api.js', () => ({
@@ -80,7 +80,7 @@ describe('PhotoGallery delete permissions', () => {
       expect(deleteOwnEventPhoto).toHaveBeenCalledWith('event-1', 1, 'delete-token-1')
     })
     expect(deleteEventPhoto).not.toHaveBeenCalled()
-    expect(getPhotoDeleteToken('event-1/mine.jpg')).toBe('')
+    expect(getPhotoDeleteTokens()).not.toHaveProperty(['event-1/mine.jpg'])
   })
 
   it('lets the organizer delete any photo with the organizer token', async () => {
@@ -185,7 +185,7 @@ describe('PhotoGallery upload', () => {
     getEventPhotos.mockResolvedValue([])
     uploadEventPhoto.mockResolvedValue('event-1/uploaded.jpg')
     recordEventPhoto.mockImplementation(async () => {
-      expect(getPhotoDeleteToken('event-1/uploaded.jpg')).not.toBe('')
+      expect(getPhotoDeleteTokens()).toHaveProperty(['event-1/uploaded.jpg'])
       return { success: true }
     })
 
@@ -197,8 +197,8 @@ describe('PhotoGallery upload', () => {
     await waitFor(() => {
       expect(recordEventPhoto).toHaveBeenCalled()
     })
-    const deleteToken = getPhotoDeleteToken('event-1/uploaded.jpg')
-    expect(deleteToken).not.toBe('')
+    const deleteToken = getPhotoDeleteTokens()['event-1/uploaded.jpg']
+    expect(deleteToken).toEqual(expect.any(String))
     expect(uploadEventPhoto).toHaveBeenCalledWith('event-1', file, deleteToken)
     expect(recordEventPhoto).toHaveBeenCalledWith('event-1', 'event-1/uploaded.jpg', 'Alice', deleteToken)
   })

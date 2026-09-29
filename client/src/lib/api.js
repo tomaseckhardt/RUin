@@ -18,7 +18,7 @@ function isOfflineError(error) {
     return false
   }
 
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+  if (navigator.onLine === false) {
     return true
   }
 
@@ -129,16 +129,14 @@ export async function replayRetryQueue() {
   }
 }
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    replayRetryQueue()
-  })
+window.addEventListener('online', () => {
+  replayRetryQueue()
+})
 
-  // Also try once on load: a previous session may have queued something
-  // while offline and then been closed before an "online" event ever fired.
-  if (navigator.onLine) {
-    replayRetryQueue()
-  }
+// Also try once on load: a previous session may have queued something
+// while offline and then been closed before an "online" event ever fired.
+if (navigator.onLine) {
+  replayRetryQueue()
 }
 
 async function callRpc(name, args, fallbackMessage) {

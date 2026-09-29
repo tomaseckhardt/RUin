@@ -29,7 +29,6 @@ export default {
   },
 
   shell: {
-    lightMode: 'Light mode',
     darkMode: 'Dark mode',
     language: 'Language',
     theme: 'Theme',
@@ -237,7 +236,6 @@ export default {
     excuseAccepted: 'Excuse accepted.',
     excuseRejected: 'Excuse rejected.',
     confirmDeleteEvent: 'Do you really want to delete this event? This can’t be undone.',
-    photosNotDeleted: 'The photos couldn’t be deleted from storage, but the event will disappear.',
     eventDeleted: 'The event has been deleted.',
     eventUpdated: 'Event details updated.',
     confirmDeleteAttendee: 'Do you really want to remove {name}?',
@@ -486,7 +484,6 @@ export default {
     likedBy: 'Liked by {names}',
     likeNeedsName: 'Fill in your name in the RSVP to like a photo.',
     commentsTitle: 'Comments',
-    commentCount: { one: '{count} comment', other: '{count} comments' },
     noComments: 'No comments yet. Be the first.',
     commentLabel: 'Comment on the photo',
     commentPlaceholder: 'Write a comment…',
@@ -494,7 +491,6 @@ export default {
     commentNeedsName: 'Fill in your name in the RSVP to comment.',
     deleteComment: 'Delete the comment from {name}',
     confirmDeleteComment: 'Do you really want to delete this comment?',
-    storageDeleteFailed: 'The photo couldn’t be deleted from storage, but its record will disappear.',
     nothingToDownload: 'Nothing to download - you uploaded the rest of the photos yourself.',
     downloadOneFailed: 'Couldn’t download the photo from {name}.',
     zipFileName: 'photos-{id}.zip',

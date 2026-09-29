@@ -8,7 +8,7 @@ const DEBOUNCE_MS = 120
 // event_chat_messages/event_chat_message_reactions/event_signup_items/
 // event_signup_claims/event_stops directly, since those tables' SELECT RLS
 // policies are `using (false)` - a direct subscription would never receive
-// any row content. See "Realtime read hardening" in all-phases.sql.
+// any row content. See the Realtime section of all-phases.sql.
 export function subscribeToEventTicks(eventId, reasons, onTick, discriminator) {
   const reasonSet = new Set(reasons)
   let timeoutId = null

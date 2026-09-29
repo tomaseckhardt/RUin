@@ -5,10 +5,6 @@ import { useI18n } from '../lib/i18n.js'
 const MOBILE_QUERY = '(max-width: 767px)'
 
 function isIosLikeDevice() {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
   const ua = window.navigator.userAgent || ''
   const platform = window.navigator.platform || ''
 
@@ -19,10 +15,6 @@ function isIosLikeDevice() {
 }
 
 function isStandaloneMode() {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
 }
 

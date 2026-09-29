@@ -124,10 +124,10 @@ export function ConfirmCelebration({ name }) {
         </div>
         */}
         <img src={`${RUDY_GIF_PATH}RUdy-party.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
-        <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'float-up 0.4s ease 0.5s both', opacity: 0 }}>
+        <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'fade-up 0.4s ease 0.5s both', opacity: 0 }}>
           {name ? t('celebration.confirmTitleWithName', { name }) : t('celebration.confirmTitle')}
         </h3>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-300" style={{ animation: 'float-up 0.4s ease 0.65s both', opacity: 0 }}>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-300" style={{ animation: 'fade-up 0.4s ease 0.65s both', opacity: 0 }}>
           {t('celebration.confirmText')}
         </p>
       </div>
@@ -171,10 +171,10 @@ export function DeclineCelebration({ name }) {
         </div>
         */}
         <img src={`${RUDY_GIF_PATH}RUdy-rejected.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
-        <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'float-up 0.4s ease 0.5s both', opacity: 0 }}>
+        <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'fade-up 0.4s ease 0.5s both', opacity: 0 }}>
           {name ? t('celebration.declineTitleWithName', { name }) : t('celebration.declineTitle')}
         </h3>
-        <p className="mt-1 mb-3 text-sm text-slate-500 dark:text-slate-300" style={{ animation: 'float-up 0.4s ease 0.65s both', opacity: 0 }}>
+        <p className="mt-1 mb-3 text-sm text-slate-500 dark:text-slate-300" style={{ animation: 'fade-up 0.4s ease 0.65s both', opacity: 0 }}>
           {t('celebration.declineText')}
         </p>
         <span
@@ -183,7 +183,7 @@ export function DeclineCelebration({ name }) {
             background: 'rgba(245,158,11,0.1)',
             border: '1px solid rgba(245,158,11,0.2)',
             color: '#d29014',
-            animation: 'float-up 0.4s ease 0.8s both',
+            animation: 'fade-up 0.4s ease 0.8s both',
             opacity: 0,
           }}>
           {t('celebration.excusedBadge')}
