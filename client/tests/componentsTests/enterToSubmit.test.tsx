@@ -3,7 +3,13 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { installEnterToSubmit } from '../../src/lib/enterToSubmit.js'
 
-function MessageForm({ onSend, isSending = false, withTextarea = true }) {
+type MessageFormProps = {
+  onSend: (message: string) => void
+  isSending?: boolean
+  withTextarea?: boolean
+}
+
+function MessageForm({ onSend, isSending = false, withTextarea = true }: MessageFormProps) {
   const [message, setMessage] = useState('')
 
   return (
@@ -21,7 +27,7 @@ function MessageForm({ onSend, isSending = false, withTextarea = true }) {
   )
 }
 
-let uninstall
+let uninstall: () => void
 
 beforeEach(() => {
   uninstall = installEnterToSubmit()

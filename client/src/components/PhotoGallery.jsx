@@ -36,6 +36,13 @@ function groupByPhoto(rows, pick) {
   return groups
 }
 
+/**
+ * @param {object} props
+ * @param {string} props.eventId
+ * @param {string} [props.currentName] the viewer's RSVP name, credited on uploads, likes and comments
+ * @param {boolean} [props.isOrganizer]
+ * @param {string | null} [props.organizerToken] lets the organizer delete any photo or comment
+ */
 function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToken = null }) {
   const { t } = useI18n()
   const [photos, setPhotos] = useState([])

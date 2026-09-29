@@ -176,6 +176,10 @@ export function unlockManageWithPin(eventId, pin) {
   )
 }
 
+/**
+ * @param {string} id
+ * @param {string | null} [organizerToken] only the organizer gets the guests' phone numbers
+ */
 export function getEvent(id, organizerToken = null) {
   return callRpc('get_event_payload', { p_event_id: id, p_organizer_token: organizerToken }, t('api.errors.getEvent'))
 }

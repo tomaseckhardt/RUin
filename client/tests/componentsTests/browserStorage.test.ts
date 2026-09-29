@@ -53,7 +53,8 @@ describe('browserStorage', () => {
       if (descriptor) {
         Object.defineProperty(window, 'localStorage', descriptor)
       } else {
-        delete window.localStorage
+        // Only reached if jsdom ever stops defining localStorage on window.
+        delete (window as { localStorage?: Storage }).localStorage
       }
     }
   })

@@ -47,16 +47,16 @@ const THREE_PHOTOS = [...PHOTOS, { id: 3, storage_path: 'event-1/third.jpg', upl
 beforeEach(() => {
   jest.clearAllMocks()
   window.localStorage.removeItem('ruin-photo-delete-tokens')
-  getEventPhotos.mockResolvedValue(PHOTOS)
-  getEventPhotoLikes.mockResolvedValue([])
-  getEventPhotoComments.mockResolvedValue([])
-  deleteEventPhoto.mockResolvedValue({ success: true })
-  deleteOwnEventPhoto.mockResolvedValue({ success: true })
+  jest.mocked(getEventPhotos).mockResolvedValue(PHOTOS)
+  jest.mocked(getEventPhotoLikes).mockResolvedValue([])
+  jest.mocked(getEventPhotoComments).mockResolvedValue([])
+  jest.mocked(deleteEventPhoto).mockResolvedValue({ success: true })
+  jest.mocked(deleteOwnEventPhoto).mockResolvedValue({ success: true })
   jest.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
 afterEach(() => {
-  window.confirm.mockRestore()
+  jest.mocked(window.confirm).mockRestore()
 })
 
 describe('PhotoGallery delete permissions', () => {
@@ -118,7 +118,10 @@ describe('PhotoGallery delete permissions', () => {
 
   it('moves the lightbox to the next photo right after a delete, keeping focus inside it', async () => {
     const user = userEvent.setup()
-    getEventPhotos.mockResolvedValueOnce(THREE_PHOTOS).mockReturnValueOnce(new Promise(() => {}))
+    jest
+      .mocked(getEventPhotos)
+      .mockResolvedValueOnce(THREE_PHOTOS)
+      .mockReturnValueOnce(new Promise(() => {}))
 
     render(<PhotoGallery eventId="event-1" currentName="Organizátor" isOrganizer organizerToken="organizer-token" />)
 
@@ -131,13 +134,13 @@ describe('PhotoGallery delete permissions', () => {
     // The reload never answers here: the photo must already be gone.
     expect(await within(screen.getByRole('dialog')).findByText('Fotka od Cyril · 2 / 2')).toBeInTheDocument()
     expect(screen.queryByAltText('Fotka od Bob')).not.toBeInTheDocument()
-    expect(screen.getByRole('dialog')).toContainElement(document.activeElement)
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement | null)
   })
 
   it('shows the new last photo after deleting the last one, even when the reload returns fewer photos', async () => {
     const user = userEvent.setup()
     // Someone else deleted Bob's photo meanwhile.
-    getEventPhotos.mockResolvedValueOnce(THREE_PHOTOS).mockResolvedValueOnce([PHOTOS[0]])
+    jest.mocked(getEventPhotos).mockResolvedValueOnce(THREE_PHOTOS).mockResolvedValueOnce([PHOTOS[0]])
 
     render(<PhotoGallery eventId="event-1" currentName="Organizátor" isOrganizer organizerToken="organizer-token" />)
 
@@ -154,9 +157,9 @@ describe('PhotoGallery delete permissions', () => {
 
   it('sends one delete even when Delete is clicked again while the first is running', async () => {
     const user = userEvent.setup()
-    let finishDelete
-    getEventPhotos.mockResolvedValueOnce(PHOTOS).mockResolvedValue([PHOTOS[0]])
-    deleteEventPhoto.mockReturnValue(
+    let finishDelete: (result: { success: boolean }) => void = () => {}
+    jest.mocked(getEventPhotos).mockResolvedValueOnce(PHOTOS).mockResolvedValue([PHOTOS[0]])
+    jest.mocked(deleteEventPhoto).mockReturnValue(
       new Promise((resolve) => {
         finishDelete = resolve
       }),
@@ -182,9 +185,9 @@ describe('PhotoGallery delete permissions', () => {
 describe('PhotoGallery upload', () => {
   it('saves the photo’s delete token before recording it and sends the same token along', async () => {
     const user = userEvent.setup()
-    getEventPhotos.mockResolvedValue([])
-    uploadEventPhoto.mockResolvedValue('event-1/uploaded.jpg')
-    recordEventPhoto.mockImplementation(async () => {
+    jest.mocked(getEventPhotos).mockResolvedValue([])
+    jest.mocked(uploadEventPhoto).mockResolvedValue('event-1/uploaded.jpg')
+    jest.mocked(recordEventPhoto).mockImplementation(async () => {
       expect(getPhotoDeleteTokens()).toHaveProperty(['event-1/uploaded.jpg'])
       return { success: true }
     })
@@ -192,7 +195,7 @@ describe('PhotoGallery upload', () => {
     const { container } = render(<PhotoGallery eventId="event-1" currentName="Alice" />)
     await screen.findByText(/Zatím žádné fotky/)
     const file = new File(['image'], 'party.jpg', { type: 'image/jpeg' })
-    await user.upload(container.querySelector('input[type="file"]'), file)
+    await user.upload(container.querySelector<HTMLInputElement>('input[type="file"]')!, file)
 
     await waitFor(() => {
       expect(recordEventPhoto).toHaveBeenCalled()
@@ -211,11 +214,11 @@ describe('PhotoGallery likes and comments', () => {
   ]
 
   it('shows like and comment counts on the thumbnails', async () => {
-    getEventPhotoLikes.mockResolvedValue([
+    jest.mocked(getEventPhotoLikes).mockResolvedValue([
       { photo_id: 1, liker_name: 'Bob' },
       { photo_id: 1, liker_name: 'Cyril' },
     ])
-    getEventPhotoComments.mockResolvedValue(COMMENTS)
+    jest.mocked(getEventPhotoComments).mockResolvedValue(COMMENTS)
 
     const { container } = render(<PhotoGallery eventId="event-1" currentName="Alice" />)
 
@@ -228,8 +231,8 @@ describe('PhotoGallery likes and comments', () => {
 
   it('likes a photo under the viewer’s name and takes the like back', async () => {
     const user = userEvent.setup()
-    getEventPhotoLikes.mockResolvedValue([{ photo_id: 1, liker_name: 'Bob' }])
-    toggleEventPhotoLike.mockResolvedValueOnce({ success: true, liked: true }).mockResolvedValueOnce({ success: true, liked: false })
+    jest.mocked(getEventPhotoLikes).mockResolvedValue([{ photo_id: 1, liker_name: 'Bob' }])
+    jest.mocked(toggleEventPhotoLike).mockResolvedValueOnce({ success: true, liked: true }).mockResolvedValueOnce({ success: true, liked: false })
 
     render(<PhotoGallery eventId="event-1" currentName="Alice" />)
     await user.click(await screen.findByAltText('Fotka od Alice'))
@@ -267,7 +270,7 @@ describe('PhotoGallery likes and comments', () => {
 
   it('adds a comment to the open photo and clears the draft', async () => {
     const user = userEvent.setup()
-    addEventPhotoComment.mockImplementation(async (_eventId, photoId, authorName, message) => ({
+    jest.mocked(addEventPhotoComment).mockImplementation(async (_eventId, photoId, authorName, message) => ({
       id: 20,
       photo_id: photoId,
       author_name: authorName,
@@ -293,7 +296,7 @@ describe('PhotoGallery likes and comments', () => {
   it('sends a comment with Enter, as main.jsx sets up for the whole app', async () => {
     const user = userEvent.setup()
     const uninstall = installEnterToSubmit()
-    addEventPhotoComment.mockImplementation(async (_eventId, photoId, authorName, message) => ({
+    jest.mocked(addEventPhotoComment).mockImplementation(async (_eventId, photoId, authorName, message) => ({
       id: 21,
       photo_id: photoId,
       author_name: authorName,
@@ -315,7 +318,7 @@ describe('PhotoGallery likes and comments', () => {
 
   it('keeps the draft when the comment can’t be saved', async () => {
     const user = userEvent.setup()
-    addEventPhotoComment.mockRejectedValue(new Error('Komentáře posíláš moc rychle, chvilku počkej.'))
+    jest.mocked(addEventPhotoComment).mockRejectedValue(new Error('Komentáře posíláš moc rychle, chvilku počkej.'))
 
     render(<PhotoGallery eventId="event-1" currentName="Alice" />)
     await user.click(await screen.findByAltText('Fotka od Bob'))
@@ -343,8 +346,8 @@ describe('PhotoGallery likes and comments', () => {
 
   it('lets only the organizer delete comments', async () => {
     const user = userEvent.setup()
-    getEventPhotoComments.mockResolvedValue(COMMENTS)
-    deleteEventPhotoComment.mockResolvedValue({ success: true })
+    jest.mocked(getEventPhotoComments).mockResolvedValue(COMMENTS)
+    jest.mocked(deleteEventPhotoComment).mockResolvedValue({ success: true })
 
     const { unmount } = render(<PhotoGallery eventId="event-1" currentName="Alice" />)
     await user.click(await screen.findByAltText('Fotka od Alice'))
@@ -365,8 +368,8 @@ describe('PhotoGallery likes and comments', () => {
   })
 
   it('still shows the photos when likes and comments can’t be loaded', async () => {
-    getEventPhotoLikes.mockRejectedValue(new Error('Lajky u fotek se nepodařilo načíst.'))
-    getEventPhotoComments.mockRejectedValue(new Error('Komentáře u fotek se nepodařilo načíst.'))
+    jest.mocked(getEventPhotoLikes).mockRejectedValue(new Error('Lajky u fotek se nepodařilo načíst.'))
+    jest.mocked(getEventPhotoComments).mockRejectedValue(new Error('Komentáře u fotek se nepodařilo načíst.'))
 
     render(<PhotoGallery eventId="event-1" currentName="Alice" />)
 
@@ -375,7 +378,7 @@ describe('PhotoGallery likes and comments', () => {
 
   it('has no axe violations in the lightbox with comments', async () => {
     const user = userEvent.setup()
-    getEventPhotoComments.mockResolvedValue(COMMENTS)
+    jest.mocked(getEventPhotoComments).mockResolvedValue(COMMENTS)
 
     render(<PhotoGallery eventId="event-1" currentName="Organizátor" isOrganizer organizerToken="organizer-token" />)
     await user.click(await screen.findByAltText('Fotka od Alice'))

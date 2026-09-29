@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import SignupBoard from '../../src/components/SignupBoard.jsx'
 import { claimSignupItem, getSignupItems, unclaimSignupItem } from '../../src/lib/api.js'
 
@@ -16,7 +16,9 @@ jest.mock('../../src/lib/realtimeTick.js', () => ({
   subscribeToEventTicks: jest.fn(() => () => {}),
 }))
 
-function bringItem({ claims = [], capacity = 2 } = {}) {
+type Claim = { id: number; attendee_name: string; seats: number }
+
+function bringItem({ claims = [], capacity = 2 }: { claims?: Claim[]; capacity?: number } = {}) {
   return {
     id: 1,
     event_id: 'event-1',
@@ -32,11 +34,11 @@ function bringItem({ claims = [], capacity = 2 } = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks()
-  claimSignupItem.mockResolvedValue({ success: true })
-  unclaimSignupItem.mockResolvedValue({ success: true })
+  jest.mocked(claimSignupItem).mockResolvedValue({ success: true })
+  jest.mocked(unclaimSignupItem).mockResolvedValue({ success: true })
 })
 
-async function expandCard(user) {
+async function expandCard(user: UserEvent) {
   const toggle = await screen.findByRole('button', { expanded: false })
   await user.click(toggle)
 }
@@ -44,7 +46,7 @@ async function expandCard(user) {
 describe('SignupBoard claim/unclaim flow', () => {
   it('lets an attendee claim an open item', async () => {
     const user = userEvent.setup()
-    getSignupItems.mockResolvedValue([bringItem()])
+    jest.mocked(getSignupItems).mockResolvedValue([bringItem()])
 
     render(<SignupBoard eventId="event-1" category="bring" currentName="Alice" canInteract />)
     await expandCard(user)
@@ -59,7 +61,7 @@ describe('SignupBoard claim/unclaim flow', () => {
 
   it('lets the claim owner unclaim their own claim', async () => {
     const user = userEvent.setup()
-    getSignupItems.mockResolvedValue([bringItem({ claims: [{ id: 10, attendee_name: 'Alice', seats: 1 }] })])
+    jest.mocked(getSignupItems).mockResolvedValue([bringItem({ claims: [{ id: 10, attendee_name: 'Alice', seats: 1 }] })])
 
     render(<SignupBoard eventId="event-1" category="bring" currentName="Alice" canInteract />)
     await expandCard(user)
@@ -74,7 +76,7 @@ describe('SignupBoard claim/unclaim flow', () => {
 
   it('disables claiming once capacity is full for someone else', async () => {
     const user = userEvent.setup()
-    getSignupItems.mockResolvedValue([
+    jest.mocked(getSignupItems).mockResolvedValue([
       bringItem({
         capacity: 1,
         claims: [{ id: 10, attendee_name: 'Bob', seats: 1 }],

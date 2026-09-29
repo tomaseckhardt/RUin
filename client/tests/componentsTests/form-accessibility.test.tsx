@@ -8,8 +8,8 @@ expect.extend(toHaveNoViolations)
  * Form accessibility test helper
  * Verifies that forms have proper labels, required indicators, and keyboard navigation
  */
-export function testFormA11y(container) {
-  const inputs = container.querySelectorAll('input, textarea, select')
+export function testFormA11y(container: HTMLElement) {
+  const inputs = container.querySelectorAll<HTMLInputElement>('input, textarea, select')
 
   inputs.forEach((input) => {
     // Each input should have a label

@@ -1,8 +1,11 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import PageShell from '../../src/components/PageShell.jsx'
+import PageShellComponent from '../../src/components/PageShell.jsx'
+import { withOptionalProps } from './withOptionalProps.ts'
 import { getLocale, setLocale } from '../../src/lib/i18n.js'
+
+const PageShell = withOptionalProps(PageShellComponent)
 
 function renderShell() {
   return render(

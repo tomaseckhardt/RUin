@@ -1,7 +1,7 @@
 // One end-to-end walk through the whole app, run once in Czech and once in
 // English. Every label and button is looked up in the locale dictionaries,
 // so both runs are the same test. The backend is the in-memory fake in
-// fakeSupabase.js - nothing reaches a real Supabase project.
+// fakeSupabase.ts - nothing reaches a real Supabase project.
 //
 // Run: npm run test:e2e (in client/). It starts its own dev server; failure
 // traces land in tests/test-results/.
@@ -9,11 +9,19 @@
 import { expect, test } from '@playwright/test'
 import cs from '../src/locales/cs.js'
 import en from '../src/locales/en.js'
-import { createFakeSupabase } from './fakeSupabase.js'
+import { createFakeSupabase } from './fakeSupabase.ts'
 
-const DICTIONARIES = { cs, en }
+type Locale = 'cs' | 'en'
+// A dictionary entry is a text, a list of texts, plural forms ({ one, other,
+// ... }) or a nested group of entries.
+type Dictionary = { [key: string]: string | string[] | Dictionary }
+type TextParams = Record<string, string | number>
 
-// What the test types in, per language.
+const DICTIONARIES: Record<Locale, Dictionary> = { cs, en }
+const LOCALE_NAMES: Record<Locale, string> = { cs: 'Czech', en: 'English' }
+
+// What the test types in, per language. `satisfies` checks that both
+// languages fill in the same fields, while keeping each value's own type.
 const INPUT = {
   cs: {
     organizer: 'Eva',
@@ -55,37 +63,53 @@ const INPUT = {
     voter: 'Charles',
     feedback: 'It would be nice to export the itinerary to a calendar.',
   },
-}
+} satisfies Record<Locale, Record<string, string>>
 
 // A 1x1 PNG to upload as a photo.
 const PHOTO = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
 
 // The same lookup as t() in src/lib/i18n.js, for plain-text entries.
-function translator(locale) {
+function translator(locale: Locale) {
   const plural = new Intl.PluralRules(locale)
 
-  return (key, params = {}) => {
-    let entry = key.split('.').reduce((node, part) => node?.[part], DICTIONARIES[locale])
+  return (key: string, params: TextParams = {}): string => {
+    let entry: Dictionary[string] | undefined = DICTIONARIES[locale]
 
-    if (entry && typeof entry === 'object') {
-      entry = entry[plural.select(params.count)] ?? entry.other
+    for (const part of key.split('.')) {
+      entry = typeof entry === 'object' && !Array.isArray(entry) ? entry[part] : undefined
+    }
+
+    // Plural forms: pick the one Intl.PluralRules names for params.count.
+    if (typeof entry === 'object' && !Array.isArray(entry)) {
+      entry = entry[plural.select(Number(params.count))] ?? entry.other
     }
 
     if (typeof entry !== 'string') {
       throw new Error(`No ${locale} text for ${key}`)
     }
 
-    return entry.replace(/\{(\w+)\}/g, (_, name) => String(params[name]))
+    return entry.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name]))
   }
 }
 
-for (const locale of ['cs', 'en']) {
-  test(`the whole app works in ${locale === 'cs' ? 'Czech' : 'English'}`, async ({ page }) => {
+// The first capture group of pattern in text; fails the test if it doesn't match.
+function capture(text: string, pattern: RegExp): string {
+  const match = text.match(pattern)
+
+  if (!match) {
+    throw new Error(`${text} does not match ${pattern}`)
+  }
+
+  return match[1]
+}
+
+for (const locale of ['cs', 'en'] as const) {
+  test(`the whole app works in ${LOCALE_NAMES[locale]}`, async ({ page }) => {
     const t = translator(locale)
     const input = INPUT[locale]
     const backend = createFakeSupabase()
-    const pageErrors = []
-    const realSupabaseRequests = []
+    const pageErrors: string[] = []
+    const realSupabaseRequests: string[] = []
 
     page.on('pageerror', (error) => pageErrors.push(error.message))
     // A safety net: the dev server is built against the fake URL, so nothing
@@ -104,7 +128,7 @@ for (const locale of ['cs', 'en']) {
     }, locale)
 
     const dialog = page.getByRole('dialog')
-    const toast = (text) => expect(page.getByText(text, { exact: true }).first()).toBeVisible()
+    const toast = (text: string) => expect(page.getByText(text, { exact: true }).first()).toBeVisible()
     let eventId = ''
 
     await test.step('the organizer creates an event with a bring list', async () => {
@@ -129,7 +153,7 @@ for (const locale of ['cs', 'en']) {
       // The link's token is saved and dropped from the address bar.
       await expect(page).toHaveURL(/#\/event\/\w+\/manage$/)
       await expect(page.getByRole('heading', { level: 1, name: input.event })).toBeVisible()
-      eventId = page.url().match(/#\/event\/(\w+)\/manage$/)[1]
+      eventId = capture(page.url(), /#\/event\/(\w+)\/manage$/)
       expect(backend.db.items).toEqual([expect.objectContaining({ label: input.item, capacity: 2, category: 'bring' })])
     })
 
@@ -248,7 +272,7 @@ for (const locale of ['cs', 'en']) {
       await toast(t('createPoll.created'))
       await expect(page).toHaveURL(/#\/poll\/\w+\?token=/)
       const creatorUrl = page.url()
-      const pollId = creatorUrl.match(/#\/poll\/(\w+)/)[1]
+      const pollId = capture(creatorUrl, /#\/poll\/(\w+)/)
 
       await page.goto(`/#/poll/${pollId}`)
       await page.getByPlaceholder(t('common.guestNamePlaceholder')).fill(input.voter)

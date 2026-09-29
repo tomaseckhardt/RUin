@@ -39,8 +39,8 @@ Dev server běží na http://localhost:5173/. `dev`, `build` i `preview` jdou p�
 - `src/components/` - UI komponenty
 - `src/lib/` - API vrstva (`api.js`), Supabase klient, překlady (`i18n.js`) a helpery
 - `src/locales/` - české a anglické texty UI
-- `tests/componentsTests/` - testy v Jestu (`*.test.js`), Jest setup a testovací helpery
-- `tests/` - E2E test v Playwrightu (`app.e2e.js`, `fakeSupabase.js`, `playwright.config.js`)
+- `tests/componentsTests/` - testy v Jestu (`*.test.ts(x)`), Jest setup a testovací helpery
+- `tests/` - E2E test v Playwrightu (`app.e2e.ts`, `fakeSupabase.ts`, `playwright.config.ts`)
 - `public/` - service worker, ikony a manifest
 
 ## Důležité pro contributory

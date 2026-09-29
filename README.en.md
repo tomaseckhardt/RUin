@@ -81,7 +81,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasts), `qrcode` (QR codes), `jszip` (photo ZIPs)
 - Backend: Supabase - Postgres + RPC functions (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - External services: Open-Meteo (geocoding and weather forecast), Google Fonts (Space Grotesk)
-- Tests: Jest + Testing Library (`client/tests/componentsTests/*.test.js`), `jest-axe` for a11y assertions in tests (`npm --prefix client run test:a11y`)
+- Tests: Jest + Testing Library (`client/tests/componentsTests/*.test.ts(x)`), `jest-axe` for a11y assertions in tests (`npm --prefix client run test:a11y`)
 - Deploy: GitHub Actions -> GitHub Pages (custom domain `ruin.eckhardt.cz`)
 
 ## Repository structure
@@ -91,8 +91,8 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
   - `src/components/` - reusable UI components
   - `src/lib/` - the API layer (`api.js` is the only place that calls Supabase RPCs), the Supabase client, translations (`i18n.js`) and helpers (formatting, weather, push, QR poster, localStorage)
   - `src/locales/` - UI text dictionaries (`cs.js`, `en.js`) and the English wording of the database error messages (`serverMessages.en.js`)
-  - `tests/componentsTests/` - the Jest tests (`*.test.js`), shared test helpers and the Jest setup
-  - `tests/` - the Playwright E2E test (`app.e2e.js`) with an in-memory fake Supabase (`fakeSupabase.js`) and its config (`playwright.config.js`)
+  - `tests/componentsTests/` - the Jest tests (`*.test.ts(x)`), shared test helpers and the Jest setup
+  - `tests/` - the Playwright E2E test (`app.e2e.ts`) with an in-memory fake Supabase (`fakeSupabase.ts`) and its config (`playwright.config.ts`)
   - `public/` - service worker (`sw.js`), icons and the manifest
   - `scripts/run-vite-safe.mjs` - runs Vite from a temporary copy of the project (see [NPM scripts](#npm-scripts))
 - `supabase/sql/all-phases.sql` - the whole database schema, a single SQL file
@@ -194,8 +194,9 @@ Client (`client/package.json`):
 - `npm --prefix client run build`
 - `npm --prefix client run preview`
 - `npm --prefix client run lint` - ESLint
-- `npm --prefix client run test` - Jest (unit, component + a11y tests, `*.test.js`)
+- `npm --prefix client run test` - Jest (unit, component + a11y tests, `*.test.ts(x)`)
 - `npm --prefix client run test:a11y` - only the tests matching the `a11y` pattern
+- `npm --prefix client run typecheck` - type-checks the tests (`tsc -p tests`). The tests are TypeScript while the app stays JavaScript; Jest and Playwright only strip the types, so this script (and CI) is what checks them.
 - `npm --prefix client run test:e2e` - the Playwright E2E test: walks through the whole app (creating an event, editing it, RSVPs, chat, bring list, photos, pings, accepting an excuse, a poll, feedback, dark mode) once in Czech and once in English. It starts its own dev server against an in-memory fake Supabase and never touches the real project. Run `npx playwright install chromium` once first.
 
 The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-safe.mjs`. It copies the project into a temporary folder (only symlinking `src` and `public`) and runs Vite there, because Vite can't cope with a path that contains e.g. a `?` (the "Are you in?" folder). Changes in `src/` and `public/` show up right away; after changing `vite.config.js` or `package.json`, restart the dev server. Pass your own Vite options straight to this script, e.g. `node scripts/run-vite-safe.mjs dev --host 127.0.0.1` in the `client` directory - they don't get through `npm run dev -- ...`.
@@ -204,7 +205,7 @@ The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-s
 
 - `npm test` runs Jest (jsdom + Testing Library + `jest-axe`): unit tests for `lib/`, component tests and a11y tests.
 - The localization tests check that `cs.js` and `en.js` have the same keys and `{placeholders}`, and that every message in `all-phases.sql` has an English translation (see [Localization](#localization-czech-and-english)).
-- The Jest setup (`client/tests/componentsTests/setup.js`) switches the UI to Czech - jsdom reports itself as `en-US`, so the app would otherwise run in English.
+- The Jest setup (`client/tests/componentsTests/setup.ts`) switches the UI to Czech - jsdom reports itself as `en-US`, so the app would otherwise run in English.
 - CI (the `ci` job in `.github/workflows/deploy-pages.yml`) runs lint and tests on every pull request to `main` and on every push to `main`. Build and deploy run only on a push to `main` (or a manual run), and only when `ci` passes.
 - Jest doesn't work when the project path contains a `?` - see [Troubleshooting](#troubleshooting).
 
@@ -393,7 +394,7 @@ The UI comes in two languages. Czech is the source language; English has the sam
 - On the first visit, the language is picked from the browser (`cs` and `sk` -> Czech, anything else -> English), and it's switched with the CZ | EN toggle in the top-right corner of every page's header. The choice is saved in `localStorage` (`ruin-locale`), and `<html lang>` is set as well.
 - Dates and times are formatted for the language (`cs-CZ`; in English `en-GB` with a 24-hour clock).
 - The texts live in `client/src/locales/cs.js` and `client/src/locales/en.js`. In a component: `const { t } = useI18n()` and `t('section.key', { param })`; outside React (`lib/`), just import `t` from `client/src/lib/i18n.js`. Plurals are objects keyed by `Intl.PluralRules` category (`{ one, few, other }`); a missing form falls back to `other`.
-- Add every new text to both dictionaries - `client/tests/componentsTests/i18n.test.js` checks that they have the same keys and the same `{placeholders}`.
+- Add every new text to both dictionaries - `client/tests/componentsTests/i18n.test.tsx` checks that they have the same keys and the same `{placeholders}`.
 - Database error messages (`raise exception` in `all-phases.sql`) stay in Czech; for the English UI, the client translates them by their exact text using `client/src/locales/serverMessages.en.js`. When you add or reword a message in the SQL, add it there too - otherwise the same test fails. Code that branches on a specific message compares the original text from `error.serverMessage`, not the translated `error.message`.
 - Push reminders are still in Czech for now: their text is put together by the `send-event-reminders` Edge Function, and the language isn't stored with the subscription.
 
@@ -453,6 +454,6 @@ An older version of the service worker (`ruin-app-shell-v1`) also cached files f
 
 Vite listens on `localhost`, which may resolve to IPv6 only (`::1`). Open http://localhost:5173/, or start the dev server with `--host 127.0.0.1` (see [NPM scripts](#npm-scripts)).
 
-### `npm test` reports "Module <rootDir>/tests/componentsTests/setup.js ... was not found"
+### `npm test` reports "Module <rootDir>/tests/componentsTests/setup.ts ... was not found"
 
 Jest can't cope with a project path that contains a `?` (e.g. the "Are you in?" folder). Vite works around this with `run-vite-safe.mjs`, Jest doesn't - clone or copy the project to a path without special characters and run the tests there.

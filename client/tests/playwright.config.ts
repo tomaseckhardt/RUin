@@ -1,11 +1,11 @@
 import { defineConfig, devices } from '@playwright/test'
-import { SUPABASE_URL } from './fakeSupabase.js'
+import { SUPABASE_URL } from './fakeSupabase.ts'
 
 const PORT = 5288
 
 export default defineConfig({
   testDir: '.',
-  testMatch: '*.e2e.js',
+  testMatch: '*.e2e.ts',
   outputDir: 'test-results',
   timeout: 180_000,
   // One language after the other: the dev server is slow when both hit it.
