@@ -5,6 +5,7 @@ import PageShell from '../components/PageShell.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import { createEventPoll } from '../lib/api.js'
+import { parseLocalDateTime } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 
 function createEmptyOption() {
@@ -54,6 +55,16 @@ function CreatePollPage() {
 
     if (options.length < 2) {
       toast.error(t('createPoll.minTwoOptions'))
+      return
+    }
+
+    const pastOptionIndex = options.findIndex((option) => {
+      const datetime = parseLocalDateTime(option.datetime)
+      return !datetime || datetime.getTime() <= Date.now()
+    })
+
+    if (pastOptionIndex !== -1) {
+      toast.error(t('createPoll.optionMustBeFuture', { number: pastOptionIndex + 1 }))
       return
     }
 

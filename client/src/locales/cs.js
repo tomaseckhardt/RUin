@@ -333,6 +333,7 @@ export default {
     submitting: 'Vytvářím anketu…',
     submit: 'Vytvořit anketu',
     optionIncomplete: 'Možnost {number} nemá vyplněné datum nebo místo — doplň ji, nebo ji odeber.',
+    optionMustBeFuture: 'Termín možnosti {number} už uplynul. Vyber budoucí čas.',
     minTwoOptions: 'Přidej aspoň dvě možnosti.',
     created: 'Anketa je připravená. Sdílej odkaz na hlasování.',
   },

@@ -32,6 +32,22 @@ const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:admin@example.com'
 
 const hasRequiredSecrets = Boolean(supabaseUrl && serviceRoleKey && vapidPublicKey && vapidPrivateKey)
 
+type EventReminder = {
+  event_id: string
+  reminder_type: 'day_before' | 'hour_before'
+  name: string
+  location: string
+  starts_in_seconds: number
+  starts_today: boolean
+  starts_at_label: string
+}
+
+type PushSubscription = {
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
 if (!hasRequiredSecrets) {
   console.error('Missing required secrets (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY/VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY).')
 }
@@ -49,7 +65,7 @@ if (hasRequiredSecrets) {
 // starts_at_label come from get_pending_event_reminders()): a day-before
 // reminder can also go out on the event's own day, and an hour-before one
 // anywhere within that last hour.
-function buildNotificationPayload(reminder) {
+function buildNotificationPayload(reminder: EventReminder) {
   const url = `#/event/${reminder.event_id}`
   const tag = `reminder-${reminder.event_id}-${reminder.reminder_type}`
 
@@ -74,13 +90,29 @@ function buildNotificationPayload(reminder) {
   }
 }
 
-// Sends one reminder's notification to every subscriber of its event, then
-// marks the reminder as sent. Returns per-reminder sent/failed counts.
-async function processReminder(reminder) {
-  const { data: subscriptions, error: subscriptionsError } = await supabase.rpc('get_push_subscriptions_for_event', { p_event_id: reminder.event_id })
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function errorStatusCode(error: unknown) {
+  if (typeof error !== 'object' || error === null || !('statusCode' in error)) {
+    return null
+  }
+
+  const statusCode = error.statusCode
+  return typeof statusCode === 'number' ? statusCode : null
+}
+
+// Claims one batch of endpoints for this reminder. A delivery is acknowledged
+// only after push succeeds; transient failures keep their own retry state.
+async function processReminder(reminder: EventReminder) {
+  const { data: subscriptions, error: subscriptionsError } = await supabase.rpc('claim_event_reminder_deliveries', {
+    p_event_id: reminder.event_id,
+    p_reminder_type: reminder.reminder_type,
+  })
 
   if (subscriptionsError) {
-    console.error(`Failed to load subscriptions for event ${reminder.event_id}:`, subscriptionsError.message)
+    console.error(`Failed to claim reminder deliveries for event ${reminder.event_id}:`, subscriptionsError.message)
     return { sentCount: 0, failedCount: 0 }
   }
 
@@ -92,7 +124,7 @@ async function processReminder(reminder) {
   let sentCount = 0
   let failedCount = 0
 
-  for (const subscription of subscriptions ?? []) {
+  for (const subscription of (subscriptions ?? []) as PushSubscription[]) {
     const pushSubscription = {
       endpoint: subscription.endpoint,
       keys: { p256dh: subscription.p256dh, auth: subscription.auth },
@@ -101,39 +133,71 @@ async function processReminder(reminder) {
     try {
       await webpush.sendNotification(pushSubscription, payload, pushOptions)
       sentCount += 1
-    } catch (sendError) {
-      failedCount += 1
 
-      if (sendError?.statusCode === 404 || sendError?.statusCode === 410) {
+      const { error: markDeliveryError } = await supabase.rpc('mark_event_reminder_delivery', {
+        p_event_id: reminder.event_id,
+        p_reminder_type: reminder.reminder_type,
+        p_endpoint: subscription.endpoint,
+        p_sent: true,
+      })
+
+      if (markDeliveryError) {
+        failedCount += 1
+        console.error(`Failed to acknowledge reminder for endpoint ${subscription.endpoint}:`, markDeliveryError.message)
+      }
+    } catch (sendError: unknown) {
+      failedCount += 1
+      const statusCode = errorStatusCode(sendError)
+
+      if (statusCode === 404 || statusCode === 410) {
         const { error: deleteError } = await supabase.rpc('delete_push_subscription_by_endpoint', {
           p_endpoint: subscription.endpoint,
         })
 
         if (deleteError) {
           console.error(`Failed to delete dead subscription ${subscription.endpoint}:`, deleteError.message)
+
+          const { error: releaseError } = await supabase.rpc('mark_event_reminder_delivery', {
+            p_event_id: reminder.event_id,
+            p_reminder_type: reminder.reminder_type,
+            p_endpoint: subscription.endpoint,
+            p_sent: false,
+          })
+
+          if (releaseError) {
+            console.error(`Failed to release reminder claim for ${subscription.endpoint}:`, releaseError.message)
+          }
         }
       } else {
-        console.error(`Push failed for endpoint ${subscription.endpoint}:`, sendError?.message ?? sendError)
+        console.error(`Push failed for endpoint ${subscription.endpoint}:`, errorMessage(sendError))
+
+        const { error: releaseError } = await supabase.rpc('mark_event_reminder_delivery', {
+          p_event_id: reminder.event_id,
+          p_reminder_type: reminder.reminder_type,
+          p_endpoint: subscription.endpoint,
+          p_sent: false,
+        })
+
+        if (releaseError) {
+          console.error(`Failed to release reminder claim for ${subscription.endpoint}:`, releaseError.message)
+        }
       }
     }
   }
 
-  const { error: markSentError } = await supabase.rpc('mark_event_reminder_sent', {
+  const { error: completeError } = await supabase.rpc('complete_event_reminder', {
     p_event_id: reminder.event_id,
     p_reminder_type: reminder.reminder_type,
   })
 
-  if (markSentError) {
-    // Not marking this as sent means the same reminder will be re-sent on
-    // the next scheduled tick (15-30 min later) - log loudly, since a
-    // silent failure here means every subscriber gets paged repeatedly.
-    console.error(`Failed to mark ${reminder.reminder_type} reminder sent for event ${reminder.event_id}:`, markSentError.message)
+  if (completeError) {
+    console.error(`Failed to complete ${reminder.reminder_type} reminder for event ${reminder.event_id}:`, completeError.message)
   }
 
   return { sentCount, failedCount }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (!supabase) {
     return new Response(JSON.stringify({ error: 'Server misconfigured: missing secrets.' }), {
       status: 500,
@@ -154,7 +218,7 @@ Deno.serve(async (req) => {
   let sentCount = 0
   let failedCount = 0
 
-  for (const reminder of reminders ?? []) {
+  for (const reminder of (reminders ?? []) as EventReminder[]) {
     const result = await processReminder(reminder)
     sentCount += result.sentCount
     failedCount += result.failedCount
