@@ -47,7 +47,11 @@ function readRetryQueue() {
   try {
     const raw = window.localStorage.getItem(RETRY_QUEUE_STORAGE_KEY)
     const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
+    return Array.isArray(parsed)
+      ? parsed
+          .filter((item) => item && typeof item === 'object' && RETRYABLE_RPCS.has(item.name) && item.args && typeof item.args === 'object')
+          .map((item) => ({ ...item, id: item.id || crypto.randomUUID() }))
+      : []
   } catch {
     return []
   }
@@ -61,13 +65,17 @@ function writeRetryQueue(queue) {
   }
 }
 
+function removeRetryQueueItem(itemId) {
+  writeRetryQueue(readRetryQueue().filter((item) => item.id !== itemId))
+}
+
 function queueRetryableCall(name, args) {
   if (!RETRYABLE_RPCS.has(name)) {
     return
   }
 
   const queue = readRetryQueue()
-  queue.push({ name, args })
+  queue.push({ id: crypto.randomUUID(), name, args })
   writeRetryQueue(queue)
 }
 
@@ -78,7 +86,7 @@ let isReplayingRetryQueue = false
 // again for a real (non-network) reason is also dropped - we don't retry
 // forever - and its failure is surfaced via a toast. If we're still offline,
 // the remaining items (this one included) are left queued for next time.
-async function replayRetryQueue() {
+export async function replayRetryQueue() {
   if (isReplayingRetryQueue) {
     return
   }
@@ -90,30 +98,27 @@ async function replayRetryQueue() {
   }
 
   isReplayingRetryQueue = true
+  writeRetryQueue(queue)
 
   try {
     let successCount = 0
 
-    for (let index = 0; index < queue.length; index += 1) {
-      const item = queue[index]
+    for (const item of queue) {
       const { error } = await supabase.rpc(item.name, item.args)
+
+      if (isOfflineError(error)) {
+        return
+      }
+
+      removeRetryQueueItem(item.id)
 
       if (!error) {
         successCount += 1
         continue
       }
 
-      if (isOfflineError(error)) {
-        // Still offline (or offline again) - keep this item and everything
-        // after it for the next reconnect instead of dropping them.
-        writeRetryQueue(queue.slice(index))
-        return
-      }
-
       toast.error(t('api.queuedFailed', { error: error.message ? localizeServerMessage(error.message) : t('api.unknownError') }))
     }
-
-    writeRetryQueue([])
 
     if (successCount > 0) {
       toast.success(t('api.queuedSent', { count: successCount }))
