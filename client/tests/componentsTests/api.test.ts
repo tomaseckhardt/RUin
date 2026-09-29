@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { supabase } from '../lib/supabase.js'
-import { setLocale } from '../lib/i18n.js'
+import { supabase } from '../../src/lib/supabase.js'
+import { setLocale } from '../../src/lib/i18n.js'
 import {
   claimSignupItem,
   createEvent,
@@ -27,9 +27,9 @@ import {
   unclaimSignupItem,
   unregisterPushSubscription,
   uploadEventPhoto,
-} from '../lib/api.js'
+} from '../../src/lib/api.js'
 
-jest.mock('../lib/supabase.js', () => ({
+jest.mock('../../src/lib/supabase.js', () => ({
   supabase: {
     rpc: jest.fn(),
     storage: {
@@ -41,16 +41,24 @@ jest.mock('../lib/supabase.js', () => ({
   },
 }))
 
+// The client above is bare jest.fn()s. These handles type them for what the
+// tests do with them - the SDK's own types describe the real client and
+// would reject a hand-made { data, error }.
+type RpcResult = { data: unknown; error: { message?: string; code?: string } | null }
+const rpc = supabase.rpc as unknown as jest.Mock<Promise<RpcResult>, [name: string, args?: Record<string, unknown>]>
+const storageFrom = supabase.storage.from as unknown as jest.Mock
+const invokeFunction = supabase.functions.invoke as unknown as jest.Mock
+
 beforeEach(() => {
-  supabase.rpc.mockReset()
-  supabase.storage.from.mockReset()
-  supabase.functions.invoke.mockReset()
+  rpc.mockReset()
+  storageFrom.mockReset()
+  invokeFunction.mockReset()
   window.localStorage.removeItem('ruin-retry-queue')
 })
 
 describe('callRpc error handling (via submitRsvp)', () => {
   it('resolves with the RPC data on success', async () => {
-    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
 
     const result = await submitRsvp('event-1', { name: 'Alice', status: 'confirmed' })
 
@@ -65,13 +73,13 @@ describe('callRpc error handling (via submitRsvp)', () => {
   })
 
   it('throws the RPC error message when the call fails', async () => {
-    supabase.rpc.mockResolvedValue({ data: null, error: { message: 'Vyplň svoje jméno.' } })
+    rpc.mockResolvedValue({ data: null, error: { message: 'Vyplň svoje jméno.' } })
 
     await expect(submitRsvp('event-1', { name: '', status: 'confirmed' })).rejects.toThrow('Vyplň svoje jméno.')
   })
 
   it('falls back to the generic message when the error has none', async () => {
-    supabase.rpc.mockResolvedValue({ data: null, error: {} })
+    rpc.mockResolvedValue({ data: null, error: {} })
 
     await expect(createEvent({ name: 'x' })).rejects.toThrow('Akci se nepodařilo vytvořit.')
   })
@@ -79,7 +87,7 @@ describe('callRpc error handling (via submitRsvp)', () => {
 
 describe('deleteEventData', () => {
   it('calls the server-side handler to delete an event and its stored photos', async () => {
-    supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
+    invokeFunction.mockResolvedValue({ data: { success: true }, error: null })
 
     await removeEvent('event-1', 'organizer-token')
 
@@ -89,7 +97,7 @@ describe('deleteEventData', () => {
   })
 
   it('calls the server-side handler to delete a guest’s own photo with its delete token', async () => {
-    supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
+    invokeFunction.mockResolvedValue({ data: { success: true }, error: null })
 
     await deleteOwnEventPhoto('event-1', 12, 'delete-token-1')
 
@@ -99,7 +107,7 @@ describe('deleteEventData', () => {
   })
 
   it('calls the server-side handler to delete a photo', async () => {
-    supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
+    invokeFunction.mockResolvedValue({ data: { success: true }, error: null })
 
     await deleteEventPhoto('event-1', 'organizer-token', 12)
 
@@ -111,7 +119,7 @@ describe('deleteEventData', () => {
 
 describe('recordEventPhoto', () => {
   it('sends the photo’s delete token so the uploader can delete it later', async () => {
-    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
 
     await recordEventPhoto('event-1', 'event-1/photo.jpg', 'Alice', 'delete-token-1')
 
@@ -126,14 +134,14 @@ describe('recordEventPhoto', () => {
 
 describe('retry queue concurrency', () => {
   it('preserves a retryable request enqueued while an older request is replaying', async () => {
-    let finishReplay
-    const pendingReplay = new Promise((resolve) => {
+    let finishReplay: (result: RpcResult) => void = () => {}
+    const pendingReplay = new Promise<RpcResult>((resolve) => {
       finishReplay = resolve
     })
 
     window.localStorage.setItem('ruin-retry-queue', JSON.stringify([{ name: 'submit_rsvp', args: { p_event_id: 'event-1' } }]))
-    supabase.rpc.mockImplementation((_name, args) =>
-      args.p_event_id === 'event-1' ? pendingReplay : Promise.resolve({ data: null, error: { message: 'TypeError: Failed to fetch' } }),
+    rpc.mockImplementation((_name, args) =>
+      args?.p_event_id === 'event-1' ? pendingReplay : Promise.resolve({ data: null, error: { message: 'TypeError: Failed to fetch' } }),
     )
 
     const replay = replayRetryQueue()
@@ -143,7 +151,7 @@ describe('retry queue concurrency', () => {
     finishReplay({ data: { success: true }, error: null })
     await replay
 
-    const remainingQueue = JSON.parse(window.localStorage.getItem('ruin-retry-queue'))
+    const remainingQueue = JSON.parse(window.localStorage.getItem('ruin-retry-queue') ?? '[]')
     expect(remainingQueue).toHaveLength(1)
     expect(remainingQueue[0].args.p_event_id).toBe('event-2')
   })
@@ -156,7 +164,7 @@ describe('database error messages in the English UI', () => {
 
   it('translates a known message but keeps the original on serverMessage', async () => {
     setLocale('en')
-    supabase.rpc.mockResolvedValue({ data: null, error: { message: 'Neplatný organizátorský odkaz.' } })
+    rpc.mockResolvedValue({ data: null, error: { message: 'Neplatný organizátorský odkaz.' } })
 
     const error = await getEvent('event-1', 'stale-token').catch((caught) => caught)
 
@@ -166,7 +174,7 @@ describe('database error messages in the English UI', () => {
 
   it('falls back to the English generic message when the error has none', async () => {
     setLocale('en')
-    supabase.rpc.mockResolvedValue({ data: null, error: {} })
+    rpc.mockResolvedValue({ data: null, error: {} })
 
     await expect(createEvent({ name: 'x' })).rejects.toThrow('Couldn’t create the event.')
   })
@@ -174,7 +182,7 @@ describe('database error messages in the English UI', () => {
 
 describe('unclaimSignupItem', () => {
   it('sends the same name as both the target and the requester', async () => {
-    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
 
     await unclaimSignupItem(42, 'Bob')
 
@@ -188,7 +196,7 @@ describe('unclaimSignupItem', () => {
 
 describe('reads go through event-scoped RPCs, not direct table selects', () => {
   it('getEventChatMessages calls get_event_chat_messages and reverses the order', async () => {
-    supabase.rpc.mockResolvedValue({
+    rpc.mockResolvedValue({
       data: [{ id: 2 }, { id: 1 }],
       error: null,
     })
@@ -210,7 +218,7 @@ describe('reads go through event-scoped RPCs, not direct table selects', () => {
   })
 
   it('getChatReactions calls get_chat_reactions with the event id when there are ids', async () => {
-    supabase.rpc.mockResolvedValue({ data: [{ id: 1, message_id: 9 }], error: null })
+    rpc.mockResolvedValue({ data: [{ id: 1, message_id: 9 }], error: null })
 
     await getChatReactions('event-1', [9])
 
@@ -221,7 +229,7 @@ describe('reads go through event-scoped RPCs, not direct table selects', () => {
   })
 
   it('getSignupItems calls get_event_signup_items', async () => {
-    supabase.rpc.mockResolvedValue({ data: [], error: null })
+    rpc.mockResolvedValue({ data: [], error: null })
 
     await getSignupItems('event-1')
 
@@ -229,7 +237,7 @@ describe('reads go through event-scoped RPCs, not direct table selects', () => {
   })
 
   it('getEventStops calls get_event_stops', async () => {
-    supabase.rpc.mockResolvedValue({ data: [], error: null })
+    rpc.mockResolvedValue({ data: [], error: null })
 
     await getEventStops('event-1')
 
@@ -237,7 +245,7 @@ describe('reads go through event-scoped RPCs, not direct table selects', () => {
   })
 
   it('getEventPhotos calls get_event_photos', async () => {
-    supabase.rpc.mockResolvedValue({ data: [], error: null })
+    rpc.mockResolvedValue({ data: [], error: null })
 
     await getEventPhotos('event-1')
 
@@ -257,7 +265,7 @@ describe('sendEventChatMessage', () => {
   })
 
   it('sends the trimmed values and returns the first returned row', async () => {
-    supabase.rpc.mockResolvedValue({
+    rpc.mockResolvedValue({
       data: [{ id: 1, event_id: 'event-1', sender_name: 'Alice', message: 'Ahoj', created_at: 'now' }],
       error: null,
     })
@@ -291,7 +299,7 @@ describe('uploadEventPhoto client-side validation', () => {
 
 describe('moderateAttendee/claimSignupItem numeric ids', () => {
   it('moderateAttendee coerces attendeeId to a number', async () => {
-    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
 
     await moderateAttendee('event-1', '7', { token: 'tok', status: 'excused_accepted' })
 
@@ -304,7 +312,7 @@ describe('moderateAttendee/claimSignupItem numeric ids', () => {
   })
 
   it('claimSignupItem defaults seats to 1', async () => {
-    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
 
     await claimSignupItem(5, 'Alice')
 
@@ -319,7 +327,7 @@ describe('moderateAttendee/claimSignupItem numeric ids', () => {
 describe('uploadEventPhoto file name', () => {
   it('names the file after the SHA-256 hash of the photo’s delete token', async () => {
     const upload = jest.fn().mockResolvedValue({ error: null })
-    supabase.storage.from.mockReturnValue({ upload })
+    storageFrom.mockReturnValue({ upload })
     const file = { type: 'image/jpeg', size: 1024, name: 'party.JPG' }
 
     const storagePath = await uploadEventPhoto('event-1', file, 'delete-token-1')
@@ -332,7 +340,7 @@ describe('uploadEventPhoto file name', () => {
 
 describe('photo likes and comments', () => {
   it('reads likes and comments through event-scoped RPCs', async () => {
-    supabase.rpc.mockResolvedValue({ data: [], error: null })
+    rpc.mockResolvedValue({ data: [], error: null })
 
     await getEventPhotoLikes('event-1')
     await getEventPhotoComments('event-1')
@@ -342,7 +350,7 @@ describe('photo likes and comments', () => {
   })
 
   it('toggles a like under the given name', async () => {
-    supabase.rpc.mockResolvedValue({ data: { success: true, liked: true }, error: null })
+    rpc.mockResolvedValue({ data: { success: true, liked: true }, error: null })
 
     await expect(toggleEventPhotoLike('event-1', 12, 'Alice')).resolves.toEqual({ success: true, liked: true })
     expect(supabase.rpc).toHaveBeenCalledWith('toggle_event_photo_like', { p_event_id: 'event-1', p_photo_id: 12, p_liker_name: 'Alice' })
@@ -350,7 +358,7 @@ describe('photo likes and comments', () => {
 
   it('returns the saved comment row', async () => {
     const row = { id: 3, photo_id: 12, author_name: 'Alice', message: 'Hezká', created_at: 'now' }
-    supabase.rpc.mockResolvedValue({ data: [row], error: null })
+    rpc.mockResolvedValue({ data: [row], error: null })
 
     await expect(addEventPhotoComment('event-1', 12, 'Alice', 'Hezká')).resolves.toEqual(row)
     expect(supabase.rpc).toHaveBeenCalledWith('add_event_photo_comment', {
@@ -362,7 +370,7 @@ describe('photo likes and comments', () => {
   })
 
   it('deletes a comment with the organizer token', async () => {
-    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
 
     await deleteEventPhotoComment('event-1', 'organizer-token', 3)
 
@@ -372,7 +380,7 @@ describe('photo likes and comments', () => {
 
 describe('push reminders per event', () => {
   it('turns reminders off only for the given event', async () => {
-    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
 
     await unregisterPushSubscription('https://push.example/endpoint-1', 'event-1')
 
@@ -383,7 +391,7 @@ describe('push reminders per event', () => {
   })
 
   it('asks the server whether this browser has reminders on for the event', async () => {
-    supabase.rpc.mockResolvedValue({ data: true, error: null })
+    rpc.mockResolvedValue({ data: true, error: null })
 
     await expect(isPushSubscribed('event-1', 'https://push.example/endpoint-1')).resolves.toBe(true)
     expect(supabase.rpc).toHaveBeenCalledWith('is_push_subscribed', { p_event_id: 'event-1', p_endpoint: 'https://push.example/endpoint-1' })

@@ -5,6 +5,7 @@
 // photo. The authorize_event_photo_delete RPC decides who may delete a photo.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { errorMessage, removeEventPhotos, removeStoragePaths } from '../_shared/common.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -19,63 +20,7 @@ const corsHeaders = {
 }
 
 function jsonResponse(payload: Record<string, unknown>, status = 200) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
-
-async function removeStoragePaths(paths: string[]) {
-  for (let offset = 0; offset < paths.length; offset += 100) {
-    const { error } = await supabase.storage.from('event-photos').remove(paths.slice(offset, offset + 100))
-
-    if (error) {
-      throw new Error(`Fotky se nepodařilo smazat z úložiště: ${error.message}`)
-    }
-  }
-}
-
-async function listAllPhotoPaths(eventId: string) {
-  const folders: string[] = [eventId]
-  const paths: string[] = []
-
-  while (folders.length > 0) {
-    const folder = folders.shift()
-    if (!folder) {
-      continue
-    }
-
-    let offset = 0
-
-    while (true) {
-      const { data: page, error } = await supabase.storage.from('event-photos').list(folder, { limit: 100, offset })
-
-      if (error) {
-        throw new Error('Fotky akce se nepodařilo načíst.')
-      }
-
-      for (const item of page || []) {
-        const path = `${folder}/${item.name}`
-        if (item.id === null) {
-          folders.push(path)
-        } else {
-          paths.push(path)
-        }
-      }
-
-      if (!page || page.length < 100) {
-        break
-      }
-
-      offset += 100
-    }
-  }
-
-  return paths
+  return Response.json(payload, { status, headers: corsHeaders })
 }
 
 Deno.serve(async (req: Request) => {
@@ -139,7 +84,7 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      await removeStoragePaths([storagePath])
+      await removeStoragePaths(supabase, [storagePath])
     } catch (error) {
       return jsonResponse({ error: errorMessage(error) }, 500)
     }
@@ -158,7 +103,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    await removeStoragePaths(await listAllPhotoPaths(eventId))
+    await removeEventPhotos(supabase, eventId)
   } catch (error) {
     return jsonResponse({ error: errorMessage(error) }, 500)
   }

@@ -40,9 +40,28 @@ jobs:
         working-directory: client
         run: npm run lint
 
+      - name: Type-check the tests
+        working-directory: client
+        run: npm run typecheck
+
       - name: Test
         working-directory: client
         run: npm test
+
+      - name: Install the Playwright browser
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E test
+        working-directory: client
+        run: npm run test:e2e
+
+      - name: Upload the E2E traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: client/tests/test-results
 
   build:
     if: github.event_name != 'pull_request'

@@ -4,10 +4,7 @@ import CollapsibleCard from './CollapsibleCard.jsx'
 import { addSignupItem, claimSignupItem, deleteSignupItem, getSignupItems, removeSignupClaim, unclaimSignupItem } from '../lib/api.js'
 import { useI18n } from '../lib/i18n.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
-
-function normalizeName(value) {
-  return (value || '').trim().toLocaleLowerCase('cs-CZ')
-}
+import { normalizeName } from '../lib/normalizeName.js'
 
 function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer = false, organizerToken = null }) {
   const { t } = useI18n()
@@ -46,15 +43,9 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
   }
 
   useEffect(() => {
-    // Fetch-on-mount-and-eventId/category-change, refreshed again by the
-    // realtime tick subscription below - there's no external system to
-    // "subscribe" to for the initial load itself.
+    // Load now, and again whenever a realtime tick says the lists changed.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadItems()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, category])
-
-  useEffect(() => {
     return subscribeToEventTicks(eventId, ['signup_item', 'signup_claim'], loadItems, category)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, category])
@@ -88,87 +79,32 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
     }
   }
 
-  async function handleClaim(item) {
+  // Runs one change to an item with the item marked busy, then reloads.
+  async function runItemAction(item, action) {
+    setBusyItemId(item.id)
+
+    try {
+      await action()
+      await loadItems()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusyItemId(null)
+    }
+  }
+
+  function handleClaim(item) {
     if (!currentName?.trim()) {
       toast.error(t('signup.nameRequired'))
       return
     }
 
-    setBusyItemId(item.id)
-
-    try {
-      await claimSignupItem(item.id, currentName)
-      await loadItems()
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setBusyItemId(null)
-    }
+    runItemAction(item, () => claimSignupItem(item.id, currentName))
   }
 
-  async function handleUnclaim(item) {
-    setBusyItemId(item.id)
-
-    try {
-      await unclaimSignupItem(item.id, currentName)
-      await loadItems()
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setBusyItemId(null)
-    }
-  }
-
-  async function handleRemoveClaim(item, claim) {
-    setBusyItemId(item.id)
-
-    try {
-      await removeSignupClaim(item.id, claim.attendee_name, currentName)
-      await loadItems()
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setBusyItemId(null)
-    }
-  }
-
-  async function handleRemoveClaimAsOrganizer(item, claim) {
-    if (!organizerToken) {
-      return
-    }
-
-    setBusyItemId(item.id)
-
-    try {
-      await removeSignupClaim(item.id, claim.attendee_name, currentName, organizerToken)
-      await loadItems()
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setBusyItemId(null)
-    }
-  }
-
-  async function handleDelete(item) {
-    if (!organizerToken) {
-      return
-    }
-
-    const confirmed = window.confirm(t('signup.confirmDelete', { label: item.label }))
-
-    if (!confirmed) {
-      return
-    }
-
-    setBusyItemId(item.id)
-
-    try {
-      await deleteSignupItem(eventId, item.id, organizerToken)
-      await loadItems()
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setBusyItemId(null)
+  function handleDelete(item) {
+    if (window.confirm(t('signup.confirmDelete', { label: item.label }))) {
+      runItemAction(item, () => deleteSignupItem(eventId, item.id, organizerToken))
     }
   }
 
@@ -221,10 +157,14 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
             const claims = item.event_signup_claims || []
             const claimedSeats = claims.reduce((sum, claim) => sum + claim.seats, 0)
             const isFull = claimedSeats >= item.capacity
-            const myClaim = currentName
-              ? claims.find((claim) => claim.attendee_name.toLocaleLowerCase('cs-CZ') === currentName.trim().toLocaleLowerCase('cs-CZ'))
-              : null
+            const myClaim = currentName?.trim() ? claims.find((claim) => normalizeName(claim.attendee_name) === normalizeName(currentName)) : null
             const isOwnRide = category === 'ride' && currentName?.trim() && normalizeName(item.created_by) === normalizeName(currentName)
+            // The driver can let a passenger go; the organizer can remove anyone.
+            const claimRemoval = isOwnRide
+              ? { label: t('signup.offerSwap'), token: null }
+              : isOrganizer
+                ? { label: t('common.remove'), token: organizerToken }
+                : null
 
             return (
               <div key={item.id} className="rounded-2xl border border-slate-200 p-3 dark:border-slate-700">
@@ -233,7 +173,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.label}</p>
                     {item.note ? <p className="text-xs text-slate-500 dark:text-slate-400">{item.note}</p> : null}
                     {claims.length > 0 ? (
-                      isOwnRide ? (
+                      claimRemoval ? (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           {claims.map((claim) => (
                             <span
@@ -244,28 +184,10 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                                 type="button"
                                 className="rounded-full px-1.5 py-0.5 text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
                                 disabled={busyItemId === item.id}
-                                onClick={() => handleRemoveClaim(item, claim)}>
-                                {t('signup.offerSwap')}
-                              </button>
-                            </span>
-                          ))}
-                          <span className="text-xs text-slate-400 dark:text-slate-500">
-                            ({claimedSeats}/{item.capacity})
-                          </span>
-                        </div>
-                      ) : isOrganizer ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          {claims.map((claim) => (
-                            <span
-                              key={claim.id}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/60 py-1 pl-2.5 pr-1.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
-                              {claim.attendee_name}
-                              <button
-                                type="button"
-                                className="rounded-full px-1.5 py-0.5 text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
-                                disabled={busyItemId === item.id}
-                                onClick={() => handleRemoveClaimAsOrganizer(item, claim)}>
-                                {t('common.remove')}
+                                onClick={() =>
+                                  runItemAction(item, () => removeSignupClaim(item.id, claim.attendee_name, currentName, claimRemoval.token))
+                                }>
+                                {claimRemoval.label}
                               </button>
                             </span>
                           ))}
@@ -290,7 +212,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                         type="button"
                         className="secondary-button px-3 py-1.5 text-xs"
                         disabled={busyItemId === item.id}
-                        onClick={() => handleUnclaim(item)}>
+                        onClick={() => runItemAction(item, () => unclaimSignupItem(item.id, currentName))}>
                         {t('signup.unclaim')}
                       </button>
                     ) : (

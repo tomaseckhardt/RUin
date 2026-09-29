@@ -1,5 +1,5 @@
 // Czech is the app's source language. Every key here must also exist in
-// en.js (enforced by src/test/i18n.test.js). Plural entries are objects keyed
+// en.js (enforced by tests/componentsTests/i18n.test.tsx). Plural entries are objects keyed
 // by Intl.PluralRules category ({ one, few, many, other }) - a category that
 // isn't listed falls back to `other`.
 export default {
@@ -32,7 +32,6 @@ export default {
   },
 
   shell: {
-    lightMode: 'Světlý režim',
     darkMode: 'Tmavý režim',
     language: 'Jazyk',
     theme: 'Vzhled',
@@ -239,7 +238,6 @@ export default {
     excuseAccepted: 'Omluvenka schválená.',
     excuseRejected: 'Omluvenka zamítnutá.',
     confirmDeleteEvent: 'Opravdu chceš tuhle akci smazat? Tohle nejde vrátit zpět.',
-    photosNotDeleted: 'Fotky se nepodařilo smazat z úložiště, akce ale zmizí.',
     eventDeleted: 'Akce byla smazaná.',
     eventUpdated: 'Detaily akce jsou upravené.',
     confirmDeleteAttendee: 'Opravdu chceš smazat účastníka {name}?',
@@ -248,8 +246,6 @@ export default {
     unlockedAndSaved: 'Správa odemčená. Přihlášení je uložené pro příště.',
     editTitle: 'Změň základní údaje',
     editHint: 'Můžeš přepsat název, místo i termín. Změna se hned promítne do pozvánky.',
-    editNamePlaceholder: 'Např. Letní gril',
-    editLocationPlaceholder: 'Např. Stromovka',
     saveChanges: 'Uložit změny',
     unlockModalHint: 'PIN zadáš jednou. Přihlášení se uloží na tomto zařízení.',
   },
@@ -436,6 +432,7 @@ export default {
     reactNeedsName: 'Pro reakci se nejdřív pod svým jménem.',
     chatNeedsName: 'Pro chat se nejdřív pod svým jménem.',
     missingName: 'Chybí jméno pro chat.',
+    addReaction: 'Přidat reakci',
   },
 
   stops: {
@@ -488,7 +485,6 @@ export default {
     likedBy: 'Líbí se: {names}',
     likeNeedsName: 'Pro lajk napiš svoje jméno v RSVP.',
     commentsTitle: 'Komentáře',
-    commentCount: { one: '{count} komentář', few: '{count} komentáře', other: '{count} komentářů' },
     noComments: 'Zatím bez komentářů. Napiš první.',
     commentLabel: 'Komentář k fotce',
     commentPlaceholder: 'Napiš komentář…',
@@ -496,7 +492,6 @@ export default {
     commentNeedsName: 'Pro komentář napiš svoje jméno v RSVP.',
     deleteComment: 'Smazat komentář od {name}',
     confirmDeleteComment: 'Opravdu chceš smazat tento komentář?',
-    storageDeleteFailed: 'Fotku se nepodařilo smazat z úložiště, záznam ale zmizí.',
     nothingToDownload: 'Není co stáhnout, zbylé fotky jsi nahrál/a ty.',
     downloadOneFailed: 'Fotku od {name} se nepodařilo stáhnout.',
     zipFileName: 'fotky-{id}.zip',
@@ -589,7 +584,6 @@ export default {
   },
 
   weather: {
-    title: 'Počasí',
     conditions: {
       clear: 'Jasno',
       mostlyClear: 'Skoro jasno',

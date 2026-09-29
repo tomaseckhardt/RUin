@@ -2,20 +2,11 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import PageShell from '../components/PageShell.jsx'
 import { getFeedbackReports } from '../lib/api.js'
-import { getIntlLocale, useI18n } from '../lib/i18n.js'
+import { formatDateTime } from '../lib/format.js'
+import { useI18n } from '../lib/i18n.js'
 
 const FILTERS = ['all', 'bug', 'idea']
 const REPORT_TYPES = ['bug', 'idea']
-
-function formatReportedAt(value) {
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat(getIntlLocale(), { dateStyle: 'full', timeStyle: 'short' }).format(date)
-}
 
 function FeedbackPage() {
   const { t } = useI18n()
@@ -70,7 +61,7 @@ function FeedbackPage() {
                   </span>
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{report.name}</p>
                 </div>
-                <time className="text-xs text-slate-500 dark:text-slate-400">{formatReportedAt(report.created_at)}</time>
+                <time className="text-xs text-slate-500 dark:text-slate-400">{formatDateTime(report.created_at)}</time>
               </div>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">{report.message}</p>
             </article>

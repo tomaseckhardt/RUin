@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
-function CollapsibleCard({ eyebrow, title, headerActions, defaultOpen = false, children }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
+function CollapsibleCard({ eyebrow, title, headerActions, children }) {
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
     <section className="panel">

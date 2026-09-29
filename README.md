@@ -81,7 +81,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasty), `qrcode` (QR kódy), `jszip` (ZIP s fotkami)
 - Backend: Supabase - Postgres + RPC funkce (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - Externí služby: Open-Meteo (geokódování a předpověď počasí), Google Fonts (Space Grotesk)
-- Testy: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` pro a11y assertions v testech, Puppeteer + `axe-puppeteer` pro `npm run audit:a11y` proti buildu
+- Testy: Jest + Testing Library (`client/tests/componentsTests/*.test.ts(x)`), `jest-axe` pro a11y assertions v testech (`npm --prefix client run test:a11y`)
 - Deploy: GitHub Actions -> GitHub Pages (vlastní doména `ruin.eckhardt.cz`)
 
 ## Struktura repozitáře
@@ -91,12 +91,12 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
   - `src/components/` - znovupoužitelné UI komponenty
   - `src/lib/` - API vrstva (`api.js` je jediné místo, které volá Supabase RPC), Supabase klient, překlady (`i18n.js`) a helpery (formátování, počasí, push, QR plakátek, localStorage)
   - `src/locales/` - slovníky textů UI (`cs.js`, `en.js`) a anglické znění chybových hlášek z databáze (`serverMessages.en.js`)
-  - `src/test/` - testy (`*.test.js`), sdílené testovací helpery a Jest setup
+  - `tests/componentsTests/` - testy v Jestu (`*.test.ts(x)`), sdílené testovací helpery a Jest setup
+  - `tests/` - E2E test v Playwrightu (`app.e2e.ts`) s falešným Supabase v paměti (`fakeSupabase.ts`) a jeho konfigurace (`playwright.config.ts`)
   - `public/` - service worker (`sw.js`), ikony a manifest
   - `scripts/run-vite-safe.mjs` - spouští Vite z dočasné kopie projektu (viz [NPM skripty](#npm-skripty))
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
 - `supabase/functions/` - Edge Functions (`send-event-reminders` pro push připomínky, `cleanup-expired-events` pro úklid expirovaných akcí, `delete-event-data` pro ruční mazání fotek a akcí). Běží v Deno, ne v Node: aby je VS Code nehlásil jako chybné (`Cannot find name 'Deno'`, nenalezený import `npm:`), nainstaluj si [Deno](https://deno.com) a rozšíření Deno pro VS Code - `.vscode/settings.json` ho zapíná jen pro `supabase/functions`.
-- `scripts/audit-a11y.mjs` - a11y audit postaveného buildu (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) a šablony pro issues a pull requesty
 - `CNAME` - vlastní doména pro GitHub Pages
 
@@ -147,7 +147,7 @@ Celé databázové schéma žije v jednom souboru:
 supabase/sql/all-phases.sql
 ```
 
-Žádné samostatné "fáze" k ručnímu skládání - `all-phases.sql` je jediný zdroj pravdy a při každé další změně schématu se upravuje přímo on (ne nový soubor vedle). Je napsaný idempotentně (`create table if not exists`, `create or replace function`, `drop policy/trigger if exists` před každým `create`, `on conflict do nothing` u jediného top-level insertu), takže ho lze bezpečně spustit znovu celý i na projektu, který už část schématu má - Postgres jen přeskočí nebo nahradí to, co už existuje. Uvnitř je rozdělený do očíslovaných sekcí (`-- Phase N: ...`), jejichž komentáře vysvětlují, proč daná změna vznikla.
+`all-phases.sql` je jediný zdroj pravdy: celé schéma v aktuální podobě, každá tabulka, funkce a politika jen jednou. Při změně schématu se upravuje přímo on (ne nový soubor vedle), a to na místě, kde je daný objekt definovaný. Hlavička souboru popisuje, jak na to u funkcí a tabulek. Celý běží v jedné transakci a je idempotentní (`create table if not exists`, `create or replace function`, `drop policy/trigger if exists` před každým `create`), takže ho lze kdykoli spustit znovu celý, na novém i existujícím projektu. Když cokoli selže, nezmění se nic. Historie změn je v gitu. Sekce "Retired objects" na konci odstraní objekty, které starší verze souboru vytvořily a nic je už nepoužívá.
 
 Co všechno `all-phases.sql` obsahuje:
 
@@ -160,10 +160,10 @@ Co všechno `all-phases.sql` obsahuje:
 - Komunitní prvky: check-in, emoji reakce na chat, seznamy "kdo co nese" / spolujízda, vícero zastávek za večer, ankety na termín/místo před založením akce (s vlastním veřejným i tvůrčím odkazem), fotky z akce (Storage bucket `event-photos`).
 - Case-insensitive hlasování v anketách.
 - Šťouchnutí s opakovatelným 10minutovým cooldownem místo "jednou navždy" (atomický `on conflict ... do update ... where`), s RLS na `attendee_pings`.
-- Bezpečnostní hardening: `_random_token` přes `pgcrypto`/`gen_random_bytes()` místo nekryptografického `random()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` vrací telefonní čísla jen s platným `p_organizer_token`; opravená race podmínka v `moderate_attendee`; srozumitelná hláška místo syrové Postgres chyby při konfliktu telefonního čísla. Záměrně neřeší: `organizer_token` zůstává čitelný (ne hash), protože appka přes PIN umí "obnovit" zapomenutý manage odkaz a to s jednosměrným hashem nejde bez přestavby celého recovery flow. Celý model identity/autorizace (appka nemá auth vůbec, jediná "oprávnění" jsou tokeny v odkazech, RLS musí defaultně vše zamítat) je sepsaný v [SECURITY_MODEL.md](SECURITY_MODEL.md).
+- Bezpečnostní hardening: `_random_token` přes `pgcrypto`/`gen_random_bytes()` místo nekryptografického `random()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` vrací telefonní čísla jen s platným `p_organizer_token` a neplatný token odmítne (správa akce pak znovu chce PIN); opravená race podmínka v `moderate_attendee`; srozumitelná hláška místo syrové Postgres chyby při konfliktu telefonního čísla. Záměrně neřeší: `organizer_token` zůstává čitelný (ne hash), protože appka přes PIN umí "obnovit" zapomenutý manage odkaz a to s jednosměrným hashem nejde bez přestavby celého recovery flow. Celý model identity/autorizace (appka nemá auth vůbec, jediná "oprávnění" jsou tokeny v odkazech, RLS musí defaultně vše zamítat) je sepsaný v [SECURITY_MODEL.md](SECURITY_MODEL.md).
 - Mazání fotek ze Storage - ručně přes Edge Function `delete-event-data`, která ověřuje organizátorský token nebo mazací token fotky toho, kdo ji nahrál, automaticky po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` - a vlastní životní cyklus anket (nevyhodnocená zanikne 14 dní od vytvoření, vyhodnocená automaticky spolu s akcí, co z ní vznikla).
 - Blokace přihlášení řidiče na vlastní nabídku odvozu + možnost odebrat konkrétního spolujezdce z vlastní nabídky.
-- Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé `select` politiky jsou `using (false)`), realtime běží přes `event_realtime_ticks`.
+- Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé čtení tabulek RLS nepovolí), realtime běží přes `event_realtime_ticks`.
 - Organizátor jako samostatná identita (`events.organizer_name`) - chat, šťouchnutí, fotky i položky ze správy akce se podepisují jménem organizátora.
 - Serverové omezení uploadu fotek (bucket `event-photos`: max 10 MB, jen obrázky, nejvýše 50 fotek na akci a upload pouze do složky existující akce).
 - Lajky a komentáře u fotek (`event_photo_likes`, `event_photo_comments`): číst i zapisovat jdou jen přes RPC (`get_event_photo_likes`, `get_event_photo_comments`, `toggle_event_photo_like`, `add_event_photo_comment`, `delete_event_photo_comment`), jeden lajk na jméno a fotku, komentář max 500 znaků, max 200 komentářů na fotku, mazat komentáře smí jen organizátor. Otevřená alba se obnovují přes realtime ticky `photo`, `photo_like` a `photo_comment`.
@@ -186,7 +186,6 @@ Kořen repozitáře (`package.json`):
 - `npm run dev` - vývojový server klienta
 - `npm run build` - produkční build klienta
 - `npm run test` - spustí testy klienta (`npm --prefix client run test`)
-- `npm run audit:a11y` - build + a11y audit skript
 - `npm run install:all` / `npm run postinstall` - doinstaluje závislosti v `client/` (spouští se automaticky po `npm install` v kořeni)
 
 Klient (`client/package.json`):
@@ -195,8 +194,10 @@ Klient (`client/package.json`):
 - `npm --prefix client run build`
 - `npm --prefix client run preview`
 - `npm --prefix client run lint` - ESLint
-- `npm --prefix client run test` - Jest (jednotkové, komponentové + a11y testy, `*.test.js`)
+- `npm --prefix client run test` - Jest (jednotkové, komponentové + a11y testy, `*.test.ts(x)`)
 - `npm --prefix client run test:a11y` - jen testy odpovídající vzoru `a11y`
+- `npm --prefix client run typecheck` - typová kontrola testů (`tsc -p tests`). Testy jsou v TypeScriptu, aplikace zůstává v JavaScriptu; Jest i Playwright typy jen odstraní, kontroluje je až tenhle skript (a CI).
+- `npm --prefix client run test:e2e` - E2E test v Playwrightu: projde celou aplikaci (založení akce, úpravy, RSVP, chat, bring list, fotky, šťouchnutí, schválení omluvenky, anketa, feedback, tmavý režim) jednou česky a jednou anglicky. Sám spustí dev server proti falešnému Supabase v paměti, na skutečný projekt nesahá. Poprvé je potřeba `npx playwright install chromium`.
 
 `dev`, `build` i `preview` v klientovi běží přes `client/scripts/run-vite-safe.mjs`. Ten zkopíruje projekt do dočasné složky (`src` a `public` jen nalinkuje) a Vite spustí tam, protože Vite si neporadí s cestou obsahující třeba `?` (složka "Are you in?"). Úpravy v `src/` a `public/` se projeví hned, po změně `vite.config.js` nebo `package.json` je potřeba dev server restartovat. Vlastní parametry pro Vite předej přímo tomuhle skriptu, např. `node scripts/run-vite-safe.mjs dev --host 127.0.0.1` v adresáři `client` - přes `npm run dev -- ...` se neprojdou.
 
@@ -204,8 +205,7 @@ Klient (`client/package.json`):
 
 - `npm test` spustí Jest (jsdom + Testing Library + `jest-axe`): jednotkové testy `lib/`, testy komponent a a11y testy.
 - Testy lokalizace hlídají, že `cs.js` a `en.js` mají stejné klíče i `{placeholdery}` a že každá hláška z `all-phases.sql` má anglický překlad (viz [Lokalizace](#lokalizace-čeština-a-angličtina)).
-- Jest setup (`client/src/test/setup.js`) přepíná UI do češtiny - jsdom se jinak hlásí jako `en-US` a aplikace by běžela anglicky.
-- `npm run audit:a11y` postaví aplikaci a projde úvod, pozvánku a správu akce axe auditem v Puppeteeru.
+- Jest setup (`client/tests/componentsTests/setup.ts`) přepíná UI do češtiny - jsdom se jinak hlásí jako `en-US` a aplikace by běžela anglicky.
 - CI (job `ci` v `.github/workflows/deploy-pages.yml`) spouští lint a testy při každém pull requestu do `main` i při push do `main`. Build a deploy běží jen při push do `main` (nebo ručním spuštění) a jen když `ci` projde.
 - Jest nefunguje, když cesta k projektu obsahuje `?` - viz [Troubleshooting](#troubleshooting).
 
@@ -340,7 +340,7 @@ Bez kroků 3-5 se tlačítko připomínky v appce zobrazí a subscription se ulo
 
 Připomínka "den předem" se pošle, když do akce zbývá 2-24 hodin, a podle data zní "Dnes v 18:00" nebo "Zítra v 18:00". Když do akce zbývají méně než 2 hodiny, přijde jen připomínka "hodinu předem" ("Za 45 min: …"). Každá push zpráva má TTL do začátku akce, takže se na offline zařízení nedoručí až po ní. Texty připomínek skládá Edge Function a jsou zatím jen česky.
 
-Při nasazení změny "Push reminders per event" nejdřív spusť SQL fázi, pak znovu nasaď `send-event-reminders` a teprve potom klienta (merge do `main`). SQL jde spustit kdykoli dřív, stará funkce i starý klient s ním fungují dál. Nová funkce ale potřebuje nové sloupce z `get_pending_event_reminders()` a nový klient volá `is_push_subscribed()`.
+Po změně připomínek nejdřív spusť aktuální `all-phases.sql`, pak znovu nasaď `send-event-reminders` a teprve potom klienta (merge do `main`): funkce i klient volají RPC, které přidává SQL (`claim_event_reminder_deliveries`, `is_push_subscribed` apod.).
 
 ### Automatický úklid expirovaných akcí (a jejich fotek)
 
@@ -385,7 +385,7 @@ Organizátorovo ruční mazání používá Edge Function se service-role klíč
 supabase functions deploy delete-event-data --no-verify-jwt
 ```
 
-Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba. Jednu fotku smí smazat i ten, kdo ji nahrál: pošle mazací token, který si jeho prohlížeč pro fotku uložil při nahrání, a oprávnění ověří `authorize_event_photo_delete()` v databázi (viz [SECURITY_MODEL.md](SECURITY_MODEL.md)). Při nasazení téhle změny nejdřív spusť SQL fázi "Uploaders can delete their own photos", pak funkci znovu nasaď a teprve potom nasaď klienta (merge do `main`). SQL jde spustit kdykoli dřív, protože nové parametry mají výchozí hodnotu a staré volání dál funguje. Opačně ne: nový klient posílá `p_delete_token`, který starý `record_event_photo` nezná, takže by nahrávání fotek selhalo, a nová funkce volá `authorize_event_photo_delete()`, bez které by selhalo mazání fotek.
+Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba. Jednu fotku smí smazat i ten, kdo ji nahrál: pošle mazací token, který si jeho prohlížeč pro fotku uložil při nahrání, a oprávnění ověří `authorize_event_photo_delete()` v databázi (viz [SECURITY_MODEL.md](SECURITY_MODEL.md)). Obecně platí pořadí: nejdřív SQL, pak Edge Functions, nakonec klient (merge do `main`), protože novější funkce a klient volají RPC, které přidává až SQL.
 
 ## Lokalizace (čeština a angličtina)
 
@@ -394,7 +394,7 @@ UI je ve dvou jazycích. Čeština je zdrojový jazyk, angličtina má stejné k
 - Jazyk se při první návštěvě vybere podle prohlížeče (`cs` a `sk` -> čeština, cokoliv jiného -> angličtina) a přepíná se přepínačem CZ | EN v pravém horním rohu hlavičky každé stránky. Volba se ukládá do `localStorage` (`ruin-locale`), nastavuje se i `<html lang>`.
 - Datum a čas se formátují podle jazyka (`cs-CZ`, v angličtině `en-GB` s 24hodinovým časem).
 - Texty žijí v `client/src/locales/cs.js` a `client/src/locales/en.js`. V komponentě: `const { t } = useI18n()` a `t('sekce.klic', { parametr })`; mimo React (`lib/`) stačí importovat `t` z `client/src/lib/i18n.js`. Plurály jsou objekty podle `Intl.PluralRules` (`{ one, few, other }`), chybějící tvar spadne na `other`.
-- Nový text přidej do obou slovníků - `client/src/test/i18n.test.js` hlídá, že mají stejné klíče i stejné `{placeholdery}`.
+- Nový text přidej do obou slovníků - `client/tests/componentsTests/i18n.test.tsx` hlídá, že mají stejné klíče i stejné `{placeholdery}`.
 - Chybové hlášky z databáze (`raise exception` v `all-phases.sql`) zůstávají česky; klient je pro anglické UI přeloží podle přesného textu v `client/src/locales/serverMessages.en.js`. Když v SQL přidáš nebo přeformuluješ hlášku, doplň ji tam taky - stejný test jinak spadne. Kód, který se rozhoduje podle konkrétní hlášky, porovnává původní text z `error.serverMessage`, ne přeložené `error.message`.
 - Zatím česky zůstávají push připomínky: jejich text skládá Edge Function `send-event-reminders` a u odběru se jazyk neukládá.
 
@@ -454,6 +454,6 @@ Starší verze service workeru (`ruin-app-shell-v1`) si ukládala i soubory z Vi
 
 Vite poslouchá na `localhost`, což se může přeložit jen na IPv6 (`::1`). Otevři http://localhost:5173/, nebo dev server spusť s `--host 127.0.0.1` (viz [NPM skripty](#npm-skripty)).
 
-### `npm test` hlásí "Module <rootDir>/src/test/setup.js ... was not found"
+### `npm test` hlásí "Module <rootDir>/tests/componentsTests/setup.ts ... was not found"
 
 Jest si neporadí s cestou k projektu, která obsahuje `?` (třeba složka "Are you in?"). Vite to obchází přes `run-vite-safe.mjs`, Jest ne - naklonuj nebo zkopíruj projekt do cesty bez zvláštních znaků a testy spusť tam.

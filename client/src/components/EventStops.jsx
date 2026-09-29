@@ -26,15 +26,9 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
   }
 
   useEffect(() => {
-    // Fetch-on-mount-and-eventId-change, refreshed again by the realtime
-    // tick subscription below - there's no external system to "subscribe" to
-    // for the initial load itself, so this has to call loadStops directly.
+    // Load now, and again whenever a realtime tick says the stops changed.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadStops()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId])
-
-  useEffect(() => {
     return subscribeToEventTicks(eventId, ['stop'], loadStops)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])

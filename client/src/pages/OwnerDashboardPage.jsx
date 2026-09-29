@@ -51,47 +51,16 @@ function OwnerDashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (!owner) {
-      return undefined
+    if (owner) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadPayload(owner)
     }
-
-    let cancelled = false
-
-    getOwnerPayload(owner.ownerId, owner.token)
-      .then((nextPayload) => {
-        if (!cancelled) {
-          setPayload(nextPayload)
-          setError('')
-        }
-      })
-      .catch((loadError) => {
-        if (cancelled) {
-          return
-        }
-
-        if (isInvalidOwnerTokenError(loadError)) {
-          clearSavedOwnerIdentity()
-          setOwner(null)
-          setPayload(null)
-          return
-        }
-
-        setError(loadError.message)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [owner])
-
-  function handleAccessGranted(nextOwner) {
-    setOwner(nextOwner)
-  }
+  }, [owner, loadPayload])
 
   async function handleCreateGroup(event) {
     event.preventDefault()
 
-    if (!owner || !newGroupName.trim()) {
+    if (!newGroupName.trim()) {
       return
     }
 
@@ -110,10 +79,6 @@ function OwnerDashboardPage() {
   }
 
   async function handleDeleteGroup(groupId, groupName) {
-    if (!owner) {
-      return
-    }
-
     const confirmed = window.confirm(t('owner.confirmDeleteGroup', { name: groupName }))
 
     if (!confirmed) {
@@ -139,10 +104,6 @@ function OwnerDashboardPage() {
   async function handleAddMember(event, groupId) {
     event.preventDefault()
 
-    if (!owner) {
-      return
-    }
-
     const form = memberForms[groupId] || { name: '', phone: '' }
 
     if (!form.name.trim() || !form.phone.trim()) {
@@ -161,10 +122,6 @@ function OwnerDashboardPage() {
   }
 
   async function handleRemoveMember(groupId, memberId) {
-    if (!owner) {
-      return
-    }
-
     setBusyMemberId(memberId)
 
     try {
@@ -178,10 +135,6 @@ function OwnerDashboardPage() {
   }
 
   async function handleDeleteTemplate(templateId, templateName) {
-    if (!owner) {
-      return
-    }
-
     const confirmed = window.confirm(t('owner.confirmDeleteTemplate', { name: templateName }))
 
     if (!confirmed) {
@@ -206,7 +159,7 @@ function OwnerDashboardPage() {
   if (!owner) {
     return (
       <PageShell eyebrow={t('owner.eyebrow')} title={t('owner.signInTitle')} subtitle={t('owner.signInSubtitle')} actions={backButton}>
-        <OwnerAccessModal open onClose={() => navigate('/')} onAccessGranted={handleAccessGranted} />
+        <OwnerAccessModal open onClose={() => navigate('/')} onAccessGranted={setOwner} />
       </PageShell>
     )
   }

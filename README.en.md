@@ -81,7 +81,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasts), `qrcode` (QR codes), `jszip` (photo ZIPs)
 - Backend: Supabase - Postgres + RPC functions (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - External services: Open-Meteo (geocoding and weather forecast), Google Fonts (Space Grotesk)
-- Tests: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` for a11y assertions in tests, Puppeteer + `axe-puppeteer` for `npm run audit:a11y` against the build
+- Tests: Jest + Testing Library (`client/tests/componentsTests/*.test.ts(x)`), `jest-axe` for a11y assertions in tests (`npm --prefix client run test:a11y`)
 - Deploy: GitHub Actions -> GitHub Pages (custom domain `ruin.eckhardt.cz`)
 
 ## Repository structure
@@ -91,12 +91,12 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
   - `src/components/` - reusable UI components
   - `src/lib/` - the API layer (`api.js` is the only place that calls Supabase RPCs), the Supabase client, translations (`i18n.js`) and helpers (formatting, weather, push, QR poster, localStorage)
   - `src/locales/` - UI text dictionaries (`cs.js`, `en.js`) and the English wording of the database error messages (`serverMessages.en.js`)
-  - `src/test/` - the tests (`*.test.js`), shared test helpers and the Jest setup
+  - `tests/componentsTests/` - the Jest tests (`*.test.ts(x)`), shared test helpers and the Jest setup
+  - `tests/` - the Playwright E2E test (`app.e2e.ts`) with an in-memory fake Supabase (`fakeSupabase.ts`) and its config (`playwright.config.ts`)
   - `public/` - service worker (`sw.js`), icons and the manifest
   - `scripts/run-vite-safe.mjs` - runs Vite from a temporary copy of the project (see [NPM scripts](#npm-scripts))
 - `supabase/sql/all-phases.sql` - the whole database schema, a single SQL file
 - `supabase/functions/` - Edge Functions (`send-event-reminders` for push reminders, `cleanup-expired-events` for cleaning up expired events, `delete-event-data` for manual photo/event deletion). They run on Deno, not Node: for VS Code to stop flagging them (`Cannot find name 'Deno'`, unresolved `npm:` imports), install [Deno](https://deno.com) and the Deno extension for VS Code - `.vscode/settings.json` enables it for `supabase/functions` only.
-- `scripts/audit-a11y.mjs` - a11y audit of the built app (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) and the issue and pull request templates
 - `CNAME` - the custom domain for GitHub Pages
 
@@ -147,7 +147,7 @@ The whole database schema lives in a single file:
 supabase/sql/all-phases.sql
 ```
 
-There are no separate "phases" to put together by hand - `all-phases.sql` is the single source of truth, and every further schema change is made directly in it (not in a new file next to it). It's written to be idempotent (`create table if not exists`, `create or replace function`, `drop policy/trigger if exists` before every `create`, `on conflict do nothing` on the only top-level insert), so it's safe to run the whole file again, even on a project that already has part of the schema - Postgres just skips or replaces whatever already exists. Inside, it's split into numbered sections (`-- Phase N: ...`) whose comments explain why each change was made.
+`all-phases.sql` is the single source of truth: the whole schema in its current state, every table, function and policy exactly once. A schema change is made directly in it (not in a new file next to it), right where the object is defined; the file's header explains how for functions and tables. The whole file runs in one transaction and is idempotent (`create table if not exists`, `create or replace function`, `drop policy/trigger if exists` before every `create`), so it can be run again in full at any time, on a new or an existing project. If anything fails, nothing changes. Git keeps the history. The "Retired objects" section at the end removes what earlier versions of the file created and nothing uses any more.
 
 What `all-phases.sql` contains:
 
@@ -160,10 +160,10 @@ What `all-phases.sql` contains:
 - Community features: check-in, emoji reactions in the chat, "who brings what" / carpool lists, several stops per night, date/place polls before creating an event (with their own public link and creator link), event photos (Storage bucket `event-photos`).
 - Case-insensitive voting in polls.
 - Nudges with a repeatable 10-minute cooldown instead of "once, forever" (an atomic `on conflict ... do update ... where`), with RLS on `attendee_pings`.
-- Security hardening: `_random_token` via `pgcrypto`/`gen_random_bytes()` instead of the non-cryptographic `random()` (the token is the only authorization for `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` returns phone numbers only with a valid `p_organizer_token`; a fixed race condition in `moderate_attendee`; a readable message instead of a raw Postgres error on a phone number conflict. Deliberately not addressed: `organizer_token` stays readable (not hashed), because the app can "recover" a forgotten manage link via the PIN, and that isn't possible with a one-way hash without rebuilding the whole recovery flow. The whole identity/authorization model (the app has no auth at all, the only "permissions" are tokens in links, RLS must deny everything by default) is written up in [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md).
+- Security hardening: `_random_token` via `pgcrypto`/`gen_random_bytes()` instead of the non-cryptographic `random()` (the token is the only authorization for `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` returns phone numbers only with a valid `p_organizer_token` and refuses an invalid one (the management page then asks for the PIN again); a fixed race condition in `moderate_attendee`; a readable message instead of a raw Postgres error on a phone number conflict. Deliberately not addressed: `organizer_token` stays readable (not hashed), because the app can "recover" a forgotten manage link via the PIN, and that isn't possible with a one-way hash without rebuilding the whole recovery flow. The whole identity/authorization model (the app has no auth at all, the only "permissions" are tokens in links, RLS must deny everything by default) is written up in [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md).
 - Deleting photos from Storage - manual deletion goes through the `delete-event-data` Edge Function, which validates the organizer token, or the delete token of whoever uploaded the photo; automatic deletion after 7 days goes through `get_expired_event_ids()` and the `cleanup-expired-events` Edge Function - and polls have their own lifecycle (an undecided poll expires 14 days after it was created, a decided one is removed automatically together with the event it created).
 - Blocking a driver from signing up for their own ride offer + the option to remove a specific passenger from your own offer.
-- Read hardening: chat, photos, polls, lists and stops can only be read through RPCs scoped to a specific event (the direct `select` policies are `using (false)`), and realtime goes through `event_realtime_ticks`.
+- Read hardening: chat, photos, polls, lists and stops can only be read through RPCs scoped to a specific event (RLS doesn't allow reading the tables directly), and realtime goes through `event_realtime_ticks`.
 - The organizer as a separate identity (`events.organizer_name`) - chat messages, nudges, photos and items from event management are signed with the organizer's name.
 - Server-side limits on photo uploads (bucket `event-photos`: 10 MB max, images only, at most 50 photos per event, and uploads restricted to folders for existing events).
 - Photo likes and comments (`event_photo_likes`, `event_photo_comments`): reads and writes go through RPCs only (`get_event_photo_likes`, `get_event_photo_comments`, `toggle_event_photo_like`, `add_event_photo_comment`, `delete_event_photo_comment`), one like per name and photo, comments up to 500 characters, at most 200 comments per photo, and only the organizer can delete comments. Open albums refresh through the `photo`, `photo_like` and `photo_comment` realtime ticks.
@@ -186,7 +186,6 @@ Repository root (`package.json`):
 - `npm run dev` - client development server
 - `npm run build` - client production build
 - `npm run test` - runs the client tests (`npm --prefix client run test`)
-- `npm run audit:a11y` - build + a11y audit script
 - `npm run install:all` / `npm run postinstall` - installs the dependencies in `client/` (runs automatically after `npm install` in the root)
 
 Client (`client/package.json`):
@@ -195,8 +194,10 @@ Client (`client/package.json`):
 - `npm --prefix client run build`
 - `npm --prefix client run preview`
 - `npm --prefix client run lint` - ESLint
-- `npm --prefix client run test` - Jest (unit, component + a11y tests, `*.test.js`)
+- `npm --prefix client run test` - Jest (unit, component + a11y tests, `*.test.ts(x)`)
 - `npm --prefix client run test:a11y` - only the tests matching the `a11y` pattern
+- `npm --prefix client run typecheck` - type-checks the tests (`tsc -p tests`). The tests are TypeScript while the app stays JavaScript; Jest and Playwright only strip the types, so this script (and CI) is what checks them.
+- `npm --prefix client run test:e2e` - the Playwright E2E test: walks through the whole app (creating an event, editing it, RSVPs, chat, bring list, photos, pings, accepting an excuse, a poll, feedback, dark mode) once in Czech and once in English. It starts its own dev server against an in-memory fake Supabase and never touches the real project. Run `npx playwright install chromium` once first.
 
 The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-safe.mjs`. It copies the project into a temporary folder (only symlinking `src` and `public`) and runs Vite there, because Vite can't cope with a path that contains e.g. a `?` (the "Are you in?" folder). Changes in `src/` and `public/` show up right away; after changing `vite.config.js` or `package.json`, restart the dev server. Pass your own Vite options straight to this script, e.g. `node scripts/run-vite-safe.mjs dev --host 127.0.0.1` in the `client` directory - they don't get through `npm run dev -- ...`.
 
@@ -204,8 +205,7 @@ The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-s
 
 - `npm test` runs Jest (jsdom + Testing Library + `jest-axe`): unit tests for `lib/`, component tests and a11y tests.
 - The localization tests check that `cs.js` and `en.js` have the same keys and `{placeholders}`, and that every message in `all-phases.sql` has an English translation (see [Localization](#localization-czech-and-english)).
-- The Jest setup (`client/src/test/setup.js`) switches the UI to Czech - jsdom reports itself as `en-US`, so the app would otherwise run in English.
-- `npm run audit:a11y` builds the app and runs an axe audit of the home page, the invite and event management in Puppeteer.
+- The Jest setup (`client/tests/componentsTests/setup.ts`) switches the UI to Czech - jsdom reports itself as `en-US`, so the app would otherwise run in English.
 - CI (the `ci` job in `.github/workflows/deploy-pages.yml`) runs lint and tests on every pull request to `main` and on every push to `main`. Build and deploy run only on a push to `main` (or a manual run), and only when `ci` passes.
 - Jest doesn't work when the project path contains a `?` - see [Troubleshooting](#troubleshooting).
 
@@ -340,7 +340,7 @@ Without steps 3-5, the reminder button shows up in the app and the subscription 
 
 The "a day before" reminder goes out when the event is 2-24 hours away and, depending on the date, reads "Today at 18:00" or "Tomorrow at 18:00" (in Czech). When the event is less than 2 hours away, only the "an hour before" reminder arrives ("In 45 min: …"). Every push message has a TTL until the event starts, so an offline device doesn't get it after the event. The reminder texts are put together by the Edge Function and are only in Czech for now.
 
-When deploying the "Push reminders per event" change, run the SQL phase first, then redeploy `send-event-reminders`, and only then deploy the client (merge into `main`). The SQL can run any time before that; the old function and the old client keep working with it. The new function, however, needs the new columns from `get_pending_event_reminders()`, and the new client calls `is_push_subscribed()`.
+After a reminders change, first run the current `all-phases.sql`, then redeploy `send-event-reminders`, and only then deploy the client (merge into `main`): the function and the client call RPCs that the SQL adds (`claim_event_reminder_deliveries`, `is_push_subscribed` and so on).
 
 ### Automatic cleanup of expired events (and their photos)
 
@@ -385,7 +385,7 @@ Manual organizer deletion uses an Edge Function with the service-role key so Sto
 supabase functions deploy delete-event-data --no-verify-jwt
 ```
 
-The function validates the organizer token against the requested event; it needs no schedule, and the service-role key never goes to the client. A single photo can also be deleted by whoever uploaded it: they send the delete token their browser saved for the photo on upload, and `authorize_event_photo_delete()` checks it in the database (see [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md)). When deploying this change, run the SQL phase "Uploaders can delete their own photos" first, then redeploy the function, and only then deploy the client (merge into `main`). The SQL can run any time before that, since the new parameters have defaults and the old calls keep working. Not the other way round: the new client sends `p_delete_token`, which the old `record_event_photo` doesn't know, so photo uploads would fail, and the new function calls `authorize_event_photo_delete()`, without which photo deletes would fail.
+The function validates the organizer token against the requested event; it needs no schedule, and the service-role key never goes to the client. A single photo can also be deleted by whoever uploaded it: they send the delete token their browser saved for the photo on upload, and `authorize_event_photo_delete()` checks it in the database (see [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md)). The general order is: SQL first, then the Edge Functions, then the client (merge into `main`), because newer functions and clients call RPCs that only the SQL adds.
 
 ## Localization (Czech and English)
 
@@ -394,7 +394,7 @@ The UI comes in two languages. Czech is the source language; English has the sam
 - On the first visit, the language is picked from the browser (`cs` and `sk` -> Czech, anything else -> English), and it's switched with the CZ | EN toggle in the top-right corner of every page's header. The choice is saved in `localStorage` (`ruin-locale`), and `<html lang>` is set as well.
 - Dates and times are formatted for the language (`cs-CZ`; in English `en-GB` with a 24-hour clock).
 - The texts live in `client/src/locales/cs.js` and `client/src/locales/en.js`. In a component: `const { t } = useI18n()` and `t('section.key', { param })`; outside React (`lib/`), just import `t` from `client/src/lib/i18n.js`. Plurals are objects keyed by `Intl.PluralRules` category (`{ one, few, other }`); a missing form falls back to `other`.
-- Add every new text to both dictionaries - `client/src/test/i18n.test.js` checks that they have the same keys and the same `{placeholders}`.
+- Add every new text to both dictionaries - `client/tests/componentsTests/i18n.test.tsx` checks that they have the same keys and the same `{placeholders}`.
 - Database error messages (`raise exception` in `all-phases.sql`) stay in Czech; for the English UI, the client translates them by their exact text using `client/src/locales/serverMessages.en.js`. When you add or reword a message in the SQL, add it there too - otherwise the same test fails. Code that branches on a specific message compares the original text from `error.serverMessage`, not the translated `error.message`.
 - Push reminders are still in Czech for now: their text is put together by the `send-event-reminders` Edge Function, and the language isn't stored with the subscription.
 
@@ -454,6 +454,6 @@ An older version of the service worker (`ruin-app-shell-v1`) also cached files f
 
 Vite listens on `localhost`, which may resolve to IPv6 only (`::1`). Open http://localhost:5173/, or start the dev server with `--host 127.0.0.1` (see [NPM scripts](#npm-scripts)).
 
-### `npm test` reports "Module <rootDir>/src/test/setup.js ... was not found"
+### `npm test` reports "Module <rootDir>/tests/componentsTests/setup.ts ... was not found"
 
 Jest can't cope with a project path that contains a `?` (e.g. the "Are you in?" folder). Vite works around this with `run-vite-safe.mjs`, Jest doesn't - clone or copy the project to a path without special characters and run the tests there.

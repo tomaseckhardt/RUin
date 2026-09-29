@@ -7,10 +7,8 @@ import App from './App.jsx'
 import { installEnterToSubmit } from './lib/enterToSubmit.js'
 import { ensurePushServiceWorker } from './lib/push.js'
 
-if (typeof window !== 'undefined') {
-  ensurePushServiceWorker().catch(() => {})
-  installEnterToSubmit()
-}
+ensurePushServiceWorker().catch(() => {})
+installEnterToSubmit()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

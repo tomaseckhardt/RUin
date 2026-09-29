@@ -29,7 +29,6 @@ export default {
   },
 
   shell: {
-    lightMode: 'Light mode',
     darkMode: 'Dark mode',
     language: 'Language',
     theme: 'Theme',
@@ -237,7 +236,6 @@ export default {
     excuseAccepted: 'Excuse accepted.',
     excuseRejected: 'Excuse rejected.',
     confirmDeleteEvent: 'Do you really want to delete this event? This can’t be undone.',
-    photosNotDeleted: 'The photos couldn’t be deleted from storage, but the event will disappear.',
     eventDeleted: 'The event has been deleted.',
     eventUpdated: 'Event details updated.',
     confirmDeleteAttendee: 'Do you really want to remove {name}?',
@@ -246,8 +244,6 @@ export default {
     unlockedAndSaved: 'Management unlocked. You’ll stay signed in next time.',
     editTitle: 'Change the basics',
     editHint: 'You can change the name, location and date. The invite updates right away.',
-    editNamePlaceholder: 'e.g. Summer barbecue',
-    editLocationPlaceholder: 'e.g. Stromovka park',
     saveChanges: 'Save changes',
     unlockModalHint: 'You only enter the PIN once. The login is saved on this device.',
   },
@@ -434,6 +430,7 @@ export default {
     reactNeedsName: 'Sign in with your name before reacting.',
     chatNeedsName: 'Sign in with your name before chatting.',
     missingName: 'Missing a name for the chat.',
+    addReaction: 'Add a reaction',
   },
 
   stops: {
@@ -486,7 +483,6 @@ export default {
     likedBy: 'Liked by {names}',
     likeNeedsName: 'Fill in your name in the RSVP to like a photo.',
     commentsTitle: 'Comments',
-    commentCount: { one: '{count} comment', other: '{count} comments' },
     noComments: 'No comments yet. Be the first.',
     commentLabel: 'Comment on the photo',
     commentPlaceholder: 'Write a comment…',
@@ -494,7 +490,6 @@ export default {
     commentNeedsName: 'Fill in your name in the RSVP to comment.',
     deleteComment: 'Delete the comment from {name}',
     confirmDeleteComment: 'Do you really want to delete this comment?',
-    storageDeleteFailed: 'The photo couldn’t be deleted from storage, but its record will disappear.',
     nothingToDownload: 'Nothing to download - you uploaded the rest of the photos yourself.',
     downloadOneFailed: 'Couldn’t download the photo from {name}.',
     zipFileName: 'photos-{id}.zip',
@@ -587,7 +582,6 @@ export default {
   },
 
   weather: {
-    title: 'Weather',
     conditions: {
       clear: 'Clear',
       mostlyClear: 'Mostly clear',

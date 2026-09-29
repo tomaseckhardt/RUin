@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
-function getCurrentOnlineStatus() {
-  if (typeof navigator === 'undefined') {
-    return true
+function subscribe(onChange) {
+  window.addEventListener('online', onChange)
+  window.addEventListener('offline', onChange)
+
+  return () => {
+    window.removeEventListener('online', onChange)
+    window.removeEventListener('offline', onChange)
   }
-
-  return navigator.onLine
 }
 
 // Tracks browser-level connectivity (navigator.onLine plus the window
@@ -14,27 +16,5 @@ function getCurrentOnlineStatus() {
 // internet/Supabase is unreachable" - but it's enough to show a "you're
 // offline" banner and to know when it's worth replaying queued requests.
 export function useOnlineStatus() {
-  const [isOnline, setIsOnline] = useState(getCurrentOnlineStatus)
-
-  useEffect(() => {
-    function handleOnline() {
-      setIsOnline(true)
-    }
-
-    function handleOffline() {
-      setIsOnline(false)
-    }
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [])
-
-  return isOnline
+  return useSyncExternalStore(subscribe, () => navigator.onLine)
 }
-
-export default useOnlineStatus

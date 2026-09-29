@@ -4,7 +4,7 @@ const APP_BASE_PATH = import.meta.env.BASE_URL || '/'
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY?.trim() || ''
 
 function isServiceWorkerSupported() {
-  return typeof window !== 'undefined' && 'serviceWorker' in navigator
+  return 'serviceWorker' in navigator
 }
 
 function isPushSupported() {

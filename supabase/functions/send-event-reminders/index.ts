@@ -21,16 +21,15 @@
 // dashboard's Cron Jobs UI) must be configured to send that header. See
 // "Automatické připomínky před akcí" in README.md.
 
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
+import { errorMessage, refuseUnlessScheduler } from '../_shared/common.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')
 const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')
 const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:admin@example.com'
-
-const hasRequiredSecrets = Boolean(supabaseUrl && serviceRoleKey && vapidPublicKey && vapidPrivateKey)
 
 type EventReminder = {
   event_id: string
@@ -48,17 +47,15 @@ type PushSubscription = {
   auth: string
 }
 
-if (!hasRequiredSecrets) {
-  console.error('Missing required secrets (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY/VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY).')
-}
-
 // Both of these throw synchronously on a falsy key - only call them once we
 // know every secret is actually present, so a missing secret surfaces as the
 // handler's "Server misconfigured" response below instead of a boot-time crash.
-const supabase = hasRequiredSecrets ? createClient(supabaseUrl, serviceRoleKey) : null
+const supabase = supabaseUrl && serviceRoleKey && vapidPublicKey && vapidPrivateKey ? createClient(supabaseUrl, serviceRoleKey) : null
 
-if (hasRequiredSecrets) {
+if (supabase) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
+} else {
+  console.error('Missing required secrets (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY/VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY).')
 }
 
 // Worded by when the event really starts (starts_in_seconds, starts_today and
@@ -90,22 +87,9 @@ function buildNotificationPayload(reminder: EventReminder) {
   }
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function errorStatusCode(error: unknown) {
-  if (typeof error !== 'object' || error === null || !('statusCode' in error)) {
-    return null
-  }
-
-  const statusCode = error.statusCode
-  return typeof statusCode === 'number' ? statusCode : null
-}
-
 // Claims one batch of endpoints for this reminder. A delivery is acknowledged
 // only after push succeeds; transient failures keep their own retry state.
-async function processReminder(reminder: EventReminder) {
+async function processReminder(supabase: SupabaseClient, reminder: EventReminder) {
   const { data: subscriptions, error: subscriptionsError } = await supabase.rpc('claim_event_reminder_deliveries', {
     p_event_id: reminder.event_id,
     p_reminder_type: reminder.reminder_type,
@@ -147,40 +131,33 @@ async function processReminder(reminder: EventReminder) {
       }
     } catch (sendError: unknown) {
       failedCount += 1
-      const statusCode = errorStatusCode(sendError)
+      const statusCode = (sendError as { statusCode?: unknown } | null)?.statusCode
 
+      // 404/410: the browser dropped the subscription, so it goes for good.
       if (statusCode === 404 || statusCode === 410) {
         const { error: deleteError } = await supabase.rpc('delete_push_subscription_by_endpoint', {
           p_endpoint: subscription.endpoint,
         })
 
-        if (deleteError) {
-          console.error(`Failed to delete dead subscription ${subscription.endpoint}:`, deleteError.message)
-
-          const { error: releaseError } = await supabase.rpc('mark_event_reminder_delivery', {
-            p_event_id: reminder.event_id,
-            p_reminder_type: reminder.reminder_type,
-            p_endpoint: subscription.endpoint,
-            p_sent: false,
-          })
-
-          if (releaseError) {
-            console.error(`Failed to release reminder claim for ${subscription.endpoint}:`, releaseError.message)
-          }
+        if (!deleteError) {
+          continue
         }
+
+        console.error(`Failed to delete dead subscription ${subscription.endpoint}:`, deleteError.message)
       } else {
         console.error(`Push failed for endpoint ${subscription.endpoint}:`, errorMessage(sendError))
+      }
 
-        const { error: releaseError } = await supabase.rpc('mark_event_reminder_delivery', {
-          p_event_id: reminder.event_id,
-          p_reminder_type: reminder.reminder_type,
-          p_endpoint: subscription.endpoint,
-          p_sent: false,
-        })
+      // Release the claim so the next run retries this endpoint.
+      const { error: releaseError } = await supabase.rpc('mark_event_reminder_delivery', {
+        p_event_id: reminder.event_id,
+        p_reminder_type: reminder.reminder_type,
+        p_endpoint: subscription.endpoint,
+        p_sent: false,
+      })
 
-        if (releaseError) {
-          console.error(`Failed to release reminder claim for ${subscription.endpoint}:`, releaseError.message)
-        }
+      if (releaseError) {
+        console.error(`Failed to release reminder claim for ${subscription.endpoint}:`, releaseError.message)
       }
     }
   }
@@ -198,33 +175,30 @@ async function processReminder(reminder: EventReminder) {
 }
 
 Deno.serve(async (req: Request) => {
-  if (!supabase) {
-    return new Response(JSON.stringify({ error: 'Server misconfigured: missing secrets.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  if (!supabase || !serviceRoleKey) {
+    return Response.json({ error: 'Server misconfigured: missing secrets.' }, { status: 500 })
   }
 
-  if (req.headers.get('authorization') !== `Bearer ${serviceRoleKey}`) {
-    return new Response(JSON.stringify({ error: 'Unauthorized.' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+  const refusal = refuseUnlessScheduler(req, serviceRoleKey)
+
+  if (refusal) {
+    return refusal
   }
 
   const { data: reminders, error: remindersError } = await supabase.rpc('get_pending_event_reminders')
 
   if (remindersError) {
-    return new Response(JSON.stringify({ error: remindersError.message }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+    return Response.json({ error: remindersError.message }, { status: 500 })
   }
 
   let sentCount = 0
   let failedCount = 0
 
   for (const reminder of (reminders ?? []) as EventReminder[]) {
-    const result = await processReminder(reminder)
+    const result = await processReminder(supabase, reminder)
     sentCount += result.sentCount
     failedCount += result.failedCount
   }
 
-  return new Response(JSON.stringify({ processedReminders: reminders?.length ?? 0, sentCount, failedCount }), {
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return Response.json({ processedReminders: reminders?.length ?? 0, sentCount, failedCount })
 })

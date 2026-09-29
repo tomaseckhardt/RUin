@@ -2,6 +2,7 @@ import { Fragment, createElement, isValidElement, useSyncExternalStore } from 'r
 import cs from '../locales/cs.js'
 import en from '../locales/en.js'
 import enServerMessages from '../locales/serverMessages.en.js'
+import { readStoredValue, writeStoredValue } from './browserStorage.js'
 
 const LOCALE_STORAGE_KEY = 'ruin-locale'
 const DICTIONARIES = { cs, en }
@@ -38,27 +39,17 @@ export function detectLocale(languages) {
 }
 
 function readSavedLocale() {
-  try {
-    const saved = window.localStorage.getItem(LOCALE_STORAGE_KEY)
-    return SUPPORTED_LOCALES.includes(saved) ? saved : null
-  } catch {
-    return null
-  }
+  const saved = readStoredValue(LOCALE_STORAGE_KEY)
+  return SUPPORTED_LOCALES.includes(saved) ? saved : null
 }
 
 function getInitialLocale() {
-  if (typeof window === 'undefined') {
-    return 'cs'
-  }
-
   const browserLanguages = navigator.languages?.length ? navigator.languages : [navigator.language]
   return readSavedLocale() || detectLocale(browserLanguages)
 }
 
 function applyDocumentLanguage(locale) {
-  if (typeof document !== 'undefined') {
-    document.documentElement.lang = locale
-  }
+  document.documentElement.lang = locale
 }
 
 let currentLocale = getInitialLocale()
@@ -81,11 +72,7 @@ export function setLocale(nextLocale) {
 
   currentLocale = nextLocale
 
-  try {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale)
-  } catch {
-    // Ignore storage failures in restricted browser environments.
-  }
+  writeStoredValue(LOCALE_STORAGE_KEY, nextLocale)
 
   applyDocumentLanguage(nextLocale)
   listeners.forEach((listener) => listener())

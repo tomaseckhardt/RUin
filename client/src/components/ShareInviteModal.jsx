@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import ModalOverlay from './ModalOverlay.jsx'
+import { downloadHref } from '../lib/download.js'
 import { createQrPosterDataUrl, dataUrlToFile } from '../lib/qrPoster.js'
 import { formatDateTime, shouldShowPastEventBadge } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
@@ -86,12 +87,7 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
       return
     }
 
-    const link = document.createElement('a')
-    link.href = qrDataUrl
-    link.download = t('share.qrFileName', { id: eventId || 'ruin' })
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    downloadHref(qrDataUrl, t('share.qrFileName', { id: eventId || 'ruin' }))
   }
 
   async function handleShareQrPng() {

@@ -16,15 +16,13 @@ import {
   toggleEventPhotoLike,
   uploadEventPhoto,
 } from '../lib/api.js'
+import { downloadBlob } from '../lib/download.js'
 import { useI18n } from '../lib/i18n.js'
-import { clearPhotoDeleteToken, createPhotoDeleteToken, getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
+import { clearPhotoDeleteToken, getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
+import { normalizeName } from '../lib/normalizeName.js'
 
 const NO_ROWS = []
-
-function normalizeName(value) {
-  return (value || '').trim().toLocaleLowerCase('cs-CZ')
-}
 
 function groupByPhoto(rows, pick) {
   const groups = new Map()
@@ -38,6 +36,13 @@ function groupByPhoto(rows, pick) {
   return groups
 }
 
+/**
+ * @param {object} props
+ * @param {string} props.eventId
+ * @param {string} [props.currentName] the viewer's RSVP name, credited on uploads, likes and comments
+ * @param {boolean} [props.isOrganizer]
+ * @param {string | null} [props.organizerToken] lets the organizer delete any photo or comment
+ */
 function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToken = null }) {
   const { t } = useI18n()
   const [photos, setPhotos] = useState([])
@@ -133,14 +138,9 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   }
 
   useEffect(() => {
-    // Fetch-on-mount-and-eventId-change, refreshed again by the realtime
-    // tick subscription below.
+    // Load now, and again whenever a realtime tick says the photos changed.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPhotos()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId])
-
-  useEffect(() => {
     return subscribeToEventTicks(eventId, ['photo', 'photo_like', 'photo_comment'], loadPhotos)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
@@ -170,7 +170,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         }
 
         try {
-          const deleteToken = createPhotoDeleteToken()
+          const deleteToken = crypto.randomUUID()
           const storagePath = await uploadEventPhoto(eventId, file, deleteToken)
           // Saved before recording: if the record goes through but its
           // response is lost, the token must not be lost with it.
@@ -314,15 +314,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         }),
       )
 
-      const zipBlob = await zip.generateAsync({ type: 'blob' })
-      const url = URL.createObjectURL(zipBlob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = t('photos.zipFileName', { id: eventId })
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      downloadBlob(await zip.generateAsync({ type: 'blob' }), t('photos.zipFileName', { id: eventId }))
 
       toast.success(t('photos.downloaded', { count: othersPhotos.length }))
     } catch (error) {

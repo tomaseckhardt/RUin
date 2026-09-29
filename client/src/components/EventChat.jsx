@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { getChatReactions, getEventChatMessages, sendEventChatMessage, toggleChatReaction } from '../lib/api.js'
 import { getIntlLocale, useI18n } from '../lib/i18n.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
+import { normalizeName } from '../lib/normalizeName.js'
 
 const CHAT_MESSAGE_MAX = 500
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '🍻']
@@ -19,10 +20,6 @@ function groupReactions(reactions) {
   return [...groups.entries()].map(([emoji, senderNames]) => ({ emoji, senderNames }))
 }
 
-function normalizeName(value) {
-  return value.trim().toLocaleLowerCase('cs-CZ')
-}
-
 function toTimeLabel(value) {
   const date = new Date(value)
 
@@ -36,45 +33,11 @@ function toTimeLabel(value) {
   })
 }
 
-function sortMessages(messages) {
-  return [...messages].sort((a, b) => {
-    const dateA = new Date(a.created_at).getTime()
-    const dateB = new Date(b.created_at).getTime()
+// Adds fetched or just-sent messages, one copy per id, oldest first.
+function mergeMessages(previousMessages, incomingMessages) {
+  const byId = new Map([...previousMessages, ...incomingMessages].map((message) => [message.id, message]))
 
-    if (dateA === dateB) {
-      return a.id - b.id
-    }
-
-    return dateA - dateB
-  })
-}
-
-function upsertMessage(messages, incomingMessage) {
-  if (!incomingMessage?.id) {
-    return messages
-  }
-
-  const exists = messages.some((message) => message.id === incomingMessage.id)
-
-  if (exists) {
-    return messages
-  }
-
-  return sortMessages([...messages, incomingMessage])
-}
-
-function mergeMessages(previousMessages, fetchedMessages) {
-  const merged = new Map()
-
-  for (const message of previousMessages) {
-    merged.set(message.id, message)
-  }
-
-  for (const message of fetchedMessages) {
-    merged.set(message.id, message)
-  }
-
-  return sortMessages([...merged.values()])
+  return [...byId.values()].sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || a.id - b.id)
 }
 
 function EventChat({ eventId, currentName, canSend }) {
@@ -134,15 +97,9 @@ function EventChat({ eventId, currentName, canSend }) {
   }
 
   useEffect(() => {
-    // Fetch-on-mount-and-eventId-change, refreshed again by the realtime
-    // tick subscription below - there's no external system to "subscribe" to
-    // for the initial load itself.
+    // Load now, and again whenever a realtime tick says the chat changed.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadMessages()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId])
-
-  useEffect(() => {
     return subscribeToEventTicks(eventId, ['chat_message', 'chat_reaction'], loadMessages)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
@@ -211,7 +168,9 @@ function EventChat({ eventId, currentName, canSend }) {
 
     try {
       const savedMessage = await sendEventChatMessage(eventId, currentName, messageInput)
-      setMessages((previousMessages) => upsertMessage(previousMessages, savedMessage))
+      if (savedMessage) {
+        setMessages((previousMessages) => mergeMessages(previousMessages, [savedMessage]))
+      }
       setMessageInput('')
     } catch (error) {
       toast.error(error.message)
@@ -274,6 +233,8 @@ function EventChat({ eventId, currentName, canSend }) {
                 <button
                   type="button"
                   onClick={() => setOpenPickerFor((current) => (current === message.id ? null : message.id))}
+                  aria-label={t('chat.addReaction')}
+                  aria-expanded={openPickerFor === message.id}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-xs text-slate-400 hover:text-slate-700 dark:border-slate-700 dark:text-slate-500 dark:hover:text-slate-200">
                   +
                 </button>

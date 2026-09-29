@@ -15,9 +15,14 @@ if (!globalThis.crypto?.subtle) {
   Object.defineProperty(globalThis.crypto, 'subtle', { value: webcrypto.subtle })
 }
 
+declare global {
+  // Set below, read by the code babel-plugin-import-meta-env.cjs generates.
+  var __vite_import_meta__: { env: Record<string, string> }
+}
+
 // jsdom doesn't implement matchMedia; PageShell reads prefers-color-scheme.
 if (typeof window !== 'undefined' && !window.matchMedia) {
-  window.matchMedia = (query) => ({
+  window.matchMedia = (query: string): MediaQueryList => ({
     matches: false,
     media: query,
     onchange: null,

@@ -1,9 +1,7 @@
+import { normalizeName } from './normalizeName.js'
+
 export function createEmptyInvitee() {
   return { key: crypto.randomUUID(), name: '', phone: '' }
-}
-
-function normalizeForDedupe(value) {
-  return (value || '').trim().toLocaleLowerCase('cs-CZ')
 }
 
 // Filters out rows the user never filled in, and trims whitespace - both
@@ -21,11 +19,11 @@ export function getFilledInvitees(invitees) {
 // picking the same group twice - or picking two overlapping groups - doesn't
 // create duplicate rows.
 export function mergeInvitees(existing, incoming) {
-  const seen = new Set(existing.map((invitee) => normalizeForDedupe(invitee.phone) || normalizeForDedupe(invitee.name)))
+  const seen = new Set(existing.map((invitee) => normalizeName(invitee.phone) || normalizeName(invitee.name)))
   const merged = [...existing]
 
   for (const member of incoming) {
-    const key = normalizeForDedupe(member.phone) || normalizeForDedupe(member.name)
+    const key = normalizeName(member.phone) || normalizeName(member.name)
 
     if (!key || seen.has(key)) {
       continue

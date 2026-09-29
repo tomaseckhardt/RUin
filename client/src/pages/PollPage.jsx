@@ -3,14 +3,12 @@ import { toast } from 'sonner'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import PageShell from '../components/PageShell.jsx'
 import { finalizePoll, getPollPayload, votePoll } from '../lib/api.js'
+import { readStoredValue, writeStoredValue } from '../lib/browserStorage.js'
 import { formatDateTime } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
+import { normalizeName } from '../lib/normalizeName.js'
 
 const VOTER_STORAGE_PREFIX = 'ruin-poll-voter'
-
-function normalizeName(value) {
-  return value.trim().toLocaleLowerCase('cs-CZ')
-}
 
 function voterStorageKey(pollId) {
   return `${VOTER_STORAGE_PREFIX}:${pollId}`
@@ -25,10 +23,8 @@ function PollPage() {
   const [payload, setPayload] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [voterName, setVoterName] = useState(() => (typeof window === 'undefined' ? '' : window.localStorage.getItem(voterStorageKey(id)) || ''))
-  const [selectedOptionId, setSelectedOptionId] = useState(null)
-  const [hasSelectedManually, setHasSelectedManually] = useState(false)
-  const [lastAutoSelectedId, setLastAutoSelectedId] = useState(null)
+  const [voterName, setVoterName] = useState(() => readStoredValue(voterStorageKey(id)) || '')
+  const [pickedOptionId, setPickedOptionId] = useState(null)
   const [isVoting, setIsVoting] = useState(false)
   const [finalizingOptionId, setFinalizingOptionId] = useState(null)
   const [organizerPin, setOrganizerPin] = useState('')
@@ -60,15 +56,13 @@ function PollPage() {
       ? payload.options.find((option) => option.votes.some((voterEntry) => normalizeName(voterEntry) === normalizedVoterName))
       : null
 
-  if (!hasSelectedManually && myExistingVoteOption && myExistingVoteOption.id !== lastAutoSelectedId) {
-    setLastAutoSelectedId(myExistingVoteOption.id)
-    setSelectedOptionId(myExistingVoteOption.id)
-  }
+  // Until the voter picks an option, their existing vote is preselected.
+  const chosenId = pickedOptionId ?? myExistingVoteOption?.id ?? null
 
   async function handleVote(event) {
     event.preventDefault()
 
-    if (!voterName.trim() || !selectedOptionId) {
+    if (!voterName.trim() || !chosenId) {
       toast.error(t('poll.nameAndOptionRequired'))
       return
     }
@@ -76,8 +70,8 @@ function PollPage() {
     setIsVoting(true)
 
     try {
-      await votePoll(id, selectedOptionId, voterName)
-      window.localStorage.setItem(voterStorageKey(id), voterName.trim())
+      await votePoll(id, chosenId, voterName)
+      writeStoredValue(voterStorageKey(id), voterName.trim())
       toast.success(t('poll.voteSaved'))
       await loadPoll()
     } catch (voteError) {
@@ -143,10 +137,13 @@ function PollPage() {
           <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('poll.options')}</p>
           <div className="mt-4 space-y-3">
             {options.map((option) => {
-              const isHighlighted = isCreator ? finalizingOptionId === option.id : selectedOptionId === option.id
+              const isHighlighted = isCreator ? finalizingOptionId === option.id : chosenId === option.id
+              // A voter's option labels its radio. The creator's has a button
+              // instead, which a <label> would name after the whole card.
+              const OptionCard = isCreator ? 'div' : 'label'
 
               return (
-                <label
+                <OptionCard
                   key={option.id}
                   className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-4 transition sm:flex-row sm:items-center sm:justify-between ${isHighlighted ? 'border-fuchsia-300 bg-fuchsia-50/60 dark:border-fuchsia-500/60 dark:bg-fuchsia-950/20' : 'border-slate-200 dark:border-slate-700'}`}>
                   <div className="flex items-center gap-3">
@@ -155,11 +152,8 @@ function PollPage() {
                         type="radio"
                         name="poll-option"
                         className="h-4 w-4 accent-fuchsia-600"
-                        checked={selectedOptionId === option.id}
-                        onChange={() => {
-                          setHasSelectedManually(true)
-                          setSelectedOptionId(option.id)
-                        }}
+                        checked={chosenId === option.id}
+                        onChange={() => setPickedOptionId(option.id)}
                       />
                     ) : null}
                     <div>
@@ -181,7 +175,7 @@ function PollPage() {
                       </button>
                     ) : null}
                   </div>
-                </label>
+                </OptionCard>
               )
             })}
           </div>

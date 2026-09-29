@@ -39,9 +39,10 @@ jiného účastníka viditelné veřejně na stránce akce, může teoreticky za
 stejné RPC pod tímto jménem - to není bug, který jde "opravit" v jedné funkci,
 je to důsledek toho, že appka nemá auth vrstvu vůbec. Konkrétní příklad, kde se
 na tenhle rozdíl (mezi "ověřit, že pole nedělá dvojí roli" a "skutečně ověřit
-identitu") narazilo, je popsaný přímo v kódu u `unclaim_signup_item` (fáze
-"Realtime read hardening", `supabase/sql/all-phases.sql`) - stojí tam za
-přečtení jako přesná formulace limitu tohoto modelu.
+identitu") narazilo, je `unclaim_signup_item`: bere jméno toho, koho
+odhlašuje, i jméno volajícího a vyžaduje, aby se shodovala. Tím jedno pole
+přestalo dělat dvojí roli, ale identitu to neověří - kdo pošle cizí jméno
+dvakrát, projde.
 
 Co z toho plyne pro nový kód: nikdy nepočítej s tím, že `p_attendee_name`,
 `p_sender_name` apod. je důkaz, kdo volání skutečně provedl. Je to jen popisek,
@@ -53,8 +54,7 @@ který si vymyslel volající.
 
 Organizátor akce nemá účet ani heslo - má jen **odkaz na správu akce**
 (`.../#/event/:eventId/manage?token=...`). Ten `token` je náhodný řetězec
-(`_random_token()` přes `pgcrypto`/`gen_random_bytes()`, viz "Security
-hardening" fáze), uložený v `events.organizer_token` a poslaný v query stringu
+(`_random_token()` přes `pgcrypto`/`gen_random_bytes()`), uložený v `events.organizer_token` a poslaný v query stringu
 odkazu v čistém textu.
 
 Klíčová vlastnost: **kdo má tuhle URL, je organizátor** - žádná session, žádné
@@ -75,9 +75,8 @@ Tohle je vědomý kompromis, ne opomenutí - flow "zapomněl jsi odkaz na správ
 zadej PIN" po ověření PINu vrací **původní token zpátky uživateli**, aby si mohl
 znovu otevřít správu akce. To s jednosměrným hashem nejde - hash se nedá zpětně
 převést na originál. Přesně tenhle tradeoff (a proč by jeho oprava znamenala
-předělat celý recovery flow, ne jen jednu funkci) je zdokumentovaný v komentáři
-u fáze 14 (`-- Phase 14: Security/correctness hardening...`) v
-`supabase/sql/all-phases.sql`.
+předělat celý recovery flow v `get_organizer_path_with_pin`, ne jen jednu
+funkci) je vědomé rozhodnutí.
 
 ### Tvůrce ankety: `event_polls.creator_token`
 
@@ -132,12 +131,13 @@ frontend bundlu) mimo appku, bez filtru, a je po autorizaci.
 
 Zavedený vzor v `supabase/sql/all-phases.sql` je:
 
-- SELECT/INSERT/UPDATE/DELETE politiky pro `anon`/`authenticated` na
-  citlivých tabulkách jsou `using (false)` (případně `with check (false)`) -
-  žádný přímý přístup z klienta není povolený vůbec. Najdeš je snadno:
+- RLS je zapnuté na každé tabulce (`alter table ... enable row level
+  security`) a bez politiky Postgres pro `anon`/`authenticated` všechno
+  zamítne. Povolující politiky jsou jen tři: čtení `event_realtime_ticks`
+  (realtime) a čtení a upload v bucketu `event-photos`. Všechny najdeš:
 
   ```bash
-  grep -n "using (false)" supabase/sql/all-phases.sql
+  grep -n "create policy" supabase/sql/all-phases.sql
   ```
 
 - Veškeré čtení i zápis jde přes `SECURITY DEFINER` RPC funkce
@@ -159,21 +159,19 @@ Zavedený vzor v `supabase/sql/all-phases.sql` je:
   mění nebo odhaluje něco vázaného na akci, anketu nebo vlastníka, první věc,
   kterou udělá, je tenhle porovnávací check.
 
-Proč na tomhle tolik záleží, má appka i vlastní historku, ne jen teorii: fáze
-"Realtime read hardening" (`-- ==================== Realtime read hardening
-====================` v `supabase/sql/all-phases.sql`) popisuje přesně tenhle
-druh chyby nalezený a opravený najednou na devíti tabulkách
+Proč na tomhle tolik záleží, má appka i vlastní historku, ne jen teorii: změna
+"Realtime read hardening" (v historii `supabase/sql/all-phases.sql` v gitu)
+opravila přesně tenhle druh chyby najednou na devíti tabulkách
 (`event_polls`/`event_poll_options`/`event_poll_votes`, `event_photos`,
 `event_chat_messages`/`event_chat_message_reactions`,
 `event_signup_items`/`event_signup_claims`, `event_stops`) - politiky byly
 `using (true)` nebo `using (event_exists(event_id))` (což je díky FK triviálně
 pravdivé pro každý existující řádek), takže šlo přímým REST dotazem bez
 `event_id` filtru přečíst chat, fotky, ankety i seznamy ze VŠECH akcí v appce
-najednou, ne jen z té jedné, na kterou má volající odkaz. Komentář u téhle
-fáze stojí za přečtení celý - vysvětluje i to, proč se u tabulek s realtime
-subscriptions (chat, signup listy, zastávky) nešlo jen tak zamknout na
-`using (false)`, ale musela se zavést vrstva RPC + přechod na
-"poslouchej `event_realtime_ticks`, pak si dotáhni data znovu" vzor.
+najednou, ne jen z té jedné, na kterou má volající odkaz. U tabulek
+s realtime subscriptions (chat, signup listy, zastávky) nešlo čtení jen tak
+zakázat, musela se zavést vrstva RPC a vzor "poslouchej
+`event_realtime_ticks`, pak si dotáhni data znovu".
 
 ## 4. Pravidlo pro nový kód
 
@@ -182,9 +180,8 @@ Když přidáváš novou tabulku nebo RPC funkci:
 1. **Nikdy nevěř klientem poslanému `event_id`, tokenu nebo jménu jako důkazu
    identity nebo vlastnictví samo o sobě.** Je to jen vstupní parametr, ne
    ověřený fakt.
-2. Nová tabulka má na SELECT/INSERT/UPDATE/DELETE pro `anon`/`authenticated`
-   defaultně `using (false)` (a `with check (false)` u zápisu), dokud
-   neexistuje konkrétní důvod jinak.
+2. Nová tabulka dostane `alter table ... enable row level security` a žádnou
+   politiku, dokud neexistuje konkrétní důvod pro přímý přístup z klienta.
 3. Čtení i zápis jde přes `SECURITY DEFINER` RPC, která:
    - je `language plpgsql security definer set search_path = public`,
    - uvnitř těla ověří autorizaci - typicky `if v_event.organizer_token <>
@@ -203,7 +200,7 @@ Když přidáváš novou tabulku nebo RPC funkci:
    Postgres chyba. Pro anglické UI je klient překládá podle přesného textu,
    takže každou novou hlášku doplň i do
    `client/src/locales/serverMessages.en.js` (hlídá to
-   `client/src/test/i18n.test.js`). Když se klient podle konkrétní hlášky
+   `client/tests/componentsTests/i18n.test.tsx`). Když se klient podle konkrétní hlášky
    rozhoduje, musí porovnávat `error.serverMessage` (původní text), ne
    přeložené `error.message`.
 
@@ -226,7 +223,7 @@ autorizace reálně vynucuje, je tělo SECURITY DEFINER funkce v
   neověřuje (žádná SMS) - kdo číslo zaregistruje jako první, vlastní k němu
   účet. Jméno se při přihlášení jen přepíše.
 - `/feedback` je záměrně veřejný - kdokoli přečte všechna hlášení včetně jmen
-  (fáze 21 v `all-phases.sql`).
+  (`get_feedback_reports` v `all-phases.sql`).
 - Další konkrétní nálezy (chybějící ownership check u jedné RPC, chybějící
   server-side validace uploadu apod.) jsou vedené jako issues/nálezy v
   [CODE_REVIEW.md](CODE_REVIEW.md), ne duplikované tady - tenhle dokument

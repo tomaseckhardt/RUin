@@ -1,11 +1,15 @@
+import type { ReactElement } from 'react'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { axe, toHaveNoViolations } from 'jest-axe'
-import PageShell from '../components/PageShell.jsx'
+import PageShellComponent from '../../src/components/PageShell.jsx'
+import { withOptionalProps } from './withOptionalProps.ts'
+
+const PageShell = withOptionalProps(PageShellComponent)
 
 expect.extend(toHaveNoViolations)
 
-function renderWithRouter(ui) {
+function renderWithRouter(ui: ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>)
 }
 

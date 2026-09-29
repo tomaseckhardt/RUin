@@ -1,20 +1,24 @@
-/* global __dirname */
 import fs from 'node:fs'
 import path from 'node:path'
 import { render, screen } from '@testing-library/react'
-import cs from '../locales/cs.js'
-import en from '../locales/en.js'
-import enServerMessages from '../locales/serverMessages.en.js'
-import { formatDateTime } from '../lib/format.js'
-import { detectLocale, getLocale, localizeServerMessage, setLocale, t } from '../lib/i18n.js'
+import cs from '../../src/locales/cs.js'
+import en from '../../src/locales/en.js'
+import enServerMessages from '../../src/locales/serverMessages.en.js'
+import { formatDateTime } from '../../src/lib/format.js'
+import { detectLocale, getLocale, localizeServerMessage, setLocale, t } from '../../src/lib/i18n.js'
 
 const SQL_PATH = path.resolve(__dirname, '../../../supabase/sql/all-phases.sql')
 
-function isLeaf(value) {
-  return typeof value === 'string' || Array.isArray(value) || typeof value?.other === 'string'
+// A leaf is a text, a list of texts or plural forms ({ one, other, ... });
+// anything else is a group of entries.
+type Leaf = string | string[] | Record<string, string>
+type EntryGroup = { [key: string]: Leaf | EntryGroup }
+
+function isLeaf(value: Leaf | EntryGroup): value is Leaf {
+  return typeof value === 'string' || Array.isArray(value) || typeof value.other === 'string'
 }
 
-function collectLeaves(node, prefix = '', leaves = new Map()) {
+function collectLeaves(node: EntryGroup, prefix = '', leaves = new Map<string, Leaf>()) {
   for (const [key, value] of Object.entries(node)) {
     const fullKey = prefix ? `${prefix}.${key}` : key
 
@@ -29,7 +33,7 @@ function collectLeaves(node, prefix = '', leaves = new Map()) {
 }
 
 // Placeholders a leaf uses, across all plural forms / array items.
-function placeholdersOf(leaf) {
+function placeholdersOf(leaf: Leaf) {
   const texts = typeof leaf === 'string' ? [leaf] : Object.values(leaf)
   return [...new Set(texts.flatMap((text) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1])))].sort()
 }
@@ -50,10 +54,16 @@ describe('locale dictionaries', () => {
     for (const [key, csLeaf] of csLeaves) {
       const enLeaf = enLeaves.get(key)
 
+      // A missing key fails 'have exactly the same keys' above.
+      if (enLeaf === undefined) {
+        continue
+      }
+
       if (Array.isArray(csLeaf)) {
-        expect({ key, length: enLeaf.length }).toEqual({ key, length: csLeaf.length })
+        const enItems = Array.isArray(enLeaf) ? enLeaf : []
+        expect({ key, length: enItems.length }).toEqual({ key, length: csLeaf.length })
         csLeaf.forEach((item, index) => {
-          expect({ key, index, placeholders: placeholdersOf(enLeaf[index]) }).toEqual({ key, index, placeholders: placeholdersOf(item) })
+          expect({ key, index, placeholders: placeholdersOf(enItems[index] ?? '') }).toEqual({ key, index, placeholders: placeholdersOf(item) })
         })
       } else {
         expect({ key, placeholders: placeholdersOf(enLeaf) }).toEqual({ key, placeholders: placeholdersOf(csLeaf) })

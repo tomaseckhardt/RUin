@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
+import { downloadBlob } from '../lib/download.js'
 import { buildAbsoluteUrl } from '../lib/format.js'
 import { t, useI18n } from '../lib/i18n.js'
 
@@ -13,25 +14,10 @@ const ICS_LINE_LENGTH_LIMIT = 75
 const ICS_LINE_FOLD_LENGTH = 74
 const CALENDAR_AUTO_OPEN_DELAY_MS = 150
 
-function pad(value) {
-  return String(value).padStart(2, '0')
-}
-
-function toUtcIcsDateTime(input) {
-  const date = new Date(input)
-
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('Invalid event datetime')
-  }
-
-  const year = date.getUTCFullYear()
-  const month = pad(date.getUTCMonth() + 1)
-  const day = pad(date.getUTCDate())
-  const hours = pad(date.getUTCHours())
-  const minutes = pad(date.getUTCMinutes())
-  const seconds = pad(date.getUTCSeconds())
-
-  return `${year}${month}${day}T${hours}${minutes}${seconds}Z`
+// 2026-05-01T18:30:00.000Z -> 20260501T183000Z. toISOString() throws on an
+// invalid date, which sends the callers to their fallback.
+function toUtcIcsDateTime(date) {
+  return date.toISOString().replace(/[-:]|\.\d{3}/g, '')
 }
 
 function escapeIcsText(value) {
@@ -138,15 +124,8 @@ function openCalendarUrl(url) {
   }
 }
 
-function showCalendarDownloadSuccess() {
-  toast.success(t('calendar.downloaded'))
-}
-
-function showCalendarError() {
-  toast.error(t('calendar.error'))
-}
-
-function downloadIcs(content, fileName) {
+function exportIcs(eventData) {
+  const content = buildIcs(eventData)
   const isMobileBrowser = MOBILE_BROWSER_RE.test(navigator.userAgent) || window.matchMedia('(pointer: coarse)').matches
 
   if (isMobileBrowser) {
@@ -157,23 +136,12 @@ function downloadIcs(content, fileName) {
     return
   }
 
-  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-
-  link.href = url
-  link.download = fileName
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  // Safari can read the blob: URL asynchronously after click() returns, so
-  // revoking it immediately can produce an empty/truncated download.
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  downloadBlob(new Blob([content], { type: 'text/calendar;charset=utf-8' }), getCalendarFileName(eventData))
 }
 
 // Google Calendar's "render" endpoint is a plain https URL that opens a
 // prefilled "add event" form on calendar.google.com - unlike the .ics/
-// data:-URI flow below, it works from inside restricted in-app browsers
+// data:-URI flow above, it works from inside restricted in-app browsers
 // (Instagram, Messenger, TikTok, ...) since those only block downloads and
 // non-http(s) navigation, not ordinary link clicks.
 function buildEventUrl(eventData) {
@@ -282,19 +250,12 @@ function AddToCalendarButton({ eventData }) {
 
     const timer = window.setTimeout(() => {
       try {
-        const googleCalendarUrl = buildGoogleCalendarUrl(eventData)
-        const calendarWindow = window.open(googleCalendarUrl, '_blank', 'noopener,noreferrer')
-
-        if (!calendarWindow) {
-          window.location.href = googleCalendarUrl
-        }
+        openCalendarUrl(buildGoogleCalendarUrl(eventData))
       } catch {
         try {
-          const calendarContent = buildIcs(eventData)
-          const fileName = getCalendarFileName(eventData)
-          downloadIcs(calendarContent, fileName)
+          exportIcs(eventData)
         } catch {
-          showCalendarError()
+          toast.error(t('calendar.error'))
         }
       }
     }, CALENDAR_AUTO_OPEN_DELAY_MS)
@@ -315,35 +276,23 @@ function AddToCalendarButton({ eventData }) {
     openCalendarUrl(targetUrl.toString())
   }
 
+  // Apple devices get the .ics file, which opens their native calendar;
+  // everyone else gets Google Calendar, with the file as the fallback.
   function handleNormalBrowserCalendarClick() {
-    if (isAppleDevice()) {
+    if (!isAppleDevice()) {
       try {
-        const calendarContent = buildIcs(eventData)
-        const fileName = getCalendarFileName(eventData)
-        downloadIcs(calendarContent, fileName)
-        showCalendarDownloadSuccess()
+        openCalendarUrl(buildGoogleCalendarUrl(eventData))
+        return
       } catch {
-        showCalendarError()
+        // Fall through to ICS export below.
       }
-      return
     }
 
     try {
-      const googleCalendarUrl = buildGoogleCalendarUrl(eventData)
-      openCalendarUrl(googleCalendarUrl)
-      return
+      exportIcs(eventData)
+      toast.success(t('calendar.downloaded'))
     } catch {
-      // Fall through to ICS export below.
-    }
-
-    try {
-      const calendarContent = buildIcs(eventData)
-      const fileName = getCalendarFileName(eventData)
-
-      downloadIcs(calendarContent, fileName)
-      showCalendarDownloadSuccess()
-    } catch {
-      showCalendarError()
+      toast.error(t('calendar.error'))
     }
   }
 
