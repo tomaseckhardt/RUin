@@ -2186,6 +2186,10 @@ $$;
 -- Called by the send-event-reminders Edge Function (service role, bypasses RLS).
 -- Returns events that just crossed the 24h-before or 1h-before mark and haven't
 -- had that reminder type sent yet.
+-- "Push reminders per event" below changes the return type, which create or
+-- replace can't undo - drop first so a full top-to-bottom re-run works.
+drop function if exists public.get_pending_event_reminders();
+
 create or replace function public.get_pending_event_reminders()
 returns table (
   event_id text,
@@ -7090,5 +7094,170 @@ create trigger event_photo_comments_emit_event_realtime_tick_tg
 after insert or delete on public.event_photo_comments
 for each row
 execute function public.emit_event_realtime_tick_from_event_row('photo_comment');
+
+commit;
+
+-- ==================== Push reminders per event ====================
+-- A browser has one push subscription (one endpoint) for the whole app, but
+-- push_subscriptions.endpoint was unique: turning reminders on for a second
+-- event moved the row there, so the first event silently lost its
+-- reminders, and turning them off anywhere turned them off everywhere. Rows
+-- are now one per event and endpoint, unregistering takes the event, and
+-- is_push_subscribed() tells the client whether reminders are on for the
+-- event it shows.
+--
+-- get_pending_event_reminders() no longer sends the day-before reminder
+-- once the event is less than 2 hours away - it used to go out together
+-- with the hour-before one, worded "tomorrow" even for an event later that
+-- day. It also returns what send-event-reminders needs to word a reminder
+-- by the real date and to give the push message a TTL, so a reminder that
+-- can't be delivered before the event starts is dropped instead of
+-- arriving late.
+--
+-- Safe to run before the client and the function are updated: unregistering
+-- without an event still removes the endpoint everywhere, as before, and
+-- the old function ignores the new columns.
+
+begin;
+
+alter table public.push_subscriptions
+  drop constraint if exists push_subscriptions_endpoint_key;
+
+create unique index if not exists push_subscriptions_event_endpoint_uidx
+  on public.push_subscriptions (event_id, endpoint);
+
+create index if not exists push_subscriptions_endpoint_idx
+  on public.push_subscriptions (endpoint);
+
+create or replace function public.register_push_subscription(
+  p_event_id text,
+  p_endpoint text,
+  p_p256dh text,
+  p_auth text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_endpoint text := nullif(trim(p_endpoint), '');
+  v_p256dh text := nullif(trim(p_p256dh), '');
+  v_auth text := nullif(trim(p_auth), '');
+begin
+  if not exists (select 1 from public.events e where e.id = p_event_id) then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if v_endpoint is null or v_p256dh is null or v_auth is null then
+    raise exception 'Neplatné přihlášení k odběru notifikací.';
+  end if;
+
+  insert into public.push_subscriptions (event_id, endpoint, p256dh, auth)
+  values (p_event_id, v_endpoint, v_p256dh, v_auth)
+  on conflict (event_id, endpoint) do nothing;
+
+  -- The keys belong to the browser's subscription, which all its events share.
+  update public.push_subscriptions s
+  set p256dh = v_p256dh, auth = v_auth
+  where s.endpoint = v_endpoint
+    and (s.p256dh <> v_p256dh or s.auth <> v_auth);
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+-- The optional event would make a 1-argument call ambiguous between the old
+-- and the new signature, so the old one goes.
+drop function if exists public.unregister_push_subscription(text);
+
+create or replace function public.unregister_push_subscription(
+  p_endpoint text,
+  p_event_id text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.push_subscriptions s
+  where s.endpoint = trim(p_endpoint)
+    and (p_event_id is null or s.event_id = p_event_id);
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+create or replace function public.is_push_subscribed(
+  p_event_id text,
+  p_endpoint text
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.push_subscriptions s
+    where s.event_id = p_event_id and s.endpoint = trim(p_endpoint)
+  );
+$$;
+
+grant execute on function public.register_push_subscription(text, text, text, text) to anon, authenticated;
+grant execute on function public.unregister_push_subscription(text, text) to anon, authenticated;
+grant execute on function public.is_push_subscribed(text, text) to anon, authenticated;
+
+-- New output columns change the return type, which create or replace can't do.
+drop function if exists public.get_pending_event_reminders();
+
+create or replace function public.get_pending_event_reminders()
+returns table (
+  event_id text,
+  reminder_type text,
+  name text,
+  location text,
+  datetime timestamp without time zone,
+  starts_in_seconds integer,
+  starts_today boolean,
+  starts_at_label text
+)
+language sql
+security definer
+set search_path = public
+as $$
+  with now_local as (
+    select (now() at time zone 'Europe/Prague') as ts
+  )
+  select
+    e.id, 'day_before', e.name, e.location, e.datetime,
+    extract(epoch from (e.datetime - now_local.ts))::integer,
+    e.datetime::date = now_local.ts::date,
+    to_char(e.datetime, 'FMHH24:MI')
+  from public.events e, now_local
+  where e.datetime <= now_local.ts + interval '24 hours'
+    and e.datetime > now_local.ts + interval '2 hours'
+    and not exists (
+      select 1 from public.event_reminders_sent r
+      where r.event_id = e.id and r.reminder_type = 'day_before'
+    )
+  union all
+  select
+    e.id, 'hour_before', e.name, e.location, e.datetime,
+    extract(epoch from (e.datetime - now_local.ts))::integer,
+    e.datetime::date = now_local.ts::date,
+    to_char(e.datetime, 'FMHH24:MI')
+  from public.events e, now_local
+  where e.datetime <= now_local.ts + interval '1 hour'
+    and e.datetime > now_local.ts
+    and not exists (
+      select 1 from public.event_reminders_sent r
+      where r.event_id = e.id and r.reminder_type = 'hour_before'
+    );
+$$;
+
+revoke all on function public.get_pending_event_reminders() from public, anon, authenticated;
+grant execute on function public.get_pending_event_reminders() to service_role;
 
 commit;

@@ -287,7 +287,7 @@ select status_code, content, created from net._http_response order by created de
 
 ### Automatické připomínky před akcí (den a hodinu předem)
 
-Účastník si po RSVP může v appce zapnout tlačítko "🔔 Připomenout den a hodinu předem" - to zaregistruje Web Push subscription k dané akci. Skutečné odeslání notifikace zajišťuje scheduled Edge Function `send-event-reminders`, kterou je potřeba jednorázově nastavit:
+Účastník si po RSVP může v appce zapnout tlačítko "🔔 Připomenout den a hodinu předem" - to zaregistruje Web Push subscription k dané akci. Prohlížeč má pro celou appku jeden push odběr, databáze ale drží jeden řádek na akci (`push_subscriptions` s unikátní dvojicí `event_id` + `endpoint`), takže připomínky jdou zapnout a vypnout pro každou akci zvlášť. Skutečné odeslání notifikace zajišťuje scheduled Edge Function `send-event-reminders`, kterou je potřeba jednorázově nastavit:
 
 **1. Vygeneruj VAPID klíče** (jen jednou za projekt):
 
@@ -335,7 +335,11 @@ select cron.schedule(
 
 Cron jde nastavit i v dashboardu (`Integrations -> Cron`), hlavička tam ale bude obsahovat klíč přímo v textu jobu.
 
-Bez kroků 3-5 se tlačítko připomínky v appce zobrazí a subscription se uloží, ale žádná notifikace nikdy nepřijde - dokud Edge Function neběží na scheduleru, nemá kdo `get_pending_event_reminders()` vyzvednout a poslat. Texty připomínek skládá Edge Function a jsou zatím jen česky.
+Bez kroků 3-5 se tlačítko připomínky v appce zobrazí a subscription se uloží, ale žádná notifikace nikdy nepřijde - dokud Edge Function neběží na scheduleru, nemá kdo `get_pending_event_reminders()` vyzvednout a poslat.
+
+Připomínka "den předem" se pošle, když do akce zbývá 2-24 hodin, a podle data zní "Dnes v 18:00" nebo "Zítra v 18:00". Když do akce zbývají méně než 2 hodiny, přijde jen připomínka "hodinu předem" ("Za 45 min: …"). Každá push zpráva má TTL do začátku akce, takže se na offline zařízení nedoručí až po ní. Texty připomínek skládá Edge Function a jsou zatím jen česky.
+
+Při nasazení změny "Push reminders per event" nejdřív spusť SQL fázi, pak znovu nasaď `send-event-reminders` a teprve potom klienta (merge do `main`). SQL jde spustit kdykoli dřív, stará funkce i starý klient s ním fungují dál. Nová funkce ale potřebuje nové sloupce z `get_pending_event_reminders()` a nový klient volá `is_push_subscribed()`.
 
 ### Automatický úklid expirovaných akcí (a jejich fotek)
 

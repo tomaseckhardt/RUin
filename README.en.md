@@ -287,7 +287,7 @@ select status_code, content, created from net._http_response order by created de
 
 ### Automatic event reminders (a day and an hour before)
 
-After RSVPing, a guest can turn on the "🔔 Remind me a day and an hour before" button in the app - that registers a Web Push subscription for the event. The notification itself is sent by the scheduled Edge Function `send-event-reminders`, which needs a one-time setup:
+After RSVPing, a guest can turn on the "🔔 Remind me a day and an hour before" button in the app - that registers a Web Push subscription for the event. The browser has one push subscription for the whole app, but the database keeps one row per event (`push_subscriptions` with a unique `event_id` + `endpoint` pair), so reminders can be turned on and off for each event separately. The notification itself is sent by the scheduled Edge Function `send-event-reminders`, which needs a one-time setup:
 
 **1. Generate VAPID keys** (only once per project):
 
@@ -335,7 +335,11 @@ select cron.schedule(
 
 You can also set up the cron in the dashboard (`Integrations -> Cron`), but then the header holds the key in plain text in the job.
 
-Without steps 3-5, the reminder button shows up in the app and the subscription gets saved, but no notification ever arrives - until the Edge Function runs on a schedule, nothing picks up `get_pending_event_reminders()` and sends them. The reminder texts are put together by the Edge Function and are only in Czech for now.
+Without steps 3-5, the reminder button shows up in the app and the subscription gets saved, but no notification ever arrives - until the Edge Function runs on a schedule, nothing picks up `get_pending_event_reminders()` and sends them.
+
+The "a day before" reminder goes out when the event is 2-24 hours away and, depending on the date, reads "Today at 18:00" or "Tomorrow at 18:00" (in Czech). When the event is less than 2 hours away, only the "an hour before" reminder arrives ("In 45 min: …"). Every push message has a TTL until the event starts, so an offline device doesn't get it after the event. The reminder texts are put together by the Edge Function and are only in Czech for now.
+
+When deploying the "Push reminders per event" change, run the SQL phase first, then redeploy `send-event-reminders`, and only then deploy the client (merge into `main`). The SQL can run any time before that; the old function and the old client keep working with it. The new function, however, needs the new columns from `get_pending_event_reminders()`, and the new client calls `is_push_subscribed()`.
 
 ### Automatic cleanup of expired events (and their photos)
 

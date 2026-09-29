@@ -15,6 +15,7 @@ import PhotoGallery from '../components/PhotoGallery.jsx'
 import {
   checkInAttendee,
   getEvent,
+  isPushSubscribed,
   pingAttendee,
   registerPushSubscription,
   submitRsvp,
@@ -23,7 +24,7 @@ import {
 } from '../lib/api.js'
 import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
-import { isReminderSupported, subscribeToEventReminders, unsubscribeFromEventReminders } from '../lib/push.js'
+import { getPushEndpoint, isReminderSupported, subscribeToEventReminders } from '../lib/push.js'
 import { subscribeToEventTicks } from '../lib/realtimeTick.js'
 
 // Realtime (subscribeToEventTicks below) is the primary refresh mechanism.
@@ -149,32 +150,40 @@ function EventPage() {
 
   useEffect(() => {
     if (!isReminderSupported() || typeof navigator === 'undefined') {
-      return
+      return undefined
     }
+
+    // The browser's subscription is shared by all events; ask the server
+    // whether it's registered for this one.
+    let isCurrent = true
 
     navigator.serviceWorker.ready
       .then((registration) => registration.pushManager.getSubscription())
-      .then((subscription) => setIsReminderOn(Boolean(subscription)))
+      .then((subscription) => (subscription ? isPushSubscribed(id, subscription.endpoint) : false))
+      .then((isSubscribed) => {
+        if (isCurrent) {
+          setIsReminderOn(Boolean(isSubscribed))
+        }
+      })
       .catch(() => {})
-  }, [])
+
+    return () => {
+      isCurrent = false
+    }
+  }, [id])
 
   async function toggleReminder() {
     setIsTogglingReminder(true)
 
     try {
       if (isReminderOn) {
-        const endpoint = await unsubscribeFromEventReminders()
-        setIsReminderOn(false)
+        const endpoint = await getPushEndpoint()
 
         if (endpoint) {
-          try {
-            await unregisterPushSubscription(endpoint)
-          } catch {
-            toast.warning(t('event.reminderOffLocalOnly'))
-            return
-          }
+          await unregisterPushSubscription(endpoint, id)
         }
 
+        setIsReminderOn(false)
         toast.success(t('event.reminderTurnedOff'))
       } else {
         const subscription = await subscribeToEventReminders()

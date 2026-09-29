@@ -18,12 +18,14 @@ import {
   deleteOwnEventPhoto,
   getEventPhotoComments,
   getEventPhotoLikes,
+  isPushSubscribed,
   toggleEventPhotoLike,
   recordEventPhoto,
   replayRetryQueue,
   sendEventChatMessage,
   submitRsvp,
   unclaimSignupItem,
+  unregisterPushSubscription,
   uploadEventPhoto,
 } from '../lib/api.js'
 
@@ -365,5 +367,25 @@ describe('photo likes and comments', () => {
     await deleteEventPhotoComment('event-1', 'organizer-token', 3)
 
     expect(supabase.rpc).toHaveBeenCalledWith('delete_event_photo_comment', { p_event_id: 'event-1', p_token: 'organizer-token', p_comment_id: 3 })
+  })
+})
+
+describe('push reminders per event', () => {
+  it('turns reminders off only for the given event', async () => {
+    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+
+    await unregisterPushSubscription('https://push.example/endpoint-1', 'event-1')
+
+    expect(supabase.rpc).toHaveBeenCalledWith('unregister_push_subscription', {
+      p_endpoint: 'https://push.example/endpoint-1',
+      p_event_id: 'event-1',
+    })
+  })
+
+  it('asks the server whether this browser has reminders on for the event', async () => {
+    supabase.rpc.mockResolvedValue({ data: true, error: null })
+
+    await expect(isPushSubscribed('event-1', 'https://push.example/endpoint-1')).resolves.toBe(true)
+    expect(supabase.rpc).toHaveBeenCalledWith('is_push_subscribed', { p_event_id: 'event-1', p_endpoint: 'https://push.example/endpoint-1' })
   })
 })
