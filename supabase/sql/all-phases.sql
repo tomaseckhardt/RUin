@@ -6559,3 +6559,101 @@ $$;
 grant execute on function public.remove_signup_claim(bigint, text, text, text) to anon, authenticated;
 
 commit;
+
+-- ==================== Event photo upload limits ====================
+-- Keep anonymous uploads inside a real event folder and cap each event at 50
+-- photos. The advisory transaction lock makes the quota check serialize
+-- concurrent Storage uploads for the same event.
+
+begin;
+
+create or replace function public.can_upload_event_photo(p_storage_path text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_folders text[] := storage.foldername(p_storage_path);
+  v_event_id text;
+  v_photo_count integer;
+begin
+  if coalesce(array_length(v_folders, 1), 0) <> 1 then
+    return false;
+  end if;
+
+  v_event_id := v_folders[1];
+  perform pg_advisory_xact_lock(hashtextextended(v_event_id, 0));
+
+  perform 1 from public.events e where e.id = v_event_id for key share;
+  if not found then
+    return false;
+  end if;
+
+  select count(*)::integer
+  into v_photo_count
+  from storage.objects o
+  where o.bucket_id = 'event-photos'
+    and (storage.foldername(o.name))[1] = v_event_id;
+
+  return v_photo_count < 50;
+end;
+$$;
+
+revoke all on function public.can_upload_event_photo(text) from public;
+grant execute on function public.can_upload_event_photo(text) to anon, authenticated;
+
+create or replace function public.record_event_photo(
+  p_event_id text,
+  p_storage_path text,
+  p_uploaded_by text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uploaded_by text := nullif(trim(p_uploaded_by), '');
+  v_folders text[] := storage.foldername(p_storage_path);
+begin
+  if not exists (select 1 from public.events e where e.id = p_event_id) then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if v_uploaded_by is null then
+    raise exception 'Chybí jméno nahrávajícího.';
+  end if;
+
+  if coalesce(array_length(v_folders, 1), 0) <> 1 or v_folders[1] <> p_event_id then
+    raise exception 'Fotka nepatří k této akci.';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_storage_path, 0));
+
+  if not exists (
+    select 1 from storage.objects o
+    where o.bucket_id = 'event-photos' and o.name = p_storage_path
+  ) then
+    raise exception 'Nahraná fotka nebyla nalezena.';
+  end if;
+
+  if exists (select 1 from public.event_photos p where p.storage_path = p_storage_path) then
+    raise exception 'Fotka už byla přidána.';
+  end if;
+
+  insert into public.event_photos (event_id, storage_path, uploaded_by)
+  values (p_event_id, p_storage_path, v_uploaded_by);
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.record_event_photo(text, text, text) to anon, authenticated;
+
+drop policy if exists "event_photos_storage_insert" on storage.objects;
+create policy "event_photos_storage_insert"
+  on storage.objects for insert to anon, authenticated
+  with check (bucket_id = 'event-photos' and public.can_upload_event_photo(name));
+
+commit;

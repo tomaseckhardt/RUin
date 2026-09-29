@@ -162,7 +162,7 @@ Co všechno `all-phases.sql` obsahuje:
 - Blokace přihlášení řidiče na vlastní nabídku odvozu + možnost odebrat konkrétního spolujezdce z vlastní nabídky.
 - Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé `select` politiky jsou `using (false)`), realtime běží přes `event_realtime_ticks`.
 - Organizátor jako samostatná identita (`events.organizer_name`) - chat, šťouchnutí, fotky i položky ze správy akce se podepisují jménem organizátora.
-- Serverové omezení uploadu fotek (bucket `event-photos`: max 10 MB, jen obrázky).
+- Serverové omezení uploadu fotek (bucket `event-photos`: max 10 MB, jen obrázky, nejvýše 50 fotek na akci a upload pouze do složky existující akce).
 - Feedback (hlášení chyb a nápadů): `feedback_reports` + RPC `submit_feedback_report`/`get_feedback_reports`. Čtení přes `/feedback` je záměrně veřejné bez PINu - kdokoliv na tuhle adresu uvidí jméno i text všech hlášení.
 - Skupiny kontaktů a šablony akcí (`owners`, `contact_groups`, `contact_group_members`, `event_templates`) vázané na účet podle jména, telefonu a 6místného kódu (`access_owner_account`; kód je uložený jako bcrypt hash a po opakovaných chybách se dočasně zablokuje) + hromadné pozvání lidí do akce (`invite_attendees`, stav `invited`).
 - Volitelné moduly akce (`enable_bring_list`, `enable_carpool`, `enable_stops`).

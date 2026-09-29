@@ -162,7 +162,7 @@ What `all-phases.sql` contains:
 - Blocking a driver from signing up for their own ride offer + the option to remove a specific passenger from your own offer.
 - Read hardening: chat, photos, polls, lists and stops can only be read through RPCs scoped to a specific event (the direct `select` policies are `using (false)`), and realtime goes through `event_realtime_ticks`.
 - The organizer as a separate identity (`events.organizer_name`) - chat messages, nudges, photos and items from event management are signed with the organizer's name.
-- Server-side limits on photo uploads (bucket `event-photos`: 10 MB max, images only).
+- Server-side limits on photo uploads (bucket `event-photos`: 10 MB max, images only, at most 50 photos per event, and uploads restricted to folders for existing events).
 - Feedback (bug reports and ideas): `feedback_reports` + RPCs `submit_feedback_report`/`get_feedback_reports`. Reading them at `/feedback` is deliberately public, without a PIN - anyone at that address sees the name and text of every report.
 - Contact groups and event templates (`owners`, `contact_groups`, `contact_group_members`, `event_templates`) tied to an account identified by name, phone and a 6-digit code (`access_owner_account`; the code is stored as a bcrypt hash and is temporarily locked after repeated wrong attempts) + inviting people into an event in bulk (`invite_attendees`, status `invited`).
 - Optional event modules (`enable_bring_list`, `enable_carpool`, `enable_stops`).

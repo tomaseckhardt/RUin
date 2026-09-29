@@ -588,6 +588,10 @@ export async function uploadEventPhoto(eventId, file) {
   const { error: uploadError } = await supabase.storage.from('event-photos').upload(storagePath, file)
 
   if (uploadError) {
+    if (/row-level security policy/i.test(uploadError.message || '')) {
+      throw new Error(t('api.photoLimitReached'))
+    }
+
     throw new Error(uploadError.message || t('api.uploadFailed'))
   }
 
