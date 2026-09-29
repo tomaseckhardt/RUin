@@ -430,6 +430,7 @@ export default {
     reactNeedsName: 'Sign in with your name before reacting.',
     chatNeedsName: 'Sign in with your name before chatting.',
     missingName: 'Missing a name for the chat.',
+    addReaction: 'Add a reaction',
   },
 
   stops: {

@@ -1,8 +1,8 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import PageShell from '../components/PageShell.jsx'
-import { getLocale, setLocale } from '../lib/i18n.js'
+import PageShell from '../../src/components/PageShell.jsx'
+import { getLocale, setLocale } from '../../src/lib/i18n.js'
 
 function renderShell() {
   return render(

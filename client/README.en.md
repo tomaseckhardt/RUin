@@ -39,7 +39,8 @@ The dev server runs at http://localhost:5173/. `dev`, `build` and `preview` go t
 - `src/components/` - UI components
 - `src/lib/` - the API layer (`api.js`), the Supabase client, translations (`i18n.js`) and helpers
 - `src/locales/` - Czech and English UI texts
-- `src/test/` - the tests (`*.test.js`), Jest setup and test helpers
+- `tests/componentsTests/` - the Jest tests (`*.test.js`), Jest setup and test helpers
+- `tests/` - the Playwright E2E test (`app.e2e.js`, `fakeSupabase.js`, `playwright.config.js`)
 - `public/` - service worker, icons and the manifest
 
 ## Important for contributors

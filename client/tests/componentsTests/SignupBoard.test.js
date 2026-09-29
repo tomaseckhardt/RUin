@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import SignupBoard from '../components/SignupBoard.jsx'
-import { claimSignupItem, getSignupItems, unclaimSignupItem } from '../lib/api.js'
+import SignupBoard from '../../src/components/SignupBoard.jsx'
+import { claimSignupItem, getSignupItems, unclaimSignupItem } from '../../src/lib/api.js'
 
-jest.mock('../lib/api.js', () => ({
+jest.mock('../../src/lib/api.js', () => ({
   addSignupItem: jest.fn(),
   claimSignupItem: jest.fn(),
   deleteSignupItem: jest.fn(),
@@ -12,7 +12,7 @@ jest.mock('../lib/api.js', () => ({
   unclaimSignupItem: jest.fn(),
 }))
 
-jest.mock('../lib/realtimeTick.js', () => ({
+jest.mock('../../src/lib/realtimeTick.js', () => ({
   subscribeToEventTicks: jest.fn(() => () => {}),
 }))
 

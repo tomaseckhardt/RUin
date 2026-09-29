@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { installEnterToSubmit } from '../lib/enterToSubmit.js'
+import { installEnterToSubmit } from '../../src/lib/enterToSubmit.js'
 
 function MessageForm({ onSend, isSending = false, withTextarea = true }) {
   const [message, setMessage] = useState('')

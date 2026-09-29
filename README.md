@@ -81,7 +81,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasty), `qrcode` (QR kódy), `jszip` (ZIP s fotkami)
 - Backend: Supabase - Postgres + RPC funkce (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - Externí služby: Open-Meteo (geokódování a předpověď počasí), Google Fonts (Space Grotesk)
-- Testy: Jest + Testing Library (`client/src/test/*.test.js`), `jest-axe` pro a11y assertions v testech (`npm --prefix client run test:a11y`)
+- Testy: Jest + Testing Library (`client/tests/componentsTests/*.test.js`), `jest-axe` pro a11y assertions v testech (`npm --prefix client run test:a11y`)
 - Deploy: GitHub Actions -> GitHub Pages (vlastní doména `ruin.eckhardt.cz`)
 
 ## Struktura repozitáře
@@ -91,7 +91,8 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
   - `src/components/` - znovupoužitelné UI komponenty
   - `src/lib/` - API vrstva (`api.js` je jediné místo, které volá Supabase RPC), Supabase klient, překlady (`i18n.js`) a helpery (formátování, počasí, push, QR plakátek, localStorage)
   - `src/locales/` - slovníky textů UI (`cs.js`, `en.js`) a anglické znění chybových hlášek z databáze (`serverMessages.en.js`)
-  - `src/test/` - testy (`*.test.js`), sdílené testovací helpery a Jest setup
+  - `tests/componentsTests/` - testy v Jestu (`*.test.js`), sdílené testovací helpery a Jest setup
+  - `tests/` - E2E test v Playwrightu (`app.e2e.js`) s falešným Supabase v paměti (`fakeSupabase.js`) a jeho konfigurace (`playwright.config.js`)
   - `public/` - service worker (`sw.js`), ikony a manifest
   - `scripts/run-vite-safe.mjs` - spouští Vite z dočasné kopie projektu (viz [NPM skripty](#npm-skripty))
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
@@ -195,6 +196,7 @@ Klient (`client/package.json`):
 - `npm --prefix client run lint` - ESLint
 - `npm --prefix client run test` - Jest (jednotkové, komponentové + a11y testy, `*.test.js`)
 - `npm --prefix client run test:a11y` - jen testy odpovídající vzoru `a11y`
+- `npm --prefix client run test:e2e` - E2E test v Playwrightu: projde celou aplikaci (založení akce, úpravy, RSVP, chat, bring list, fotky, šťouchnutí, schválení omluvenky, anketa, feedback, tmavý režim) jednou česky a jednou anglicky. Sám spustí dev server proti falešnému Supabase v paměti, na skutečný projekt nesahá. Poprvé je potřeba `npx playwright install chromium`.
 
 `dev`, `build` i `preview` v klientovi běží přes `client/scripts/run-vite-safe.mjs`. Ten zkopíruje projekt do dočasné složky (`src` a `public` jen nalinkuje) a Vite spustí tam, protože Vite si neporadí s cestou obsahující třeba `?` (složka "Are you in?"). Úpravy v `src/` a `public/` se projeví hned, po změně `vite.config.js` nebo `package.json` je potřeba dev server restartovat. Vlastní parametry pro Vite předej přímo tomuhle skriptu, např. `node scripts/run-vite-safe.mjs dev --host 127.0.0.1` v adresáři `client` - přes `npm run dev -- ...` se neprojdou.
 
@@ -202,7 +204,7 @@ Klient (`client/package.json`):
 
 - `npm test` spustí Jest (jsdom + Testing Library + `jest-axe`): jednotkové testy `lib/`, testy komponent a a11y testy.
 - Testy lokalizace hlídají, že `cs.js` a `en.js` mají stejné klíče i `{placeholdery}` a že každá hláška z `all-phases.sql` má anglický překlad (viz [Lokalizace](#lokalizace-čeština-a-angličtina)).
-- Jest setup (`client/src/test/setup.js`) přepíná UI do češtiny - jsdom se jinak hlásí jako `en-US` a aplikace by běžela anglicky.
+- Jest setup (`client/tests/componentsTests/setup.js`) přepíná UI do češtiny - jsdom se jinak hlásí jako `en-US` a aplikace by běžela anglicky.
 - CI (job `ci` v `.github/workflows/deploy-pages.yml`) spouští lint a testy při každém pull requestu do `main` i při push do `main`. Build a deploy běží jen při push do `main` (nebo ručním spuštění) a jen když `ci` projde.
 - Jest nefunguje, když cesta k projektu obsahuje `?` - viz [Troubleshooting](#troubleshooting).
 
@@ -391,7 +393,7 @@ UI je ve dvou jazycích. Čeština je zdrojový jazyk, angličtina má stejné k
 - Jazyk se při první návštěvě vybere podle prohlížeče (`cs` a `sk` -> čeština, cokoliv jiného -> angličtina) a přepíná se přepínačem CZ | EN v pravém horním rohu hlavičky každé stránky. Volba se ukládá do `localStorage` (`ruin-locale`), nastavuje se i `<html lang>`.
 - Datum a čas se formátují podle jazyka (`cs-CZ`, v angličtině `en-GB` s 24hodinovým časem).
 - Texty žijí v `client/src/locales/cs.js` a `client/src/locales/en.js`. V komponentě: `const { t } = useI18n()` a `t('sekce.klic', { parametr })`; mimo React (`lib/`) stačí importovat `t` z `client/src/lib/i18n.js`. Plurály jsou objekty podle `Intl.PluralRules` (`{ one, few, other }`), chybějící tvar spadne na `other`.
-- Nový text přidej do obou slovníků - `client/src/test/i18n.test.js` hlídá, že mají stejné klíče i stejné `{placeholdery}`.
+- Nový text přidej do obou slovníků - `client/tests/componentsTests/i18n.test.js` hlídá, že mají stejné klíče i stejné `{placeholdery}`.
 - Chybové hlášky z databáze (`raise exception` v `all-phases.sql`) zůstávají česky; klient je pro anglické UI přeloží podle přesného textu v `client/src/locales/serverMessages.en.js`. Když v SQL přidáš nebo přeformuluješ hlášku, doplň ji tam taky - stejný test jinak spadne. Kód, který se rozhoduje podle konkrétní hlášky, porovnává původní text z `error.serverMessage`, ne přeložené `error.message`.
 - Zatím česky zůstávají push připomínky: jejich text skládá Edge Function `send-event-reminders` a u odběru se jazyk neukládá.
 
@@ -451,6 +453,6 @@ Starší verze service workeru (`ruin-app-shell-v1`) si ukládala i soubory z Vi
 
 Vite poslouchá na `localhost`, což se může přeložit jen na IPv6 (`::1`). Otevři http://localhost:5173/, nebo dev server spusť s `--host 127.0.0.1` (viz [NPM skripty](#npm-skripty)).
 
-### `npm test` hlásí "Module <rootDir>/src/test/setup.js ... was not found"
+### `npm test` hlásí "Module <rootDir>/tests/componentsTests/setup.js ... was not found"
 
 Jest si neporadí s cestou k projektu, která obsahuje `?` (třeba složka "Are you in?"). Vite to obchází přes `run-vite-safe.mjs`, Jest ne - naklonuj nebo zkopíruj projekt do cesty bez zvláštních znaků a testy spusť tam.

@@ -1,6 +1,6 @@
-import { readStoredMap, readStoredValue, saveStoredMapEntry, writeStoredMap } from '../lib/browserStorage.js'
-import { getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
-import { getSavedOrganizerToken, saveOrganizerToken } from '../lib/organizerLinkStorage.js'
+import { readStoredMap, readStoredValue, saveStoredMapEntry, writeStoredMap } from '../../src/lib/browserStorage.js'
+import { getPhotoDeleteTokens, savePhotoDeleteToken } from '../../src/lib/photoDeleteTokens.js'
+import { getSavedOrganizerToken, saveOrganizerToken } from '../../src/lib/organizerLinkStorage.js'
 
 const TEST_KEY = 'ruin-test-map'
 

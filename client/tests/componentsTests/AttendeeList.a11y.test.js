@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { axe, toHaveNoViolations } from 'jest-axe'
-import AttendeeList from '../components/AttendeeList.jsx'
+import AttendeeList from '../../src/components/AttendeeList.jsx'
 
 expect.extend(toHaveNoViolations)
 

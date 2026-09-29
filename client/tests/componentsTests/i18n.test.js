@@ -2,11 +2,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { render, screen } from '@testing-library/react'
-import cs from '../locales/cs.js'
-import en from '../locales/en.js'
-import enServerMessages from '../locales/serverMessages.en.js'
-import { formatDateTime } from '../lib/format.js'
-import { detectLocale, getLocale, localizeServerMessage, setLocale, t } from '../lib/i18n.js'
+import cs from '../../src/locales/cs.js'
+import en from '../../src/locales/en.js'
+import enServerMessages from '../../src/locales/serverMessages.en.js'
+import { formatDateTime } from '../../src/lib/format.js'
+import { detectLocale, getLocale, localizeServerMessage, setLocale, t } from '../../src/lib/i18n.js'
 
 const SQL_PATH = path.resolve(__dirname, '../../../supabase/sql/all-phases.sql')
 

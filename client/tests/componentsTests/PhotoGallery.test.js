@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import PhotoGallery from '../components/PhotoGallery.jsx'
+import PhotoGallery from '../../src/components/PhotoGallery.jsx'
 import { axe, toHaveNoViolations } from 'jest-axe'
 import {
   addEventPhotoComment,
@@ -13,11 +13,11 @@ import {
   recordEventPhoto,
   toggleEventPhotoLike,
   uploadEventPhoto,
-} from '../lib/api.js'
-import { getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
-import { installEnterToSubmit } from '../lib/enterToSubmit.js'
+} from '../../src/lib/api.js'
+import { getPhotoDeleteTokens, savePhotoDeleteToken } from '../../src/lib/photoDeleteTokens.js'
+import { installEnterToSubmit } from '../../src/lib/enterToSubmit.js'
 
-jest.mock('../lib/api.js', () => ({
+jest.mock('../../src/lib/api.js', () => ({
   addEventPhotoComment: jest.fn(),
   deleteEventPhoto: jest.fn(),
   deleteEventPhotoComment: jest.fn(),
@@ -31,7 +31,7 @@ jest.mock('../lib/api.js', () => ({
   uploadEventPhoto: jest.fn(),
 }))
 
-jest.mock('../lib/realtimeTick.js', () => ({
+jest.mock('../../src/lib/realtimeTick.js', () => ({
   subscribeToEventTicks: jest.fn(() => () => {}),
 }))
 

@@ -233,6 +233,8 @@ function EventChat({ eventId, currentName, canSend }) {
                 <button
                   type="button"
                   onClick={() => setOpenPickerFor((current) => (current === message.id ? null : message.id))}
+                  aria-label={t('chat.addReaction')}
+                  aria-expanded={openPickerFor === message.id}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-xs text-slate-400 hover:text-slate-700 dark:border-slate-700 dark:text-slate-500 dark:hover:text-slate-200">
                   +
                 </button>

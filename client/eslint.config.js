@@ -15,9 +15,16 @@ export default defineConfig([
     },
   },
   {
-    files: ['**/*.test.js', 'src/test/**/*.js'],
+    files: ['tests/componentsTests/**/*.js'],
     languageOptions: {
       globals: { ...globals.browser, ...globals.jest },
+    },
+  },
+  {
+    // Playwright: the test runs in Node and drives the browser.
+    files: ['tests/*.js'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
     },
   },
 ])

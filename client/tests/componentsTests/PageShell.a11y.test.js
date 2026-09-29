@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { axe, toHaveNoViolations } from 'jest-axe'
-import PageShell from '../components/PageShell.jsx'
+import PageShell from '../../src/components/PageShell.jsx'
 
 expect.extend(toHaveNoViolations)
 

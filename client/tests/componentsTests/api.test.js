@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { supabase } from '../lib/supabase.js'
-import { setLocale } from '../lib/i18n.js'
+import { supabase } from '../../src/lib/supabase.js'
+import { setLocale } from '../../src/lib/i18n.js'
 import {
   claimSignupItem,
   createEvent,
@@ -27,9 +27,9 @@ import {
   unclaimSignupItem,
   unregisterPushSubscription,
   uploadEventPhoto,
-} from '../lib/api.js'
+} from '../../src/lib/api.js'
 
-jest.mock('../lib/supabase.js', () => ({
+jest.mock('../../src/lib/supabase.js', () => ({
   supabase: {
     rpc: jest.fn(),
     storage: {
