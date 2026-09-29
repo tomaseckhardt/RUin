@@ -2197,42 +2197,26 @@ end;
 $$;
 grant execute on function public.delete_event_photo_comment(text, text, bigint) to anon, authenticated;
 
+-- The storage paths of an event's photos, for the Edge Functions that remove
+-- them through the Storage API (deleting from storage.objects directly is
+-- refused, see delete_events_by_ids). starts_with, not like: event ids can
+-- contain '_'.
+create or replace function public.list_event_photo_paths(p_event_id text)
+returns setof text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select o.name
+  from storage.objects o
+  where o.bucket_id = 'event-photos' and starts_with(o.name, p_event_id || '/')
+  order by o.name;
+$$;
+revoke all on function public.list_event_photo_paths(text) from public, anon, authenticated;
+grant execute on function public.list_event_photo_paths(text) to service_role;
+
 -- ==================== Push reminders ====================
-
-create or replace function public.mark_event_reminder_sent(
-  p_event_id text,
-  p_reminder_type text
-)
-returns void
-language sql
-security definer
-set search_path = public
-as $$
-  insert into public.event_reminders_sent (event_id, reminder_type)
-  values (p_event_id, p_reminder_type)
-  on conflict (event_id, reminder_type) do nothing;
-$$;
-revoke all on function public.mark_event_reminder_sent(text, text) from public, anon, authenticated;
-grant execute on function public.mark_event_reminder_sent(text, text) to service_role;
-
-create or replace function public.get_push_subscriptions_for_event(
-  p_event_id text
-)
-returns table (
-  endpoint text,
-  p256dh text,
-  auth text
-)
-language sql
-security definer
-set search_path = public
-as $$
-  select endpoint, p256dh, auth
-  from public.push_subscriptions
-  where event_id = p_event_id;
-$$;
-revoke all on function public.get_push_subscriptions_for_event(text) from public, anon, authenticated;
-grant execute on function public.get_push_subscriptions_for_event(text) to service_role;
 
 create or replace function public.register_push_subscription(
   p_event_id text,
@@ -3368,6 +3352,8 @@ drop function if exists public.emit_event_realtime_tick_from_pings();
 drop function if exists public.emit_event_realtime_tick_from_chat_messages();
 drop function if exists public.emit_event_realtime_tick_from_signup_items();
 drop function if exists public.emit_event_realtime_tick_from_stops();
+drop function if exists public.mark_event_reminder_sent(text, text);
+drop function if exists public.get_push_subscriptions_for_event(text);
 
 do $$
 declare
