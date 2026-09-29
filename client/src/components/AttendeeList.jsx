@@ -161,7 +161,7 @@ function AttendeeList({
                     {showDelete ? (
                       <button
                         type="button"
-                        className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+                        className="secondary-button danger-button"
                         disabled={deleteBusyId === attendee.id}
                         onClick={() => onDelete(attendee.id, attendee.name)}>
                         {t('common.delete')}
@@ -174,7 +174,7 @@ function AttendeeList({
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <button
                       type="button"
-                      className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+                      className="secondary-button danger-button"
                       disabled={deleteBusyId === attendee.id}
                       onClick={() => onDelete(attendee.id, attendee.name)}>
                       {t('common.delete')}

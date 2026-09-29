@@ -1,6 +1,8 @@
 // Deploy with: supabase functions deploy delete-event-data --no-verify-jwt
-// The public anon key reaches this handler, but every operation requires the
-// matching organizer bearer token stored for the requested event.
+// The public anon key reaches this handler, but every operation requires a
+// bearer token: the organizer token stored for the requested event, or - for
+// deleting one photo - the delete token the uploader's browser got for that
+// photo. The authorize_event_photo_delete RPC decides who may delete a photo.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -81,7 +83,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Server není správně nakonfigurovaný.' }, 500)
   }
 
-  let body: { action?: string; eventId?: string; token?: string; photoId?: string | number }
+  let body: { action?: string; eventId?: string; token?: string; photoId?: string | number; photoToken?: string }
 
   try {
     body = await req.json()
@@ -91,8 +93,12 @@ Deno.serve(async (req) => {
 
   const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : ''
   const token = typeof body.token === 'string' ? body.token : ''
+  const photoToken = typeof body.photoToken === 'string' ? body.photoToken : ''
+  // Deleting the event needs the organizer token; one photo can also go with
+  // its uploader's delete token.
+  const hasCredentials = token !== '' || (body.action === 'delete_photo' && photoToken !== '')
 
-  if (!eventId || !token || !['delete_event', 'delete_photo'].includes(body.action || '')) {
+  if (!eventId || !hasCredentials || !['delete_event', 'delete_photo'].includes(body.action || '')) {
     return jsonResponse({ error: 'Neplatný požadavek.' }, 400)
   }
 
@@ -106,10 +112,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Akce už neexistuje.' }, 404)
   }
 
-  if (event.organizer_token !== token) {
-    return jsonResponse({ error: 'Neplatný organizátorský odkaz.' }, 401)
-  }
-
   if (body.action === 'delete_photo') {
     const photoId = String(body.photoId ?? '')
 
@@ -117,38 +119,34 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Fotka nebyla nalezena.' }, 400)
     }
 
-    const { data: photo, error: photoError } = await supabase
-      .from('event_photos')
-      .select('id, storage_path')
-      .eq('event_id', eventId)
-      .eq('id', photoId)
-      .maybeSingle()
+    const credentials = { p_event_id: eventId, p_photo_id: photoId, p_token: token || null, p_photo_token: photoToken || null }
 
-    if (photoError) {
-      return jsonResponse({ error: 'Fotku se nepodařilo načíst.' }, 500)
-    }
+    // Checked before the file goes, so a refused request can't remove it;
+    // delete_event_photo checks the same credentials again.
+    const { data: storagePath, error: authorizeError } = await supabase.rpc('authorize_event_photo_delete', credentials)
 
-    if (!photo) {
-      return jsonResponse({ error: 'Fotka nebyla nalezena.' }, 404)
+    if (authorizeError) {
+      // P0001: a `raise exception` in the RPC, i.e. the request was refused.
+      return jsonResponse({ error: authorizeError.message }, authorizeError.code === 'P0001' ? 403 : 500)
     }
 
     try {
-      await removeStoragePaths([photo.storage_path])
+      await removeStoragePaths([storagePath])
     } catch (error) {
       return jsonResponse({ error: error.message }, 500)
     }
 
-    const { error: deleteError } = await supabase.rpc('delete_event_photo', {
-      p_event_id: eventId,
-      p_token: token,
-      p_photo_id: photoId,
-    })
+    const { error: deleteError } = await supabase.rpc('delete_event_photo', credentials)
 
     if (deleteError) {
       return jsonResponse({ error: deleteError.message }, 500)
     }
 
     return jsonResponse({ success: true })
+  }
+
+  if (event.organizer_token !== token) {
+    return jsonResponse({ error: 'Neplatný organizátorský odkaz.' }, 401)
   }
 
   try {

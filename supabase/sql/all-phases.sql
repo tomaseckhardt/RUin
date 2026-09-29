@@ -6677,3 +6677,158 @@ create policy "event_photos_storage_insert"
   with check (bucket_id = 'event-photos' and public.can_upload_event_photo(name));
 
 commit;
+
+-- ==================== Uploaders can delete their own photos ====================
+-- A photo can be deleted by the organizer and by the guest who uploaded it.
+-- Guests have no identity beyond a self-typed name (see SECURITY_MODEL.md), so
+-- the uploader proves ownership with a bearer token instead: the browser
+-- generates a random delete token per photo, keeps it in localStorage and
+-- names the uploaded file after the token's SHA-256 hash. record_event_photo
+-- stores that hash only when the caller knows the matching token, so nobody
+-- who merely sees the file in the (listable) bucket can claim it with a token
+-- of their own. Photos recorded before this phase have no hash, so only the
+-- organizer can delete them.
+--
+-- Safe to run before the client and the delete-event-data function are
+-- updated: the new parameters default to null, so the old 3-argument calls
+-- keep working.
+
+begin;
+
+alter table public.event_photos
+  add column if not exists delete_token_hash text;
+
+-- The new optional parameter would make a 3-argument call ambiguous between
+-- the old and the new signature, so the old one goes.
+drop function if exists public.record_event_photo(text, text, text);
+
+create or replace function public.record_event_photo(
+  p_event_id text,
+  p_storage_path text,
+  p_uploaded_by text,
+  p_delete_token text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uploaded_by text := nullif(trim(p_uploaded_by), '');
+  v_delete_token_hash text := encode(extensions.digest(nullif(p_delete_token, ''), 'sha256'), 'hex');
+  v_file_stem text := split_part(storage.filename(p_storage_path), '.', 1);
+  v_folders text[] := storage.foldername(p_storage_path);
+begin
+  if not exists (select 1 from public.events e where e.id = p_event_id) then
+    raise exception 'Akce neexistuje.';
+  end if;
+
+  if v_uploaded_by is null then
+    raise exception 'Chybí jméno nahrávajícího.';
+  end if;
+
+  if coalesce(array_length(v_folders, 1), 0) <> 1 or v_folders[1] <> p_event_id then
+    raise exception 'Fotka nepatří k této akci.';
+  end if;
+
+  -- A file named after a token hash needs that token; a token needs a file
+  -- named after its hash. Older clients send neither (random file names).
+  if (v_delete_token_hash is not null or v_file_stem ~ '^[0-9a-f]{64}$') and v_delete_token_hash is distinct from v_file_stem then
+    raise exception 'Fotku může přidat jen ten, kdo ji nahrál.';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_storage_path, 0));
+
+  if not exists (
+    select 1 from storage.objects o
+    where o.bucket_id = 'event-photos' and o.name = p_storage_path
+  ) then
+    raise exception 'Nahraná fotka nebyla nalezena.';
+  end if;
+
+  if exists (select 1 from public.event_photos p where p.storage_path = p_storage_path) then
+    raise exception 'Fotka už byla přidána.';
+  end if;
+
+  insert into public.event_photos (event_id, storage_path, uploaded_by, delete_token_hash)
+  values (p_event_id, p_storage_path, v_uploaded_by, v_delete_token_hash);
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.record_event_photo(text, text, text, text) to anon, authenticated;
+
+-- Who may delete a photo: the organizer (p_token) or its uploader
+-- (p_photo_token). Returns the photo's storage path, so the delete-event-data
+-- function can check first and remove the file from Storage before the row
+-- goes; delete_event_photo checks again.
+create or replace function public.authorize_event_photo_delete(
+  p_event_id text,
+  p_photo_id bigint,
+  p_token text default null,
+  p_photo_token text default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_is_organizer boolean := exists (select 1 from public.events e where e.id = p_event_id and e.organizer_token = p_token);
+  v_photo_token text := nullif(p_photo_token, '');
+  v_storage_path text;
+  v_delete_token_hash text;
+begin
+  if not v_is_organizer and v_photo_token is null then
+    raise exception 'Neplatný organizátorský odkaz.';
+  end if;
+
+  select p.storage_path, p.delete_token_hash
+  into v_storage_path, v_delete_token_hash
+  from public.event_photos p
+  where p.id = p_photo_id and p.event_id = p_event_id;
+
+  if v_storage_path is null then
+    raise exception 'Fotka nebyla nalezena.';
+  end if;
+
+  if not v_is_organizer and v_delete_token_hash is distinct from encode(extensions.digest(v_photo_token, 'sha256'), 'hex') then
+    raise exception 'Tuhle fotku může smazat jen ten, kdo ji nahrál, nebo organizátor.';
+  end if;
+
+  return v_storage_path;
+end;
+$$;
+
+revoke all on function public.authorize_event_photo_delete(text, bigint, text, text) from public, anon, authenticated;
+grant execute on function public.authorize_event_photo_delete(text, bigint, text, text) to service_role;
+
+drop function if exists public.delete_event_photo(text, text, bigint);
+
+create or replace function public.delete_event_photo(
+  p_event_id text,
+  p_token text,
+  p_photo_id bigint,
+  p_photo_token text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.authorize_event_photo_delete(p_event_id, p_photo_id, p_token, p_photo_token);
+
+  -- Storage cleanup happens in the delete-event-data Edge Function before
+  -- this RPC is called - this project rejects direct DML against
+  -- storage.objects, see the comment on delete_events_by_ids().
+  delete from public.event_photos where id = p_photo_id and event_id = p_event_id;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.delete_event_photo(text, text, bigint, text) to anon, authenticated;
+
+commit;

@@ -252,10 +252,7 @@ function OwnerDashboardPage() {
                 eyebrow={t('owner.group')}
                 title={group.name}
                 headerActions={
-                  <button
-                    type="button"
-                    className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
-                    onClick={() => handleDeleteGroup(group.id, group.name)}>
+                  <button type="button" className="secondary-button danger-button" onClick={() => handleDeleteGroup(group.id, group.name)}>
                     {t('owner.deleteGroup')}
                   </button>
                 }>

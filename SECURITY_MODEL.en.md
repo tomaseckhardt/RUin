@@ -21,8 +21,9 @@ or endpoint needs to keep in mind.
   tell them apart.
 - The exception is random tokens that act as bearer credentials:
   `organizer_token` (event management), `event_polls.creator_token` (deciding a
-  poll) and `owners.token` (contact groups and event templates). Whoever has the
-  token has the role, full stop.
+  poll), `owners.token` (contact groups and event templates) and a photo's
+  delete token (deleting a photo you uploaded). Whoever has the token has the
+  role, full stop.
 - Because the client has nothing stronger than "I typed my name" or "I have this
   token", **RLS on every table must deny everything by default**, and **all
   authorization is checked inside SECURITY DEFINER RPC functions**, not through
@@ -104,6 +105,30 @@ PIN. The function returns `ownerId` and `token`, the client saves them in
 `localStorage` (`ruin-owner-identity`), and every RPC for groups and templates
 verifies them (`v_owner.token <> p_token`). The token doesn't change on later
 sign-ins.
+
+### Photo uploader: the photo's delete token
+
+A photo can be deleted by the organizer and by whoever uploaded it. The
+uploader's name (`event_photos.uploaded_by`) is only a label, so a token proves
+ownership: before the upload the browser generates a random token for each
+photo (`crypto.randomUUID()`), keeps it in `localStorage`
+(`ruin-photo-delete-tokens`, keyed by the photo's Storage path) and names the
+file after the token's SHA-256 hash. The database stores only that hash
+(`event_photos.delete_token_hash`), since the token never has to be handed
+back.
+
+- Naming the file after the hash ties the token to that one upload. Anyone can
+  list the `event-photos` bucket, so if `record_event_photo` took any token,
+  someone could record a freshly uploaded photo with their own token before the
+  uploader does, and then delete it. `record_event_photo` therefore stores the
+  hash only for a caller who knows the token whose hash is the file name.
+- Who may delete a photo is decided by `authorize_event_photo_delete()`
+  (service role only), and `delete_event_photo()` checks the same again: a
+  valid organizer token, or a delete token with a matching hash. The
+  `delete-event-data` Edge Function asks the first one, then removes the file
+  from Storage, then calls the second.
+- Photos uploaded before the token existed, or from another device, can only be
+  deleted by the organizer.
 
 ## 3. Therefore: RLS must deny everything by default, and RPCs check authorization themselves
 

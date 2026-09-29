@@ -479,6 +479,7 @@ export default {
     imageOnly: 'Please upload an image.',
     uploadedOne: 'Photo uploaded.',
     uploadedMany: 'Uploaded {uploaded}/{total} photos.',
+    deleting: 'Deleting…',
     confirmDelete: 'Do you really want to delete this photo?',
     storageDeleteFailed: 'The photo couldn’t be deleted from storage, but its record will disappear.',
     nothingToDownload: 'Nothing to download - you uploaded the rest of the photos yourself.',

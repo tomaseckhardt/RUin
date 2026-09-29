@@ -158,7 +158,7 @@ Co všechno `all-phases.sql` obsahuje:
 - Case-insensitive hlasování v anketách.
 - Šťouchnutí s opakovatelným 10minutovým cooldownem místo "jednou navždy" (atomický `on conflict ... do update ... where`), s RLS na `attendee_pings`.
 - Bezpečnostní hardening: `_random_token` přes `pgcrypto`/`gen_random_bytes()` místo nekryptografického `random()` (token je jediné oprávnění k `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` vrací telefonní čísla jen s platným `p_organizer_token`; opravená race podmínka v `moderate_attendee`; srozumitelná hláška místo syrové Postgres chyby při konfliktu telefonního čísla. Záměrně neřeší: `organizer_token` zůstává čitelný (ne hash), protože appka přes PIN umí "obnovit" zapomenutý manage odkaz a to s jednosměrným hashem nejde bez přestavby celého recovery flow. Celý model identity/autorizace (appka nemá auth vůbec, jediná "oprávnění" jsou tokeny v odkazech, RLS musí defaultně vše zamítat) je sepsaný v [SECURITY_MODEL.md](SECURITY_MODEL.md).
-- Mazání fotek ze Storage - ručně přes Edge Function `delete-event-data`, která ověřuje organizátorský token, automaticky po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` - a vlastní životní cyklus anket (nevyhodnocená zanikne 14 dní od vytvoření, vyhodnocená automaticky spolu s akcí, co z ní vznikla).
+- Mazání fotek ze Storage - ručně přes Edge Function `delete-event-data`, která ověřuje organizátorský token nebo mazací token fotky toho, kdo ji nahrál, automaticky po 7 dnech přes `get_expired_event_ids()` a Edge Function `cleanup-expired-events` - a vlastní životní cyklus anket (nevyhodnocená zanikne 14 dní od vytvoření, vyhodnocená automaticky spolu s akcí, co z ní vznikla).
 - Blokace přihlášení řidiče na vlastní nabídku odvozu + možnost odebrat konkrétního spolujezdce z vlastní nabídky.
 - Read hardening: chat, fotky, ankety, seznamy i zastávky jdou číst jen přes RPC omezené na konkrétní akci (přímé `select` politiky jsou `using (false)`), realtime běží přes `event_realtime_ticks`.
 - Organizátor jako samostatná identita (`events.organizer_name`) - chat, šťouchnutí, fotky i položky ze správy akce se podepisují jménem organizátora.
@@ -346,7 +346,7 @@ Organizátorovo ruční mazání používá Edge Function se service-role klíč
 supabase functions deploy delete-event-data --no-verify-jwt
 ```
 
-Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba.
+Funkce sama ověřuje organizátorský token proti dané akci; plánované spouštění ani service-role klíč v klientovi nejsou potřeba. Jednu fotku smí smazat i ten, kdo ji nahrál: pošle mazací token, který si jeho prohlížeč pro fotku uložil při nahrání, a oprávnění ověří `authorize_event_photo_delete()` v databázi (viz [SECURITY_MODEL.md](SECURITY_MODEL.md)). Při nasazení téhle změny nejdřív spusť SQL fázi "Uploaders can delete their own photos", pak funkci znovu nasaď a teprve potom nasaď klienta (merge do `main`). SQL jde spustit kdykoli dřív, protože nové parametry mají výchozí hodnotu a staré volání dál funguje. Opačně ne: nový klient posílá `p_delete_token`, který starý `record_event_photo` nezná, takže by nahrávání fotek selhalo, a nová funkce volá `authorize_event_photo_delete()`, bez které by selhalo mazání fotek.
 
 ## Lokalizace (čeština a angličtina)
 

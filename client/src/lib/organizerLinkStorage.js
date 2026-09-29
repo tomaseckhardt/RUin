@@ -1,10 +1,8 @@
+import { readStoredMap, readStoredValue, removeStoredMapEntry, removeStoredValue, saveStoredMapEntry, writeStoredValue } from './browserStorage.js'
+
 const ORGANIZER_PATH_KEY = 'ruin-organizer-path'
 const ORGANIZER_TOKENS_KEY = 'ruin-organizer-tokens'
 const MAX_SAVED_ORGANIZER_TOKENS = 30
-
-function canUseStorage() {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
-}
 
 function isValidOrganizerPath(path) {
   if (typeof path !== 'string') {
@@ -15,81 +13,21 @@ function isValidOrganizerPath(path) {
 }
 
 export function getSavedOrganizerPath() {
-  if (!canUseStorage()) {
-    return ''
-  }
+  const value = readStoredValue(ORGANIZER_PATH_KEY) || ''
 
-  try {
-    const value = window.localStorage.getItem(ORGANIZER_PATH_KEY) || ''
-
-    if (!isValidOrganizerPath(value)) {
-      return ''
-    }
-
-    return value
-  } catch {
-    return ''
-  }
+  return isValidOrganizerPath(value) ? value : ''
 }
 
 export function saveOrganizerPath(path) {
-  if (!canUseStorage() || !isValidOrganizerPath(path)) {
+  if (!isValidOrganizerPath(path)) {
     return
   }
 
-  try {
-    window.localStorage.setItem(ORGANIZER_PATH_KEY, path)
-  } catch {
-    // Ignore storage failures in restricted browser environments.
-  }
+  writeStoredValue(ORGANIZER_PATH_KEY, path)
 }
 
 export function clearSavedOrganizerPath() {
-  if (!canUseStorage()) {
-    return
-  }
-
-  try {
-    window.localStorage.removeItem(ORGANIZER_PATH_KEY)
-  } catch {
-    // Ignore storage failures in restricted browser environments.
-  }
-}
-
-function readOrganizerTokensMap() {
-  if (!canUseStorage()) {
-    return {}
-  }
-
-  try {
-    const raw = window.localStorage.getItem(ORGANIZER_TOKENS_KEY)
-
-    if (!raw) {
-      return {}
-    }
-
-    const parsed = JSON.parse(raw)
-
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {}
-    }
-
-    return parsed
-  } catch {
-    return {}
-  }
-}
-
-function writeOrganizerTokensMap(map) {
-  if (!canUseStorage()) {
-    return
-  }
-
-  try {
-    window.localStorage.setItem(ORGANIZER_TOKENS_KEY, JSON.stringify(map))
-  } catch {
-    // Ignore storage failures in restricted browser environments.
-  }
+  removeStoredValue(ORGANIZER_PATH_KEY)
 }
 
 export function getSavedOrganizerToken(eventId) {
@@ -97,8 +35,7 @@ export function getSavedOrganizerToken(eventId) {
     return ''
   }
 
-  const map = readOrganizerTokensMap()
-  const token = map[eventId]
+  const token = readStoredMap(ORGANIZER_TOKENS_KEY)[eventId]
 
   return typeof token === 'string' ? token : ''
 }
@@ -108,19 +45,7 @@ export function saveOrganizerToken(eventId, token) {
     return
   }
 
-  const map = readOrganizerTokensMap()
-  const isNewEntry = !(eventId in map)
-  map[eventId] = token
-
-  if (isNewEntry) {
-    const keys = Object.keys(map)
-
-    while (keys.length > MAX_SAVED_ORGANIZER_TOKENS) {
-      delete map[keys.shift()]
-    }
-  }
-
-  writeOrganizerTokensMap(map)
+  saveStoredMapEntry(ORGANIZER_TOKENS_KEY, eventId, token, MAX_SAVED_ORGANIZER_TOKENS)
 }
 
 export function clearSavedOrganizerToken(eventId) {
@@ -128,18 +53,11 @@ export function clearSavedOrganizerToken(eventId) {
     return
   }
 
-  const map = readOrganizerTokensMap()
-
-  if (!(eventId in map)) {
-    return
-  }
-
-  delete map[eventId]
-  writeOrganizerTokensMap(map)
+  removeStoredMapEntry(ORGANIZER_TOKENS_KEY, eventId)
 }
 
 export function getSavedOrganizerEventIds() {
-  const map = readOrganizerTokensMap()
+  const map = readStoredMap(ORGANIZER_TOKENS_KEY)
 
   return Object.keys(map).filter((key) => typeof key === 'string' && key.trim() !== '')
 }

@@ -1,8 +1,6 @@
-const OWNER_IDENTITY_KEY = 'ruin-owner-identity'
+import { readStoredValue, removeStoredValue, writeStoredValue } from './browserStorage.js'
 
-function canUseStorage() {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
-}
+const OWNER_IDENTITY_KEY = 'ruin-owner-identity'
 
 function isValidOwnerIdentity(value) {
   return (
@@ -16,17 +14,13 @@ function isValidOwnerIdentity(value) {
 }
 
 export function getSavedOwner() {
-  if (!canUseStorage()) {
+  const raw = readStoredValue(OWNER_IDENTITY_KEY)
+
+  if (!raw) {
     return null
   }
 
   try {
-    const raw = window.localStorage.getItem(OWNER_IDENTITY_KEY)
-
-    if (!raw) {
-      return null
-    }
-
     const parsed = JSON.parse(raw)
 
     return isValidOwnerIdentity(parsed) ? parsed : null
@@ -36,25 +30,13 @@ export function getSavedOwner() {
 }
 
 export function saveOwnerIdentity(ownerId, token) {
-  if (!canUseStorage() || typeof ownerId !== 'string' || ownerId.trim() === '' || typeof token !== 'string' || token.trim() === '') {
+  if (typeof ownerId !== 'string' || ownerId.trim() === '' || typeof token !== 'string' || token.trim() === '') {
     return
   }
 
-  try {
-    window.localStorage.setItem(OWNER_IDENTITY_KEY, JSON.stringify({ ownerId, token }))
-  } catch {
-    // Ignore storage failures in restricted browser environments.
-  }
+  writeStoredValue(OWNER_IDENTITY_KEY, JSON.stringify({ ownerId, token }))
 }
 
 export function clearSavedOwnerIdentity() {
-  if (!canUseStorage()) {
-    return
-  }
-
-  try {
-    window.localStorage.removeItem(OWNER_IDENTITY_KEY)
-  } catch {
-    // Ignore storage failures in restricted browser environments.
-  }
+  removeStoredValue(OWNER_IDENTITY_KEY)
 }

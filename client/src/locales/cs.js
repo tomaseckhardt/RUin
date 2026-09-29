@@ -481,6 +481,7 @@ export default {
     imageOnly: 'Nahraj prosím obrázek.',
     uploadedOne: 'Fotka nahraná.',
     uploadedMany: 'Nahráno {uploaded}/{total} fotek.',
+    deleting: 'Mažu…',
     confirmDelete: 'Opravdu chceš smazat tuto fotku?',
     storageDeleteFailed: 'Fotku se nepodařilo smazat z úložiště, záznam ale zmizí.',
     nothingToDownload: 'Není co stáhnout, zbylé fotky jsi nahrál/a ty.',

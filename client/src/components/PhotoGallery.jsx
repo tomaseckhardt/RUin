@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import JSZip from 'jszip'
 import ModalOverlay from './ModalOverlay.jsx'
-import { deleteEventPhoto, getEventPhotoUrl, getEventPhotos, recordEventPhoto, uploadEventPhoto } from '../lib/api.js'
+import { deleteEventPhoto, deleteOwnEventPhoto, getEventPhotoUrl, getEventPhotos, recordEventPhoto, uploadEventPhoto } from '../lib/api.js'
 import { useI18n } from '../lib/i18n.js'
+import { clearPhotoDeleteToken, createPhotoDeleteToken, getPhotoDeleteTokens, savePhotoDeleteToken } from '../lib/photoDeleteTokens.js'
 
 function normalizeName(value) {
   return (value || '').trim().toLocaleLowerCase('cs-CZ')
@@ -15,25 +16,44 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
-  const [lightboxIndex, setLightboxIndex] = useState(null)
+  // The lightbox follows a photo, not a position, so it stays on the right
+  // one when the list changes under it (and closes when that photo is gone).
+  const [lightboxPhotoId, setLightboxPhotoId] = useState(null)
+  const [deletingPhotoId, setDeletingPhotoId] = useState(null)
+  const isDeletingRef = useRef(false)
   const fileInputRef = useRef(null)
+  const addButtonRef = useRef(null)
+  const lightboxCloseButtonRef = useRef(null)
+  const lightboxIndex = lightboxPhotoId === null ? -1 : photos.findIndex((photo) => photo.id === lightboxPhotoId)
+  const lightboxPhoto = lightboxIndex === -1 ? null : photos[lightboxIndex]
+  // Read once per render; a guest can delete only photos uploaded from this
+  // browser, which hold a delete token.
+  const deleteTokens = isOrganizer ? {} : getPhotoDeleteTokens()
+
+  function canDelete(photo) {
+    return isOrganizer || typeof deleteTokens[photo.storage_path] === 'string'
+  }
+
+  function showPhotoAt(index) {
+    setLightboxPhotoId(photos[(index + photos.length) % photos.length].id)
+  }
 
   useEffect(() => {
-    if (lightboxIndex === null) {
+    if (lightboxIndex === -1) {
       return undefined
     }
 
     function handleKeyDown(event) {
       if (event.key === 'ArrowRight') {
-        setLightboxIndex((current) => (current + 1) % photos.length)
+        setLightboxPhotoId(photos[(lightboxIndex + 1) % photos.length].id)
       } else if (event.key === 'ArrowLeft') {
-        setLightboxIndex((current) => (current - 1 + photos.length) % photos.length)
+        setLightboxPhotoId(photos[(lightboxIndex - 1 + photos.length) % photos.length].id)
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [lightboxIndex, photos.length])
+  }, [lightboxIndex, photos])
 
   async function loadPhotos() {
     try {
@@ -78,8 +98,12 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         }
 
         try {
-          const storagePath = await uploadEventPhoto(eventId, file)
-          await recordEventPhoto(eventId, storagePath, currentName || t('common.organizer'))
+          const deleteToken = createPhotoDeleteToken()
+          const storagePath = await uploadEventPhoto(eventId, file, deleteToken)
+          // Saved before recording: if the record goes through but its
+          // response is lost, the token must not be lost with it.
+          savePhotoDeleteToken(storagePath, deleteToken)
+          await recordEventPhoto(eventId, storagePath, currentName || t('common.organizer'), deleteToken)
           successCount += 1
         } catch (error) {
           toast.error(error.message)
@@ -97,22 +121,45 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
   }
 
   async function handleDelete(photo) {
-    const confirmed = window.confirm(t('photos.confirmDelete'))
-
-    if (!confirmed) {
+    if (isDeletingRef.current || !window.confirm(t('photos.confirmDelete'))) {
       return
     }
 
+    isDeletingRef.current = true
+    setDeletingPhotoId(photo.id)
+
     try {
-      await deleteEventPhoto(eventId, organizerToken, photo.id)
-      // An open lightbox moves on to the photo that takes the deleted one's
-      // place, or closes when none is left.
-      const remainingCount = photos.length - 1
-      setLightboxIndex((current) => (current === null || remainingCount === 0 ? null : Math.min(current, remainingCount - 1)))
-      await loadPhotos()
+      if (isOrganizer) {
+        await deleteEventPhoto(eventId, organizerToken, photo.id)
+      } else {
+        await deleteOwnEventPhoto(eventId, photo.id, deleteTokens[photo.storage_path])
+      }
+
+      clearPhotoDeleteToken(photo.storage_path)
+
+      // Gone right away rather than after the reload below. An open lightbox
+      // moves on to the photo that takes the deleted one's place, or closes
+      // when none is left.
+      const remaining = photos.filter((item) => item.id !== photo.id)
+      const staysOpen = lightboxPhotoId !== null && remaining.length > 0
+
+      if (lightboxPhotoId === photo.id) {
+        setLightboxPhotoId(staysOpen ? remaining[Math.min(lightboxIndex, remaining.length - 1)].id : null)
+      }
+
+      setPhotos((current) => current.filter((item) => item.id !== photo.id))
+      // The focused Delete button may be about to disappear; keep focus in the
+      // lightbox, or on the album when there's no lightbox left.
+      const focusTarget = staysOpen ? lightboxCloseButtonRef.current : addButtonRef.current
+      focusTarget?.focus()
     } catch (error) {
       toast.error(error.message)
+    } finally {
+      isDeletingRef.current = false
+      setDeletingPhotoId(null)
     }
+
+    await loadPhotos()
   }
 
   async function handleDownloadAll() {
@@ -178,7 +225,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
               {isDownloading ? t('photos.downloading') : t('photos.download')}
             </button>
           ) : null}
-          <button type="button" className="secondary-button" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
+          <button ref={addButtonRef} type="button" className="secondary-button" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
             {isUploading ? t('photos.uploading') : t('photos.add')}
           </button>
         </div>
@@ -189,9 +236,9 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         <p className="text-sm text-slate-500 dark:text-slate-400">{t('photos.empty')}</p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {photos.map((photo, index) => (
+          {photos.map((photo) => (
             <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
-              <button type="button" onClick={() => setLightboxIndex(index)} className="block h-full w-full cursor-zoom-in">
+              <button type="button" onClick={() => setLightboxPhotoId(photo.id)} className="block h-full w-full cursor-zoom-in">
                 <img
                   src={getEventPhotoUrl(photo.storage_path)}
                   alt={t('photos.photoBy', { name: photo.uploaded_by })}
@@ -199,7 +246,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                   loading="lazy"
                 />
               </button>
-              {isOrganizer ? (
+              {canDelete(photo) ? (
                 <button
                   type="button"
                   onClick={(event) => {
@@ -207,7 +254,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                     handleDelete(photo)
                   }}
                   className="absolute right-1.5 top-1.5 rounded-full bg-slate-950/60 px-2 py-1 text-xs text-white transition">
-                  {t('common.delete')}
+                  {deletingPhotoId === photo.id ? t('photos.deleting') : t('common.delete')}
                 </button>
               ) : null}
             </div>
@@ -215,23 +262,20 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
         </div>
       )}
 
-      {lightboxIndex !== null && photos[lightboxIndex] ? (
-        <ModalOverlay open onClose={() => setLightboxIndex(null)} labelledBy="photo-lightbox-title">
+      {lightboxPhoto ? (
+        <ModalOverlay open onClose={() => setLightboxPhotoId(null)} labelledBy="photo-lightbox-title">
           <div className="flex max-h-[90dvh] w-full max-w-3xl flex-col items-center gap-4 p-4">
             <div className="flex w-full items-center justify-between gap-3 text-slate-100">
               <p id="photo-lightbox-title" className="text-sm">
-                {t('photos.lightboxTitle', { name: photos[lightboxIndex].uploaded_by, index: lightboxIndex + 1, total: photos.length })}
+                {t('photos.lightboxTitle', { name: lightboxPhoto.uploaded_by, index: lightboxIndex + 1, total: photos.length })}
               </p>
               <div className="flex shrink-0 gap-2">
-                {isOrganizer ? (
-                  <button
-                    type="button"
-                    className="secondary-button border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
-                    onClick={() => handleDelete(photos[lightboxIndex])}>
-                    {t('common.delete')}
+                {canDelete(lightboxPhoto) ? (
+                  <button type="button" className="secondary-button danger-button" onClick={() => handleDelete(lightboxPhoto)}>
+                    {deletingPhotoId === lightboxPhoto.id ? t('photos.deleting') : t('common.delete')}
                   </button>
                 ) : null}
-                <button type="button" className="secondary-button" onClick={() => setLightboxIndex(null)}>
+                <button ref={lightboxCloseButtonRef} type="button" className="secondary-button" onClick={() => setLightboxPhotoId(null)}>
                   {t('common.close')}
                 </button>
               </div>
@@ -242,15 +286,15 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                 <button
                   type="button"
                   aria-label={t('photos.previous')}
-                  onClick={() => setLightboxIndex((current) => (current - 1 + photos.length) % photos.length)}
+                  onClick={() => showPhotoAt(lightboxIndex - 1)}
                   className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-left-14">
                   ‹
                 </button>
               ) : null}
 
               <img
-                src={getEventPhotoUrl(photos[lightboxIndex].storage_path)}
-                alt={t('photos.photoBy', { name: photos[lightboxIndex].uploaded_by })}
+                src={getEventPhotoUrl(lightboxPhoto.storage_path)}
+                alt={t('photos.photoBy', { name: lightboxPhoto.uploaded_by })}
                 className="max-h-[70dvh] max-w-full rounded-xl object-contain"
               />
 
@@ -258,7 +302,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
                 <button
                   type="button"
                   aria-label={t('photos.next')}
-                  onClick={() => setLightboxIndex((current) => (current + 1) % photos.length)}
+                  onClick={() => showPhotoAt(lightboxIndex + 1)}
                   className="absolute right-0 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/60 text-xl text-white sm:-right-14">
                   ›
                 </button>

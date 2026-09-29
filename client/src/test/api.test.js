@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { supabase } from '../lib/supabase.js'
 import { setLocale } from '../lib/i18n.js'
 import {
@@ -12,6 +13,8 @@ import {
   moderateAttendee,
   removeEvent,
   deleteEventPhoto,
+  deleteOwnEventPhoto,
+  recordEventPhoto,
   replayRetryQueue,
   sendEventChatMessage,
   submitRsvp,
@@ -78,6 +81,16 @@ describe('deleteEventData', () => {
     })
   })
 
+  it('calls the server-side handler to delete a guest’s own photo with its delete token', async () => {
+    supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
+
+    await deleteOwnEventPhoto('event-1', 12, 'delete-token-1')
+
+    expect(supabase.functions.invoke).toHaveBeenCalledWith('delete-event-data', {
+      body: { action: 'delete_photo', eventId: 'event-1', photoId: 12, photoToken: 'delete-token-1' },
+    })
+  })
+
   it('calls the server-side handler to delete a photo', async () => {
     supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null })
 
@@ -85,6 +98,21 @@ describe('deleteEventData', () => {
 
     expect(supabase.functions.invoke).toHaveBeenCalledWith('delete-event-data', {
       body: { action: 'delete_photo', eventId: 'event-1', token: 'organizer-token', photoId: 12 },
+    })
+  })
+})
+
+describe('recordEventPhoto', () => {
+  it('sends the photo’s delete token so the uploader can delete it later', async () => {
+    supabase.rpc.mockResolvedValue({ data: { success: true }, error: null })
+
+    await recordEventPhoto('event-1', 'event-1/photo.jpg', 'Alice', 'delete-token-1')
+
+    expect(supabase.rpc).toHaveBeenCalledWith('record_event_photo', {
+      p_event_id: 'event-1',
+      p_storage_path: 'event-1/photo.jpg',
+      p_uploaded_by: 'Alice',
+      p_delete_token: 'delete-token-1',
     })
   })
 })
@@ -278,5 +306,19 @@ describe('moderateAttendee/claimSignupItem numeric ids', () => {
       p_attendee_name: 'Alice',
       p_seats: 1,
     })
+  })
+})
+
+describe('uploadEventPhoto file name', () => {
+  it('names the file after the SHA-256 hash of the photo’s delete token', async () => {
+    const upload = jest.fn().mockResolvedValue({ error: null })
+    supabase.storage.from.mockReturnValue({ upload })
+    const file = { type: 'image/jpeg', size: 1024, name: 'party.JPG' }
+
+    const storagePath = await uploadEventPhoto('event-1', file, 'delete-token-1')
+
+    const expectedHash = createHash('sha256').update('delete-token-1').digest('hex')
+    expect(storagePath).toBe(`event-1/${expectedHash}.JPG`)
+    expect(upload).toHaveBeenCalledWith(storagePath, file)
   })
 })
