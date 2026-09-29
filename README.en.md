@@ -92,7 +92,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
   - `public/` - service worker (`sw.js`), icons and the manifest
   - `scripts/run-vite-safe.mjs` - runs Vite from a temporary copy of the project (see [NPM scripts](#npm-scripts))
 - `supabase/sql/all-phases.sql` - the whole database schema, a single SQL file
-- `supabase/functions/` - Edge Functions (`send-event-reminders` for push reminders, `cleanup-expired-events` for cleaning up expired events, `delete-event-data` for manual photo/event deletion)
+- `supabase/functions/` - Edge Functions (`send-event-reminders` for push reminders, `cleanup-expired-events` for cleaning up expired events, `delete-event-data` for manual photo/event deletion). They run on Deno, not Node: for VS Code to stop flagging them (`Cannot find name 'Deno'`, unresolved `npm:` imports), install [Deno](https://deno.com) and the Deno extension for VS Code - `.vscode/settings.json` enables it for `supabase/functions` only.
 - `scripts/audit-a11y.mjs` - a11y audit of the built app (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) and the issue and pull request templates
 - `CNAME` - the custom domain for GitHub Pages

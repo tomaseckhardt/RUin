@@ -92,7 +92,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
   - `public/` - service worker (`sw.js`), ikony a manifest
   - `scripts/run-vite-safe.mjs` - spouští Vite z dočasné kopie projektu (viz [NPM skripty](#npm-skripty))
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
-- `supabase/functions/` - Edge Functions (`send-event-reminders` pro push připomínky, `cleanup-expired-events` pro úklid expirovaných akcí, `delete-event-data` pro ruční mazání fotek a akcí)
+- `supabase/functions/` - Edge Functions (`send-event-reminders` pro push připomínky, `cleanup-expired-events` pro úklid expirovaných akcí, `delete-event-data` pro ruční mazání fotek a akcí). Běží v Deno, ne v Node: aby je VS Code nehlásil jako chybné (`Cannot find name 'Deno'`, nenalezený import `npm:`), nainstaluj si [Deno](https://deno.com) a rozšíření Deno pro VS Code - `.vscode/settings.json` ho zapíná jen pro `supabase/functions`.
 - `scripts/audit-a11y.mjs` - a11y audit postaveného buildu (Puppeteer + axe-core)
 - `.github/` - CI/CD workflow (`workflows/deploy-pages.yml`) a šablony pro issues a pull requesty
 - `CNAME` - vlastní doména pro GitHub Pages
