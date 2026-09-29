@@ -10,6 +10,7 @@ import {
   getEventStops,
   getSignupItems,
   moderateAttendee,
+  replayRetryQueue,
   sendEventChatMessage,
   submitRsvp,
   unclaimSignupItem,
@@ -28,6 +29,7 @@ jest.mock('../lib/supabase.js', () => ({
 beforeEach(() => {
   supabase.rpc.mockReset()
   supabase.storage.from.mockReset()
+  window.localStorage.removeItem('ruin-retry-queue')
 })
 
 describe('callRpc error handling (via submitRsvp)', () => {
@@ -56,6 +58,31 @@ describe('callRpc error handling (via submitRsvp)', () => {
     supabase.rpc.mockResolvedValue({ data: null, error: {} })
 
     await expect(createEvent({ name: 'x' })).rejects.toThrow('Akci se nepodařilo vytvořit.')
+  })
+})
+
+describe('retry queue concurrency', () => {
+  it('preserves a retryable request enqueued while an older request is replaying', async () => {
+    let finishReplay
+    const pendingReplay = new Promise((resolve) => {
+      finishReplay = resolve
+    })
+
+    window.localStorage.setItem('ruin-retry-queue', JSON.stringify([{ name: 'submit_rsvp', args: { p_event_id: 'event-1' } }]))
+    supabase.rpc.mockImplementation((_name, args) =>
+      args.p_event_id === 'event-1' ? pendingReplay : Promise.resolve({ data: null, error: { message: 'TypeError: Failed to fetch' } }),
+    )
+
+    const replay = replayRetryQueue()
+    await Promise.resolve()
+    await expect(submitRsvp('event-2', { name: 'Alice', status: 'confirmed' })).rejects.toThrow()
+
+    finishReplay({ data: { success: true }, error: null })
+    await replay
+
+    const remainingQueue = JSON.parse(window.localStorage.getItem('ruin-retry-queue'))
+    expect(remainingQueue).toHaveLength(1)
+    expect(remainingQueue[0].args.p_event_id).toBe('event-2')
   })
 })
 
