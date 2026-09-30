@@ -9,7 +9,7 @@ export default defineConfig({
   outputDir: 'test-results',
   timeout: 180_000,
   // One language after the other: the dev server is slow when both hit it.
-  workers: 1,
+  workers: 2,
   // The RSVP celebration alone keeps the page busy for 4.5 s.
   expect: { timeout: 15_000 },
   retries: process.env.CI ? 1 : 0,
