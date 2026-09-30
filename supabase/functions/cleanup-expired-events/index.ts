@@ -6,10 +6,11 @@
 // deletion from storage tables is not allowed. Use the Storage API instead.")
 // and broke the whole app - see the comment on delete_events_by_ids() in
 // supabase/sql/all-phases.sql. This Edge Function does the storage cleanup
-// instead, tracks which events it actually succeeded for, and only asks the
-// database to delete that specific set - an event whose photo removal fails
-// keeps its row and gets retried on the next scheduled run, instead of
-// having its only photo reference deleted alongside it.
+// instead, and deletes each event's row right after its photos are gone - an
+// event whose photo removal fails keeps its row and gets retried on the next
+// scheduled run, instead of having its only photo reference deleted
+// alongside it. At most MAX_EVENTS_PER_RUN events per run, so a backlog
+// can't outlast the function's time limit; the rest wait for the next run.
 //
 // Deploy with: supabase functions deploy cleanup-expired-events --no-verify-jwt
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are provided automatically by the runtime.
@@ -29,13 +30,14 @@ if (!supabaseUrl || !serviceRoleKey) {
 }
 
 const supabase = supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null
+const MAX_EVENTS_PER_RUN = 50
 
 Deno.serve(async (req: Request) => {
   if (!supabase || !serviceRoleKey) {
     return Response.json({ error: 'Server misconfigured: missing secrets.' }, { status: 500 })
   }
 
-  const refusal = refuseUnlessScheduler(req, serviceRoleKey)
+  const refusal = await refuseUnlessScheduler(req, serviceRoleKey)
 
   if (refusal) {
     return refusal
@@ -48,28 +50,25 @@ Deno.serve(async (req: Request) => {
   }
 
   let removedPhotoCount = 0
-  const readyToDeleteIds: string[] = []
+  let deletedEventCount = 0
 
-  for (const eventId of expiredIds ?? []) {
+  for (const eventId of (expiredIds ?? []).slice(0, MAX_EVENTS_PER_RUN)) {
     try {
       removedPhotoCount += await removeEventPhotos(supabase, eventId)
-      readyToDeleteIds.push(eventId)
     } catch (error) {
       // The event keeps its row and is retried on the next run.
       console.error(`Event ${eventId}:`, errorMessage(error))
+      continue
     }
-  }
 
-  let deletedEventCount = 0
-
-  if (readyToDeleteIds.length > 0) {
-    const { data, error: deleteError } = await supabase.rpc('delete_events_by_ids', { p_event_ids: readyToDeleteIds })
+    const { data, error: deleteError } = await supabase.rpc('delete_events_by_ids', { p_event_ids: [eventId] })
 
     if (deleteError) {
-      return Response.json({ error: deleteError.message, removedPhotoCount }, { status: 500 })
+      console.error(`Event ${eventId}:`, deleteError.message)
+      continue
     }
 
-    deletedEventCount = data ?? 0
+    deletedEventCount += data ?? 0
   }
 
   return Response.json({ expiredEventCount: expiredIds?.length ?? 0, removedPhotoCount, deletedEventCount })

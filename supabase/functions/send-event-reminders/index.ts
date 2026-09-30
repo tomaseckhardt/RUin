@@ -1,9 +1,11 @@
 // Scheduled Edge Function: sends Web Push reminders 24h and 1h before an event.
 //
 // Each event can get two reminders - 'day_before' and 'hour_before' - tracked
-// independently in event_reminders_sent so a reminder is never sent twice,
-// even though this function runs on a recurring schedule and
+// per endpoint in event_reminder_deliveries so a reminder is never sent twice
+// to one browser, even though this function runs on a recurring schedule and
 // get_pending_event_reminders() re-queries "what's due right now" every time.
+// An event stays pending for its whole window while some subscription still
+// lacks a delivery, so someone who subscribes late still gets the reminder.
 //
 // Deploy with: supabase functions deploy send-event-reminders --no-verify-jwt
 // Required secrets (supabase secrets set ...):
@@ -87,19 +89,54 @@ function buildNotificationPayload(reminder: EventReminder) {
   }
 }
 
-// Claims one batch of endpoints for this reminder. A delivery is acknowledged
-// only after push succeeds; transient failures keep their own retry state.
-async function processReminder(supabase: SupabaseClient, reminder: EventReminder) {
-  const { data: subscriptions, error: subscriptionsError } = await supabase.rpc('claim_event_reminder_deliveries', {
+// Leaves room under the Edge Function's wall-clock limit; whatever isn't
+// claimed by then waits for the next scheduled run.
+const RUN_TIME_BUDGET_MS = 60_000
+// The browser rejected the subscription itself (400 malformed, 403 created for
+// another VAPID key, 404/410 gone) - retrying can never succeed.
+const PERMANENT_PUSH_ERRORS = new Set([400, 403, 404, 410])
+
+function markDelivery(supabase: SupabaseClient, reminder: EventReminder, endpoint: string, sent: boolean) {
+  return supabase.rpc('mark_event_reminder_delivery', {
     p_event_id: reminder.event_id,
     p_reminder_type: reminder.reminder_type,
+    p_endpoint: endpoint,
+    p_sent: sent,
   })
+}
 
-  if (subscriptionsError) {
-    console.error(`Failed to claim reminder deliveries for event ${reminder.event_id}:`, subscriptionsError.message)
-    return { sentCount: 0, failedCount: 0 }
+// Claims batches of endpoints for this reminder until none are left or the
+// run's deadline passes.
+async function processReminder(supabase: SupabaseClient, reminder: EventReminder, deadline: number) {
+  let sentCount = 0
+  let failedCount = 0
+
+  while (Date.now() < deadline) {
+    const { data: subscriptions, error: subscriptionsError } = await supabase.rpc('claim_event_reminder_deliveries', {
+      p_event_id: reminder.event_id,
+      p_reminder_type: reminder.reminder_type,
+    })
+
+    if (subscriptionsError) {
+      console.error(`Failed to claim reminder deliveries for event ${reminder.event_id}:`, subscriptionsError.message)
+      break
+    }
+
+    if (!subscriptions?.length) {
+      break
+    }
+
+    const result = await sendBatch(supabase, reminder, subscriptions)
+    sentCount += result.sentCount
+    failedCount += result.failedCount
   }
 
+  return { sentCount, failedCount }
+}
+
+// A delivery is acknowledged only after push succeeds; transient failures
+// keep their own retry state (claim_event_reminder_deliveries caps attempts).
+async function sendBatch(supabase: SupabaseClient, reminder: EventReminder, subscriptions: PushSubscription[]) {
   const payload = JSON.stringify(buildNotificationPayload(reminder))
   // The push service keeps an undelivered message for its TTL (4 weeks by
   // default); a reminder that can't reach the device before the event
@@ -108,7 +145,7 @@ async function processReminder(supabase: SupabaseClient, reminder: EventReminder
   let sentCount = 0
   let failedCount = 0
 
-  for (const subscription of (subscriptions ?? []) as PushSubscription[]) {
+  for (const subscription of subscriptions) {
     const pushSubscription = {
       endpoint: subscription.endpoint,
       keys: { p256dh: subscription.p256dh, auth: subscription.auth },
@@ -116,25 +153,11 @@ async function processReminder(supabase: SupabaseClient, reminder: EventReminder
 
     try {
       await webpush.sendNotification(pushSubscription, payload, pushOptions)
-      sentCount += 1
-
-      const { error: markDeliveryError } = await supabase.rpc('mark_event_reminder_delivery', {
-        p_event_id: reminder.event_id,
-        p_reminder_type: reminder.reminder_type,
-        p_endpoint: subscription.endpoint,
-        p_sent: true,
-      })
-
-      if (markDeliveryError) {
-        failedCount += 1
-        console.error(`Failed to acknowledge reminder for endpoint ${subscription.endpoint}:`, markDeliveryError.message)
-      }
     } catch (sendError: unknown) {
       failedCount += 1
       const statusCode = (sendError as { statusCode?: unknown } | null)?.statusCode
 
-      // 404/410: the browser dropped the subscription, so it goes for good.
-      if (statusCode === 404 || statusCode === 410) {
+      if (typeof statusCode === 'number' && PERMANENT_PUSH_ERRORS.has(statusCode)) {
         const { error: deleteError } = await supabase.rpc('delete_push_subscription_by_endpoint', {
           p_endpoint: subscription.endpoint,
         })
@@ -148,27 +171,29 @@ async function processReminder(supabase: SupabaseClient, reminder: EventReminder
         console.error(`Push failed for endpoint ${subscription.endpoint}:`, errorMessage(sendError))
       }
 
-      // Release the claim so the next run retries this endpoint.
-      const { error: releaseError } = await supabase.rpc('mark_event_reminder_delivery', {
-        p_event_id: reminder.event_id,
-        p_reminder_type: reminder.reminder_type,
-        p_endpoint: subscription.endpoint,
-        p_sent: false,
-      })
+      // Release the claim so a later run retries this endpoint.
+      const { error: releaseError } = await markDelivery(supabase, reminder, subscription.endpoint, false)
 
       if (releaseError) {
         console.error(`Failed to release reminder claim for ${subscription.endpoint}:`, releaseError.message)
       }
+
+      continue
     }
-  }
 
-  const { error: completeError } = await supabase.rpc('complete_event_reminder', {
-    p_event_id: reminder.event_id,
-    p_reminder_type: reminder.reminder_type,
-  })
+    sentCount += 1
 
-  if (completeError) {
-    console.error(`Failed to complete ${reminder.reminder_type} reminder for event ${reminder.event_id}:`, completeError.message)
+    // Retried once: an unacknowledged delivery is re-sent after its lease runs
+    // out, which would show the reminder twice.
+    let ack = await markDelivery(supabase, reminder, subscription.endpoint, true)
+
+    if (ack.error) {
+      ack = await markDelivery(supabase, reminder, subscription.endpoint, true)
+    }
+
+    if (ack.error) {
+      console.error(`Failed to acknowledge reminder for endpoint ${subscription.endpoint}:`, ack.error.message)
+    }
   }
 
   return { sentCount, failedCount }
@@ -179,7 +204,7 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: 'Server misconfigured: missing secrets.' }, { status: 500 })
   }
 
-  const refusal = refuseUnlessScheduler(req, serviceRoleKey)
+  const refusal = await refuseUnlessScheduler(req, serviceRoleKey)
 
   if (refusal) {
     return refusal
@@ -191,11 +216,12 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: remindersError.message }, { status: 500 })
   }
 
+  const deadline = Date.now() + RUN_TIME_BUDGET_MS
   let sentCount = 0
   let failedCount = 0
 
   for (const reminder of (reminders ?? []) as EventReminder[]) {
-    const result = await processReminder(supabase, reminder)
+    const result = await processReminder(supabase, reminder, deadline)
     sentCount += result.sentCount
     failedCount += result.failedCount
   }

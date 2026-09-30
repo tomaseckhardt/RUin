@@ -12,8 +12,23 @@ export function errorMessage(error: unknown) {
 // checks nothing: they accept only the scheduler, which sends
 // `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` (see README.md).
 // Returns the response for a refused call, or null to go ahead.
-export function refuseUnlessScheduler(req: Request, serviceRoleKey: string) {
-  return req.headers.get('authorization') === `Bearer ${serviceRoleKey}` ? null : Response.json({ error: 'Unauthorized.' }, { status: 401 })
+export async function refuseUnlessScheduler(req: Request, serviceRoleKey: string) {
+  const authorized = await timingSafeEqualStrings(req.headers.get('authorization') ?? '', `Bearer ${serviceRoleKey}`)
+  return authorized ? null : Response.json({ error: 'Unauthorized.' }, { status: 401 })
+}
+
+// Compares secrets without leaking through timing how much of them matched:
+// hashing first gives both sides the same length, then every byte is checked.
+export async function timingSafeEqualStrings(a: string, b: string) {
+  const encoder = new TextEncoder()
+  const [hashA, hashB] = await Promise.all([a, b].map(async (value) => new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(value)))))
+  let difference = 0
+
+  for (let i = 0; i < hashA.length; i += 1) {
+    difference |= hashA[i] ^ hashB[i]
+  }
+
+  return difference === 0
 }
 
 export async function removeStoragePaths(supabase: SupabaseClient, paths: string[]) {

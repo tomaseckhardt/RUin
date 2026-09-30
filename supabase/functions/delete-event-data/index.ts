@@ -5,7 +5,7 @@
 // photo. The authorize_event_photo_delete RPC decides who may delete a photo.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { errorMessage, removeEventPhotos, removeStoragePaths } from '../_shared/common.ts'
+import { errorMessage, removeEventPhotos, removeStoragePaths, timingSafeEqualStrings } from '../_shared/common.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -44,6 +44,10 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Neplatný požadavek.' }, 400)
   }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jsonResponse({ error: 'Neplatný požadavek.' }, 400)
+  }
+
   const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : ''
   const token = typeof body.token === 'string' ? body.token : ''
   const photoToken = typeof body.photoToken === 'string' ? body.photoToken : ''
@@ -55,27 +59,19 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Neplatný požadavek.' }, 400)
   }
 
-  const { data: event, error: eventError } = await supabase.from('events').select('organizer_token').eq('id', eventId).maybeSingle()
-
-  if (eventError) {
-    return jsonResponse({ error: 'Akci se nepodařilo ověřit.' }, 500)
-  }
-
-  if (!event) {
-    return jsonResponse({ error: 'Akce už neexistuje.' }, 404)
-  }
-
   if (body.action === 'delete_photo') {
     const photoId = String(body.photoId ?? '')
 
-    if (!/^\d+$/.test(photoId)) {
+    // At most 18 digits, so it always fits the bigint column.
+    if (!/^\d{1,18}$/.test(photoId)) {
       return jsonResponse({ error: 'Fotka nebyla nalezena.' }, 400)
     }
 
     const credentials = { p_event_id: eventId, p_photo_id: photoId, p_token: token || null, p_photo_token: photoToken || null }
 
     // Checked before the file goes, so a refused request can't remove it;
-    // delete_event_photo checks the same credentials again.
+    // delete_event_photo checks the same credentials again. The RPC also
+    // covers a missing event (the photo isn't found).
     const { data: storagePath, error: authorizeError } = await supabase.rpc('authorize_event_photo_delete', credentials)
 
     if (authorizeError) {
@@ -98,7 +94,15 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ success: true })
   }
 
-  if (event.organizer_token !== token) {
+  const { data: event, error: eventError } = await supabase.from('events').select('organizer_token').eq('id', eventId).maybeSingle()
+
+  if (eventError) {
+    return jsonResponse({ error: 'Akci se nepodařilo ověřit.' }, 500)
+  }
+
+  // A missing event gets the same answer as a wrong token, so the response
+  // doesn't reveal which event ids exist.
+  if (!event || !(await timingSafeEqualStrings(event.organizer_token, token))) {
     return jsonResponse({ error: 'Neplatný organizátorský odkaz.' }, 401)
   }
 
