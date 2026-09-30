@@ -133,6 +133,8 @@ for (const locale of ['cs', 'en'] as const) {
     }
 
     await preparePage(page)
+    // Time runs normally; the test only skips ahead past the RSVP celebrations.
+    await page.clock.install()
     // Deleting asks window.confirm(); Playwright would dismiss it.
     page.on('dialog', (browserDialog) => browserDialog.accept())
 
@@ -194,6 +196,9 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(page.getByText(input.newDescription)).toBeVisible()
       await page.getByLabel(t('common.yourName')).fill(input.guest)
       await page.getByRole('button', { name: t('event.confirmOption'), exact: true }).click()
+      // The guest's own panel replaces the celebration after 4.5 s.
+      await expect(page.getByText(t('celebration.confirmTitleWithName', { name: input.guest }))).toBeVisible()
+      await page.clock.fastForward(4500)
       await expect(page.getByRole('heading', { level: 2, name: input.guest, exact: true })).toBeVisible()
 
       const chatInput = page.getByPlaceholder(t('chat.placeholder'))
@@ -249,6 +254,8 @@ for (const locale of ['cs', 'en'] as const) {
       await page.getByRole('radio', { name: t('event.excuseOption') }).click()
       await page.getByLabel(t('event.excuseReason')).fill(input.excuse)
       await page.getByRole('button', { name: t('event.sendExcuse') }).click()
+      await expect(page.getByText(t('celebration.declineTitleWithName', { name: input.secondGuest }))).toBeVisible()
+      await page.clock.fastForward(3500)
       await expect(page.getByRole('heading', { level: 2, name: input.secondGuest, exact: true })).toBeVisible()
       // The organizer is the event's first guest.
       expect(backend.db.attendees.map((attendee) => [attendee.name, attendee.status])).toEqual([
