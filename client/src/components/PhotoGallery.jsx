@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import JSZip from 'jszip'
 import ModalOverlay from './ModalOverlay.jsx'
 import PhotoComments from './PhotoComments.jsx'
 import {
@@ -299,6 +298,8 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
     setIsDownloading(true)
 
     try {
+      // Loaded on demand - only this download needs it.
+      const { default: JSZip } = await import('jszip')
       const zip = new JSZip()
 
       await Promise.all(
