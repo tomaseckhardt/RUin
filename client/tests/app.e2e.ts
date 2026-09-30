@@ -6,9 +6,10 @@
 // Run: npm run test:e2e (in client/). It starts its own dev server; failure
 // traces land in tests/test-results/.
 
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import cs from '../src/locales/cs.js'
 import en from '../src/locales/en.js'
+import serverMessagesEn from '../src/locales/serverMessages.en.js'
 import { createFakeSupabase } from './fakeSupabase.ts'
 
 type Locale = 'cs' | 'en'
@@ -104,28 +105,36 @@ function capture(text: string, pattern: RegExp): string {
 }
 
 for (const locale of ['cs', 'en'] as const) {
-  test(`the whole app works in ${LOCALE_NAMES[locale]}`, async ({ page }) => {
+  test(`the whole app works in ${LOCALE_NAMES[locale]}`, async ({ browser, page }) => {
     const t = translator(locale)
     const input = INPUT[locale]
     const backend = createFakeSupabase()
     const pageErrors: string[] = []
     const realSupabaseRequests: string[] = []
 
-    page.on('pageerror', (error) => pageErrors.push(error.message))
-    // A safety net: the dev server is built against the fake URL, so nothing
-    // may ever go to a real project.
-    await page.route(/\.supabase\.(co|in)\//, (route) => {
-      realSupabaseRequests.push(route.request().url())
-      return route.abort()
-    })
-    await backend.install(page)
-    await page.addInitScript((appLocale) => {
-      localStorage.setItem('ruin-locale', appLocale)
+    // Every browser in the test (a second one votes in the poll) talks to the
+    // same fake backend.
+    async function preparePage(browserPage: Page) {
+      browserPage.on('pageerror', (error) => pageErrors.push(error.message))
+      // A safety net: the dev server is built against the fake URL, so nothing
+      // may ever go to a real project.
+      await browserPage.route(/\.supabase\.(co|in)\//, (route) => {
+        realSupabaseRequests.push(route.request().url())
+        return route.abort()
+      })
+      await backend.install(browserPage)
+      await browserPage.addInitScript((appLocale) => {
+        localStorage.setItem('ruin-locale', appLocale)
 
-      if (!localStorage.getItem('ruin-theme')) {
-        localStorage.setItem('ruin-theme', 'light')
-      }
-    }, locale)
+        if (!localStorage.getItem('ruin-theme')) {
+          localStorage.setItem('ruin-theme', 'light')
+        }
+      }, locale)
+    }
+
+    await preparePage(page)
+    // Deleting asks window.confirm(); Playwright would dismiss it.
+    page.on('dialog', (browserDialog) => browserDialog.accept())
 
     const dialog = page.getByRole('dialog')
     const toast = (text: string) => expect(page.getByText(text, { exact: true }).first()).toBeVisible()
@@ -213,8 +222,25 @@ for (const locale of ['cs', 'en'] as const) {
       await commentInput.fill(input.comment)
       await commentInput.press('Enter')
       await expect(dialog.getByText(input.comment)).toBeVisible()
+      // Escape in a field with a draft keeps the lightbox open.
+      await expect(commentInput).toHaveValue('')
       await page.keyboard.press('Escape')
       await expect(dialog).toBeHidden()
+    })
+
+    await test.step('the guest deletes their own photo', async () => {
+      const photo = page.getByRole('img', { name: t('photos.photoBy', { name: input.guest }) })
+      await photo.click()
+      // Only the uploader's browser (it holds the delete token) offers Delete.
+      await dialog.getByRole('button', { name: t('common.delete'), exact: true }).click()
+      // The lightbox closes with the last photo gone.
+      await expect(dialog).toBeHidden()
+      await expect(photo).toBeHidden()
+      await expect(page.getByText(t('photos.empty'))).toBeVisible()
+      expect(backend.db.photos).toEqual([])
+      expect(backend.db.objects).toEqual([])
+      expect(backend.db.likes).toEqual([])
+      expect(backend.db.comments).toEqual([])
     })
 
     await test.step('a second guest excuses themselves', async () => {
@@ -224,7 +250,9 @@ for (const locale of ['cs', 'en'] as const) {
       await page.getByLabel(t('event.excuseReason')).fill(input.excuse)
       await page.getByRole('button', { name: t('event.sendExcuse') }).click()
       await expect(page.getByRole('heading', { level: 2, name: input.secondGuest, exact: true })).toBeVisible()
+      // The organizer is the event's first guest.
       expect(backend.db.attendees.map((attendee) => [attendee.name, attendee.status])).toEqual([
+        [input.organizer, 'confirmed'],
         [input.guest, 'confirmed'],
         [input.secondGuest, 'excused'],
       ])
@@ -245,12 +273,28 @@ for (const locale of ['cs', 'en'] as const) {
       expect(backend.db.pings).toEqual([expect.objectContaining({ source_name: input.guest, message: input.ping })])
     })
 
-    await test.step('a wrong link asks for the PIN, which unlocks the event again', async () => {
+    await test.step('a wrong link asks for the PIN, which refuses a wrong one and unlocks the event again', async () => {
+      // A wrong link doesn't cost this browser its saved organizer link.
+      await page.goto(`/#/event/${eventId}/manage?token=not-the-real-token`)
+      await expect(page).toHaveURL(new RegExp(`#/event/${eventId}/manage$`))
+      await expect(page.getByRole('heading', { level: 1, name: input.event })).toBeVisible()
+
+      // Without one, it asks for the PIN.
+      await page.evaluate(() => localStorage.removeItem('ruin-organizer-tokens'))
       await page.goto(`/#/event/${eventId}/manage?token=not-the-real-token`)
       await expect(page.getByRole('heading', { level: 1, name: t('manage.unlockTitle') })).toBeVisible()
       await expect(page.getByText(t('manage.unlockAgain'))).toBeVisible()
       // The wrong token is dropped from the address bar and from storage.
       await expect(page).toHaveURL(new RegExp(`#/event/${eventId}/manage$`))
+
+      // A wrong PIN comes back as { error } (so the lockout counter sticks)
+      // and is shown like any other error.
+      const wrongPin = 'Neplatný správcovský PIN.'
+      await page.getByLabel(t('pin.label')).fill('0000')
+      await page.getByRole('button', { name: t('pin.enter') }).click()
+      await toast(locale === 'cs' ? wrongPin : serverMessagesEn[wrongPin])
+      expect(backend.db.events[0].pin_failed_attempts).toBe(1)
+
       await page.getByLabel(t('pin.label')).fill('1234')
       await page.getByRole('button', { name: t('pin.enter') }).click()
       await toast(t('manage.unlockedAndSaved'))
@@ -261,7 +305,7 @@ for (const locale of ['cs', 'en'] as const) {
       await page.getByRole('button', { name: t('attendees.accept') }).click()
       await toast(t('manage.excuseAccepted'))
       await expect(page.getByText(t('attendees.status.excused_accepted'), { exact: true })).toBeVisible()
-      expect(backend.db.attendees[1].status).toBe('excused_accepted')
+      expect(backend.db.attendees[2].status).toBe('excused_accepted')
     })
 
     await test.step('someone runs a poll, a friend votes and the poll becomes an event', async () => {
@@ -281,18 +325,27 @@ for (const locale of ['cs', 'en'] as const) {
       await page.getByPlaceholder(t('createPoll.locationPlaceholder')).nth(1).fill(input.pollPlaceB)
       await page.getByRole('button', { name: t('createPoll.submit') }).click()
       await toast(t('createPoll.created'))
-      await expect(page).toHaveURL(/#\/poll\/\w+\?token=/)
-      const creatorUrl = page.url()
-      const pollId = capture(creatorUrl, /#\/poll\/(\w+)/)
+      // The creator's token stays in this browser; the address bar shows the
+      // plain voting link.
+      await expect(page).toHaveURL(/#\/poll\/\w+$/)
+      const pollId = capture(page.url(), /#\/poll\/(\w+)$/)
+      await expect(page.getByRole('button', { name: t('poll.copyVoteLink') })).toBeVisible()
 
-      await page.goto(`/#/poll/${pollId}`)
-      await page.getByPlaceholder(t('common.guestNamePlaceholder')).fill(input.voter)
-      await page.getByRole('radio').first().check()
-      await page.getByRole('button', { name: t('poll.vote'), exact: true }).click()
-      await toast(t('poll.voteSaved'))
+      // The friend votes from their own browser, where the same link is the voting page.
+      const voterContext = await browser.newContext({ baseURL: test.info().project.use.baseURL, serviceWorkers: 'block', timezoneId: 'Europe/Prague' })
+      const voterPage = await voterContext.newPage()
+      await preparePage(voterPage)
+      await voterPage.goto(`/#/poll/${pollId}`)
+      await expect(voterPage.getByRole('button', { name: t('poll.copyVoteLink') })).toBeHidden()
+      await voterPage.getByPlaceholder(t('common.guestNamePlaceholder')).fill(input.voter)
+      await voterPage.getByRole('radio').first().check()
+      await voterPage.getByRole('button', { name: t('poll.vote'), exact: true }).click()
+      await expect(voterPage.getByText(t('poll.voteSaved'), { exact: true }).first()).toBeVisible()
+      await expect(voterPage.getByText(t('poll.votes', { count: 1 }), { exact: true })).toBeVisible()
+      await voterContext.close()
+
+      await page.reload()
       await expect(page.getByText(t('poll.votes', { count: 1 }), { exact: true })).toBeVisible()
-
-      await page.goto(creatorUrl)
       await page
         .getByRole('button', { name: t('poll.pick'), exact: true })
         .first()
@@ -317,6 +370,18 @@ for (const locale of ['cs', 'en'] as const) {
 
       await page.getByRole('switch', { name: t('shell.darkMode') }).click()
       await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+    })
+
+    await test.step('the organizer deletes the first event with everything in it', async () => {
+      // The PIN unlock saved the organizer link in this browser.
+      await page.goto(`/#/event/${eventId}/manage`)
+      await expect(page.getByRole('heading', { level: 1, name: input.event })).toBeVisible()
+      await page.getByRole('button', { name: t('manage.deleteEvent') }).click()
+      await toast(t('manage.eventDeleted'))
+      await expect(page).toHaveURL(/#\/$/)
+      expect(backend.db.events.map((event) => event.id)).not.toContain(eventId)
+      expect(backend.db.attendees.filter((attendee) => attendee.event_id === eventId)).toEqual([])
+      expect(backend.db.items.filter((item) => item.event_id === eventId)).toEqual([])
     })
 
     expect(backend.unexpected).toEqual([])

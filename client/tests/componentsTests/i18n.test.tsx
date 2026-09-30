@@ -8,6 +8,8 @@ import { formatDateTime } from '../../src/lib/format.js'
 import { detectLocale, getLocale, localizeServerMessage, setLocale, t } from '../../src/lib/i18n.js'
 
 const SQL_PATH = path.resolve(__dirname, '../../../supabase/sql/all-phases.sql')
+// The delete-event-data Edge Function answers { error } itself too.
+const EDGE_FUNCTION_PATH = path.resolve(__dirname, '../../../supabase/functions/delete-event-data/index.ts')
 
 // A leaf is a text, a list of texts or plural forms ({ one, other, ... });
 // anything else is a group of entries.
@@ -73,9 +75,15 @@ describe('locale dictionaries', () => {
 })
 
 describe('database error messages', () => {
-  const raisedMessages = new Set([...fs.readFileSync(SQL_PATH, 'utf8').matchAll(/raise exception '([^']*)'/g)].map((match) => match[1]))
+  // Raised, or returned as { error } (wrong PIN/code refusals, the Edge Function).
+  const raisedMessages = new Set(
+    [
+      ...fs.readFileSync(SQL_PATH, 'utf8').matchAll(/(?:raise exception|jsonb_build_object\('error',) '([^']*)'/g),
+      ...fs.readFileSync(EDGE_FUNCTION_PATH, 'utf8').matchAll(/error: '([^']*)'/g),
+    ].map((match) => match[1]),
+  )
 
-  it('has an English translation for every message all-phases.sql raises', () => {
+  it('has an English translation for every message all-phases.sql or the Edge Function sends', () => {
     const untranslated = [...raisedMessages].filter((message) => !(message in enServerMessages))
     expect(untranslated).toEqual([])
   })

@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import { supabase } from '../../src/lib/supabase.js'
-import { setLocale } from '../../src/lib/i18n.js'
+import { setLocale, t } from '../../src/lib/i18n.js'
 import {
+  accessOwnerAccount,
   claimSignupItem,
   createEvent,
   getChatReactions,
@@ -25,6 +26,7 @@ import {
   sendEventChatMessage,
   submitRsvp,
   unclaimSignupItem,
+  unlockManageWithPin,
   unregisterPushSubscription,
   uploadEventPhoto,
 } from '../../src/lib/api.js'
@@ -132,6 +134,150 @@ describe('recordEventPhoto', () => {
   })
 })
 
+const OFFLINE = { data: null, error: { message: 'TypeError: Failed to fetch' } }
+const RETRY_QUEUE_MAX_AGE_MS = 6 * 60 * 60 * 1000
+
+type QueuedCall = { id: string; name: string; args: Record<string, unknown>; queuedAt: number }
+
+function queuedRsvp(eventId: string, queuedAt = Date.now()): QueuedCall {
+  return { id: `queued-${eventId}`, name: 'submit_rsvp', args: { p_event_id: eventId, p_name: 'Alice', p_status: 'confirmed' }, queuedAt }
+}
+
+function seedRetryQueue(items: QueuedCall[]) {
+  window.localStorage.setItem('ruin-retry-queue', JSON.stringify(items))
+}
+
+function readRetryQueue(): QueuedCall[] {
+  return JSON.parse(window.localStorage.getItem('ruin-retry-queue') ?? '[]')
+}
+
+describe('retry queue', () => {
+  it('queues a retryable call made offline and throws an error marked queued', async () => {
+    rpc.mockResolvedValue(OFFLINE)
+
+    const error = await submitRsvp('event-1', { name: 'Alice', status: 'confirmed' }).catch((caught) => caught)
+
+    expect(error.queued).toBe(true)
+    expect(readRetryQueue()).toEqual([
+      { id: expect.any(String), name: 'submit_rsvp', args: expect.objectContaining({ p_event_id: 'event-1' }), queuedAt: expect.any(Number) },
+    ])
+  })
+
+  it('never queues a call that would duplicate something when replayed', async () => {
+    rpc.mockResolvedValue(OFFLINE)
+
+    const error = await sendEventChatMessage('event-1', 'Alice', 'Hi').catch((caught) => caught)
+
+    expect(error.message).toBe(t('api.offline'))
+    expect(error.queued).toBeUndefined()
+    expect(readRetryQueue()).toEqual([])
+  })
+
+  it('keeps only the newest of two queued calls for the same thing', async () => {
+    rpc.mockResolvedValue(OFFLINE)
+
+    await submitRsvp('event-1', { name: 'Alice', status: 'confirmed' }).catch(() => {})
+    await submitRsvp('event-1', { name: 'Alice', status: 'excused', excuseReason: 'Sick' }).catch(() => {})
+    await submitRsvp('event-1', { name: 'Bob', status: 'confirmed' }).catch(() => {})
+
+    expect(readRetryQueue().map((item) => [item.args.p_name, item.args.p_status])).toEqual([
+      ['Alice', 'excused'],
+      ['Bob', 'confirmed'],
+    ])
+  })
+
+  it('replays the queue oldest first and empties it', async () => {
+    seedRetryQueue([queuedRsvp('event-1'), queuedRsvp('event-2')])
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
+
+    await replayRetryQueue()
+
+    expect(rpc.mock.calls.map(([, args]) => args?.p_event_id)).toEqual(['event-1', 'event-2'])
+    expect(readRetryQueue()).toEqual([])
+  })
+
+  it('stops at the first call that is still offline and keeps it and the rest', async () => {
+    seedRetryQueue([queuedRsvp('event-1'), queuedRsvp('event-2')])
+    rpc.mockResolvedValue(OFFLINE)
+
+    await replayRetryQueue()
+
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(readRetryQueue().map((item) => item.id)).toEqual(['queued-event-1', 'queued-event-2'])
+  })
+
+  it('drops a call that fails for a real reason and goes on with the next', async () => {
+    seedRetryQueue([queuedRsvp('event-1'), queuedRsvp('event-2')])
+    rpc.mockImplementation((_name, args) =>
+      Promise.resolve(
+        args?.p_event_id === 'event-1'
+          ? { data: null, error: { message: 'Na tuhle akci se už nedá odpovědět.', code: 'P0001' } }
+          : { data: { success: true }, error: null },
+      ),
+    )
+
+    await replayRetryQueue()
+
+    expect(rpc).toHaveBeenCalledTimes(2)
+    expect(readRetryQueue()).toEqual([])
+  })
+
+  it('drops calls older than 6 hours, or without a time, without replaying them', async () => {
+    // JSON drops the undefined queuedAt.
+    const undated = { ...queuedRsvp('event-3'), queuedAt: undefined }
+    window.localStorage.setItem(
+      'ruin-retry-queue',
+      JSON.stringify([queuedRsvp('event-1', Date.now() - RETRY_QUEUE_MAX_AGE_MS - 1000), queuedRsvp('event-2'), undated]),
+    )
+    rpc.mockResolvedValue({ data: { success: true }, error: null })
+
+    await replayRetryQueue()
+
+    expect(rpc.mock.calls.map(([, args]) => args?.p_event_id)).toEqual(['event-2'])
+    expect(readRetryQueue()).toEqual([])
+  })
+})
+
+// get_organizer_path_with_pin and access_owner_account return a refusal as
+// { error } (so the failed-attempt counter commits) instead of raising it.
+describe('refusals returned as { error }', () => {
+  afterEach(() => {
+    setLocale('cs')
+  })
+
+  it('throws a wrong PIN like a raised error, translated with serverMessage kept', async () => {
+    setLocale('en')
+    rpc.mockResolvedValue({ data: { error: 'Neplatný správcovský PIN.' }, error: null })
+
+    const error = await unlockManageWithPin('event-1', '0000').catch((caught) => caught)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toBe('Invalid admin PIN.')
+    expect(error.serverMessage).toBe('Neplatný správcovský PIN.')
+  })
+
+  it('throws a locked PIN', async () => {
+    rpc.mockResolvedValue({ data: { error: 'PIN je dočasně zablokovaný. Zkus to později.' }, error: null })
+
+    await expect(unlockManageWithPin('event-1', '1234')).rejects.toThrow('PIN je dočasně zablokovaný. Zkus to později.')
+  })
+
+  it('resolves with the organizer path for the right PIN', async () => {
+    rpc.mockResolvedValue({ data: { organizerPath: '/event/event-1/manage?token=abc' }, error: null })
+
+    await expect(unlockManageWithPin('event-1', '1234')).resolves.toEqual({ organizerPath: '/event/event-1/manage?token=abc' })
+    expect(rpc).toHaveBeenCalledWith('get_organizer_path_with_pin', { p_event_id: 'event-1', p_pin: '1234' })
+  })
+
+  it('throws a wrong owner code and resolves with the account for the right one', async () => {
+    rpc.mockResolvedValueOnce({ data: { error: 'Neplatný kód.' }, error: null })
+    await expect(accessOwnerAccount('Eva', '+420 777 000 000', '000000')).rejects.toThrow('Neplatný kód.')
+
+    rpc.mockResolvedValueOnce({ data: { ownerId: 'owner-1', token: 'owner-token' }, error: null })
+    await expect(accessOwnerAccount('Eva', '+420 777 000 000', '123456')).resolves.toEqual({ ownerId: 'owner-1', token: 'owner-token' })
+  })
+})
+
 describe('retry queue concurrency', () => {
   it('preserves a retryable request enqueued while an older request is replaying', async () => {
     let finishReplay: (result: RpcResult) => void = () => {}
@@ -139,7 +285,7 @@ describe('retry queue concurrency', () => {
       finishReplay = resolve
     })
 
-    window.localStorage.setItem('ruin-retry-queue', JSON.stringify([{ name: 'submit_rsvp', args: { p_event_id: 'event-1' } }]))
+    seedRetryQueue([queuedRsvp('event-1')])
     rpc.mockImplementation((_name, args) =>
       args?.p_event_id === 'event-1' ? pendingReplay : Promise.resolve({ data: null, error: { message: 'TypeError: Failed to fetch' } }),
     )
@@ -285,7 +431,7 @@ describe('uploadEventPhoto client-side validation', () => {
   it('rejects a non-image file without touching storage', async () => {
     const file = { type: 'text/plain', size: 10, name: 'notes.txt' }
 
-    await expect(uploadEventPhoto('event-1', file)).rejects.toThrow('Nahrát lze jen obrázky.')
+    await expect(uploadEventPhoto('event-1', file)).rejects.toThrow('Nahrát lze jen obrázky JPG, PNG, WebP nebo GIF.')
     expect(supabase.storage.from).not.toHaveBeenCalled()
   })
 
@@ -333,7 +479,7 @@ describe('uploadEventPhoto file name', () => {
     const storagePath = await uploadEventPhoto('event-1', file, 'delete-token-1')
 
     const expectedHash = createHash('sha256').update('delete-token-1').digest('hex')
-    expect(storagePath).toBe(`event-1/${expectedHash}.JPG`)
+    expect(storagePath).toBe(`event-1/${expectedHash}.jpg`)
     expect(upload).toHaveBeenCalledWith(storagePath, file)
   })
 })
