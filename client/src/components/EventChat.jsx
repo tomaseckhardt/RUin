@@ -52,6 +52,15 @@ function EventChat({ eventId, currentName, canSend }) {
   const latestRequestIdRef = useRef(0)
   const scrollContainerRef = useRef(null)
   const shouldAutoScrollRef = useRef(true)
+  const [shownEventId, setShownEventId] = useState(eventId)
+
+  // Another event: drop the previous one's chat instead of merging into it.
+  if (shownEventId !== eventId) {
+    setShownEventId(eventId)
+    setMessages([])
+    setReactionsByMessage({})
+    setIsLoading(true)
+  }
 
   async function loadMessages() {
     const requestId = ++latestRequestIdRef.current
@@ -74,17 +83,16 @@ function EventChat({ eventId, currentName, canSend }) {
         return
       }
 
-      const grouped = {}
+      // Only the fetched messages are replaced (with [] when all their
+      // reactions are gone), so older ones merged in earlier keep theirs.
+      const grouped = Object.fromEntries(nextMessages.map((message) => [message.id, []]))
 
       for (const reaction of reactions) {
-        if (!grouped[reaction.message_id]) {
-          grouped[reaction.message_id] = []
-        }
-
+        grouped[reaction.message_id] ??= []
         grouped[reaction.message_id].push(reaction)
       }
 
-      setReactionsByMessage(grouped)
+      setReactionsByMessage((previousReactions) => ({ ...previousReactions, ...grouped }))
     } catch (error) {
       if (requestId === latestRequestIdRef.current) {
         toast.error(error.message)

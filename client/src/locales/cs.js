@@ -154,6 +154,7 @@ export default {
     submitHint: 'Po vytvoření dostaneš veřejný odkaz i soukromý organizátorský link.',
     dateMustBeFuture: 'Datum a čas akce musí být v budoucnosti.',
     afterpartyFailed: 'Akce je založená, ale afterparty se nepodařilo uložit: {error}',
+    afterpartyIncomplete: 'Afterparty potřebuje místo i čas a zapnutý itinerář. Doplň ji, nebo ji zavři.',
     invitesFailed: 'Akce je založená, ale pozvánky se nepodařilo uložit: {error}',
     groupFailed: 'Akce je založená, ale skupinu se nepodařilo uložit: {error}',
     templateFailed: 'Akce je založená, ale šablonu se nepodařilo uložit: {error}',
@@ -202,6 +203,8 @@ export default {
     currentStatus: 'Aktuální stav: {status}.',
     loadingStatus: 'Načítám tvůj aktuální stav…',
     excuseRejectedNotice: 'Organizátor omluvenku zamítl. Můžeš odpověď upravit a poslat ji znovu.',
+    removedNotice: 'Organizátor tě z pozvánky odebral, na seznamu už nejsi.',
+    rsvpAgain: 'Odpovědět znovu',
     checkedIn: '📍 Odbaveno, dorazil/a jsi',
     checkingIn: 'Odbavuju…',
     checkIn: '📍 Dorazil/a jsem',
@@ -312,6 +315,9 @@ export default {
     nameAndOptionRequired: 'Napiš jméno a vyber možnost.',
     voteSaved: 'Hlas uložen.',
     eventCreated: 'Akce založena z ankety!',
+    shareHint: 'Pošli partě odkaz na hlasování. Vyhodnocení vidíš jen ty v tomhle prohlížeči.',
+    copyVoteLink: 'Zkopírovat odkaz na hlasování',
+    voteLinkCopied: 'Odkaz na hlasování zkopírovaný do schránky.',
   },
 
   createPoll: {
@@ -475,7 +481,7 @@ export default {
     previous: 'Předchozí fotka',
     next: 'Další fotka',
     nameRequired: 'Napiš svoje jméno v RSVP, ať víme, od koho fotka je.',
-    imageOnly: 'Nahraj prosím obrázek.',
+    imageOnly: 'Nahraj prosím obrázek JPG, PNG, WebP nebo GIF.',
     uploadedOne: 'Fotka nahraná.',
     uploadedMany: 'Nahráno {uploaded}/{total} fotek.',
     deleting: 'Mažu…',
@@ -620,6 +626,7 @@ export default {
 
   api: {
     offline: 'Jsi offline - zkontroluj připojení a zkus to znovu.',
+    queuedOffline: 'Jsi offline - uloženo, odešle se, až budeš zase online.',
     queuedFailed: 'Odloženou akci se nepodařilo dokončit: {error}',
     unknownError: 'neznámá chyba',
     queuedSent: {
@@ -627,7 +634,7 @@ export default {
       other: '{count} odložených akcí se úspěšně odeslalo.',
     },
     requestFailed: 'Požadavek se nepovedl.',
-    imageOnly: 'Nahrát lze jen obrázky.',
+    imageOnly: 'Nahrát lze jen obrázky JPG, PNG, WebP nebo GIF.',
     photoTooBig: 'Fotka je moc velká (limit je 10 MB).',
     photoLimitReached: 'Akce už dosáhla limitu 50 fotek.',
     uploadFailed: 'Nahrání fotky selhalo.',

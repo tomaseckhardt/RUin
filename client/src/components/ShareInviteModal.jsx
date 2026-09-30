@@ -21,6 +21,8 @@ function ShareInviteModal({ open, onClose, inviteUrl, eventId, eventName, dateti
     let cancelled = false
 
     async function generateQrCode() {
+      // Don't keep offering the previous event's/language's poster meanwhile.
+      setQrDataUrl('')
       setIsGeneratingQr(true)
 
       try {

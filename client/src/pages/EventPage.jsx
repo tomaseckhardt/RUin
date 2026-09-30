@@ -113,25 +113,16 @@ function EventPage() {
     return () => clearInterval(intervalId)
   }, [])
 
-  useEffect(() => {
-    // Invite links are #/event/:id (HashRouter) - navigating from one event's
-    // link straight to another's, in the same tab, doesn't remount this
-    // component, so identity state seeded from `initialIdentity` at mount
-    // time would otherwise keep pointing at the previous event forever.
-    const storedIdentity = readStoredValue(identityStorageKey(id)) || ''
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setName(storedIdentity)
-    setSessionName(storedIdentity)
-  }, [id])
-
   const hasLoadedOnceRef = useRef(false)
+  const celebrationTimeoutRef = useRef(null)
   const latestRequestIdRef = useRef(0)
   const sessionNameRef = useRef(sessionName)
 
   useEffect(() => {
     sessionNameRef.current = sessionName
   }, [sessionName])
+
+  useEffect(() => () => clearTimeout(celebrationTimeoutRef.current), [])
 
   useEffect(() => {
     if (!isReminderSupported()) {
@@ -171,7 +162,7 @@ function EventPage() {
         setIsReminderOn(false)
         toast.success(t('event.reminderTurnedOff'))
       } else {
-        const subscription = await subscribeToEventReminders()
+        const subscription = await subscribeToEventReminders(id)
         await registerPushSubscription(id, subscription)
         setIsReminderOn(true)
         toast.success(t('event.reminderTurnedOn'))
@@ -304,12 +295,14 @@ function EventPage() {
       setExcuseReason('')
       setPhone('')
 
+      clearTimeout(celebrationTimeoutRef.current)
+
       if (selectedStatus === 'confirmed') {
         setShowConfirmCelebration(true)
-        setTimeout(() => setShowConfirmCelebration(false), 4500)
+        celebrationTimeoutRef.current = setTimeout(() => setShowConfirmCelebration(false), 4500)
       } else {
         setShowDeclineCelebration(true)
-        setTimeout(() => setShowDeclineCelebration(false), 3500)
+        celebrationTimeoutRef.current = setTimeout(() => setShowDeclineCelebration(false), 3500)
       }
 
       await loadEvent(normalizedName)
@@ -364,6 +357,13 @@ function EventPage() {
     setExcuseReason('')
     setPhone('')
     setIsEditingResponse(false)
+  }
+
+  // The organizer removed this guest; answering again starts from their name.
+  function handleRsvpAgain() {
+    const previousName = sessionName
+    handleResetIdentity()
+    setName(previousName)
   }
 
   function closePingModal() {
@@ -607,8 +607,18 @@ function EventPage() {
                     ? t('event.currentStatus', {
                         status: t(statusLabelKey(sessionAttendee.status)),
                       })
-                    : t('event.loadingStatus')}
+                    : isSubmitting
+                      ? t('event.loadingStatus')
+                      : null}
                 </p>
+                {!sessionAttendee && !isSubmitting ? (
+                  <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50/90 p-4 text-sm leading-6 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                    {t('event.removedNotice')}
+                    <button type="button" className="primary-button mt-3 w-full justify-center" onClick={handleRsvpAgain}>
+                      {t('event.rsvpAgain')}
+                    </button>
+                  </div>
+                ) : null}
                 {sessionAttendee?.status === 'excused_rejected' ? (
                   <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50/90 p-4 text-sm leading-6 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
                     {t('event.excuseRejectedNotice')}

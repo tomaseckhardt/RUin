@@ -2,9 +2,9 @@ import { useI18n } from '../lib/i18n.js'
 
 const RUDY_GIF_PATH = `${import.meta.env.BASE_URL || '/'}RUdy/`
 
-// Původní animace (konfety, fajfka, palec dolů) je dočasně nahrazená GIFy s maskotem RUdy.
-// Nechávám ji zakomentovanou, ať se k ní dá kdykoliv vrátit - stačí odkomentovat
-// tahle data a bloky označené "Původní animace" níž a smazat <img> s GIFem.
+// The original animation (confetti, check mark, thumbs down) is temporarily replaced by GIFs of the RUdy mascot.
+// It stays commented out so it can be brought back any time - uncomment this data
+// and the blocks marked "Original animation" below, and delete the GIF <img>.
 /*
 const CONFETTI_DOTS = [
   {
@@ -69,7 +69,7 @@ export function ConfirmCelebration({ name }) {
 
   return (
     <section className="panel relative overflow-hidden py-12 text-center" style={{ animation: 'scale-in 0.4s ease both' }}>
-      {/* Původní animace - konfety:
+      {/* Original animation - confetti:
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {CONFETTI_DOTS.map((dot, index) => (
           <span
@@ -90,7 +90,7 @@ export function ConfirmCelebration({ name }) {
       */}
 
       <div className="relative">
-        {/* Původní animace - fajfka:
+        {/* Original animation - check mark:
         <div
           className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
           style={{
@@ -140,7 +140,7 @@ export function DeclineCelebration({ name }) {
 
   return (
     <section className="panel relative overflow-hidden py-12 text-center" style={{ animation: 'scale-in 0.4s ease both' }}>
-      {/* Původní animace - smutné částice:
+      {/* Original animation - sad particles:
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {SAD_PARTICLES.map((particle, index) => (
           <span
@@ -160,7 +160,7 @@ export function DeclineCelebration({ name }) {
       */}
 
       <div className="relative">
-        {/* Původní animace - palec dolů:
+        {/* Original animation - thumbs down:
         <div
           className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
           style={{

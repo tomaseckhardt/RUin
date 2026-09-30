@@ -17,7 +17,8 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
   const [label, setLabel] = useState('')
   const [capacity, setCapacity] = useState(1)
   const [note, setNote] = useState('')
-  const [busyItemId, setBusyItemId] = useState(null)
+  // Ids of items with a change in flight - several can run at once.
+  const [busyItemIds, setBusyItemIds] = useState(() => new Set())
   const latestRequestIdRef = useRef(0)
 
   async function loadItems() {
@@ -46,7 +47,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
     // Load now, and again whenever a realtime tick says the lists changed.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadItems()
-    return subscribeToEventTicks(eventId, ['signup_item', 'signup_claim'], loadItems, category)
+    return subscribeToEventTicks(eventId, ['signup_item', 'signup_claim'], loadItems)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, category])
 
@@ -81,7 +82,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
 
   // Runs one change to an item with the item marked busy, then reloads.
   async function runItemAction(item, action) {
-    setBusyItemId(item.id)
+    setBusyItemIds((current) => new Set(current).add(item.id))
 
     try {
       await action()
@@ -89,7 +90,11 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
     } catch (error) {
       toast.error(error.message)
     } finally {
-      setBusyItemId(null)
+      setBusyItemIds((current) => {
+        const next = new Set(current)
+        next.delete(item.id)
+        return next
+      })
     }
   }
 
@@ -183,7 +188,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                               <button
                                 type="button"
                                 className="rounded-full px-1.5 py-0.5 text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
-                                disabled={busyItemId === item.id}
+                                disabled={busyItemIds.has(item.id)}
                                 onClick={() =>
                                   runItemAction(item, () => removeSignupClaim(item.id, claim.attendee_name, currentName, claimRemoval.token))
                                 }>
@@ -211,7 +216,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                       <button
                         type="button"
                         className="secondary-button px-3 py-1.5 text-xs"
-                        disabled={busyItemId === item.id}
+                        disabled={busyItemIds.has(item.id)}
                         onClick={() => runItemAction(item, () => unclaimSignupItem(item.id, currentName))}>
                         {t('signup.unclaim')}
                       </button>
@@ -219,7 +224,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                       <button
                         type="button"
                         className="secondary-button px-3 py-1.5 text-xs"
-                        disabled={!canInteract || isFull || busyItemId === item.id}
+                        disabled={!canInteract || isFull || busyItemIds.has(item.id)}
                         onClick={() => handleClaim(item)}>
                         {isFull ? t('signup.full') : t('signup.claim')}
                       </button>
@@ -228,7 +233,7 @@ function SignupBoard({ eventId, category, currentName, canInteract, isOrganizer 
                       <button
                         type="button"
                         className="secondary-button danger-button px-3 py-1.5 text-xs"
-                        disabled={busyItemId === item.id}
+                        disabled={busyItemIds.has(item.id)}
                         onClick={() => handleDelete(item)}>
                         {t('common.delete')}
                       </button>

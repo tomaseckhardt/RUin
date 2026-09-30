@@ -14,6 +14,11 @@ const RETRY_QUEUE_STORAGE_KEY = 'ruin-retry-queue'
 // the offline error above instead of being queued.
 const RETRYABLE_RPCS = new Set(['submit_rsvp', 'check_in_attendee', 'claim_signup_item', 'unclaim_signup_item'])
 
+// A queued call older than this is stale (the guest has long moved on) and is
+// dropped instead of replayed; it also bounds how long a queued RSVP keeps the
+// guest's phone number in localStorage.
+const RETRY_QUEUE_MAX_AGE_MS = 6 * 60 * 60 * 1000
+
 function isOfflineError(error) {
   if (!error) {
     return false
@@ -48,7 +53,10 @@ function toRequestError(error, fallbackMessage) {
 function readRetryQueue() {
   try {
     const parsed = JSON.parse(readStoredValue(RETRY_QUEUE_STORAGE_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed.filter((item) => RETRYABLE_RPCS.has(item?.name) && typeof item.args === 'object') : []
+    const minQueuedAt = Date.now() - RETRY_QUEUE_MAX_AGE_MS
+    return Array.isArray(parsed)
+      ? parsed.filter((item) => RETRYABLE_RPCS.has(item?.name) && typeof item.args === 'object' && item.queuedAt >= minQueuedAt)
+      : []
   } catch {
     return []
   }
@@ -62,14 +70,25 @@ function removeRetryQueueItem(itemId) {
   writeRetryQueue(readRetryQueue().filter((item) => item.id !== itemId))
 }
 
+// Two queued calls with the same key target the same thing (one RSVP, one
+// check-in, one claim), so only the newer one is worth replaying.
+function retryQueueKey(item) {
+  const { p_event_id, p_item_id, p_attendee_name, p_name } = item.args
+  return JSON.stringify([item.name, p_event_id, p_item_id, p_attendee_name ?? p_name])
+}
+
+// Returns whether the call was queued.
 function queueRetryableCall(name, args) {
   if (!RETRYABLE_RPCS.has(name)) {
-    return
+    return false
   }
 
-  const queue = readRetryQueue()
-  queue.push({ id: crypto.randomUUID(), name, args })
+  const item = { id: crypto.randomUUID(), name, args, queuedAt: Date.now() }
+  const key = retryQueueKey(item)
+  const queue = readRetryQueue().filter((queued) => retryQueueKey(queued) !== key)
+  queue.push(item)
   writeRetryQueue(queue)
+  return true
 }
 
 let isReplayingRetryQueue = false
@@ -80,6 +99,20 @@ let isReplayingRetryQueue = false
 // forever - and its failure is surfaced via a toast. If we're still offline,
 // the remaining items (this one included) are left queued for next time.
 export async function replayRetryQueue() {
+  if (isReplayingRetryQueue) {
+    return
+  }
+
+  // The lock keeps two open tabs from replaying the same queue at once; a tab
+  // that finds it taken leaves the queue to the one holding it.
+  if (navigator.locks) {
+    return navigator.locks.request(RETRY_QUEUE_STORAGE_KEY, { ifAvailable: true }, (lock) => lock && replayRetryQueueNow())
+  }
+
+  return replayRetryQueueNow()
+}
+
+async function replayRetryQueueNow() {
   if (isReplayingRetryQueue) {
     return
   }
@@ -100,7 +133,7 @@ export async function replayRetryQueue() {
       const { error } = await supabase.rpc(item.name, item.args)
 
       if (isOfflineError(error)) {
-        return
+        break
       }
 
       removeRetryQueueItem(item.id)
@@ -136,7 +169,12 @@ async function callRpc(name, args, fallbackMessage) {
 
   if (error) {
     if (isOfflineError(error)) {
-      queueRetryableCall(name, args)
+      if (queueRetryableCall(name, args)) {
+        const queuedError = new Error(t('api.queuedOffline'))
+        queuedError.queued = true
+        throw queuedError
+      }
+
       throw new Error(t('api.offline'))
     }
 
@@ -165,15 +203,20 @@ export function createEvent(data) {
   )
 }
 
-export function unlockManageWithPin(eventId, pin) {
-  return callRpc(
-    'get_organizer_path_with_pin',
-    {
-      p_event_id: eventId,
-      p_pin: pin,
-    },
-    t('api.errors.unlockManage'),
-  )
+// A few RPCs return a refusal (wrong PIN/code, lockout) as { error } instead
+// of raising, so the failed-attempt counter they just bumped is not rolled
+// back. Thrown here exactly like a raised error.
+function throwReturnedError(data, fallbackMessage) {
+  if (data?.error) {
+    throw toRequestError({ message: data.error }, fallbackMessage)
+  }
+
+  return data
+}
+
+export async function unlockManageWithPin(eventId, pin) {
+  const fallbackMessage = t('api.errors.unlockManage')
+  return throwReturnedError(await callRpc('get_organizer_path_with_pin', { p_event_id: eventId, p_pin: pin }, fallbackMessage), fallbackMessage)
 }
 
 /**
@@ -293,8 +336,9 @@ export function inviteAttendees(eventId, token, invitees) {
   )
 }
 
-export function accessOwnerAccount(name, phone, code) {
-  return callRpc('access_owner_account', { p_name: name, p_phone: phone, p_code: code }, t('api.errors.accessOwnerAccount'))
+export async function accessOwnerAccount(name, phone, code) {
+  const fallbackMessage = t('api.errors.accessOwnerAccount')
+  return throwReturnedError(await callRpc('access_owner_account', { p_name: name, p_phone: phone, p_code: code }, fallbackMessage), fallbackMessage)
 }
 
 export function getOwnerPayload(ownerId, token) {
@@ -586,12 +630,18 @@ export function deleteEventPhotoComment(eventId, token, commentId) {
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
+// The only types the event-photos bucket accepts, with the file extension
+// each is stored under (taken from the type, not the user's file name).
+export const PHOTO_EXTENSIONS = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }
+
 // deleteToken is the photo's delete token (lib/photoDeleteTokens.js). The file
 // is named after its hash, which ties the token to this upload:
 // record_event_photo only accepts the token whose hash is the file name, so
 // nobody who merely sees the file in the bucket can claim it.
 export async function uploadEventPhoto(eventId, file, deleteToken) {
-  if (!file.type.startsWith('image/')) {
+  const fileExt = PHOTO_EXTENSIONS[file.type]
+
+  if (!fileExt) {
     throw new Error(t('api.imageOnly'))
   }
 
@@ -599,7 +649,6 @@ export async function uploadEventPhoto(eventId, file, deleteToken) {
     throw new Error(t('api.photoTooBig'))
   }
 
-  const fileExt = file.name.split('.').pop()
   const storagePath = `${eventId}/${await hashPhotoDeleteToken(deleteToken)}.${fileExt}`
 
   const { error: uploadError } = await supabase.storage.from('event-photos').upload(storagePath, file)

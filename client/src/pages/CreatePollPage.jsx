@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '../components/PageShell.jsx'
 import EventDateTimePicker from '../components/EventDateTimePicker.jsx'
 import ConfettiBurst from '../components/ConfettiBurst.jsx'
 import { createEventPoll } from '../lib/api.js'
-import { parseLocalDateTime } from '../lib/format.js'
+import { parseEventDateTime, parseOrganizerToken } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
+import { savePollCreatorToken } from '../lib/pollCreatorStorage.js'
 
 function createEmptyOption() {
   return { key: crypto.randomUUID(), datetime: '', location: '', note: '' }
@@ -22,6 +23,7 @@ function CreatePollPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [confettiOrigin, setConfettiOrigin] = useState(null)
   const [burstKey, setBurstKey] = useState(0)
+  const fieldId = useId()
 
   function updateOption(index, patch) {
     setOptions((current) => current.map((option, i) => (i === index ? { ...option, ...patch } : option)))
@@ -59,7 +61,7 @@ function CreatePollPage() {
     }
 
     const pastOptionIndex = options.findIndex((option) => {
-      const datetime = parseLocalDateTime(option.datetime)
+      const datetime = parseEventDateTime(option.datetime)
       return !datetime || datetime.getTime() <= Date.now()
     })
 
@@ -77,8 +79,11 @@ function CreatePollPage() {
         description,
         options,
       })
+      // The creator's token stays in this browser; the address bar keeps the
+      // plain voting link, safe to share.
+      savePollCreatorToken(result.pollId, parseOrganizerToken(result.creatorPath))
       toast.success(t('createPoll.created'))
-      navigate(result.creatorPath)
+      navigate(result.votePath)
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -92,8 +97,11 @@ function CreatePollPage() {
         <form className="panel space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('common.yourName')}</label>
+              <label htmlFor={`${fieldId}-creator-name`} className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+                {t('common.yourName')}
+              </label>
               <input
+                id={`${fieldId}-creator-name`}
                 className="field"
                 value={creatorName}
                 onChange={(event) => setCreatorName(event.target.value)}
@@ -102,8 +110,11 @@ function CreatePollPage() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createPoll.name')}</label>
+              <label htmlFor={`${fieldId}-name`} className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+                {t('createPoll.name')}
+              </label>
               <input
+                id={`${fieldId}-name`}
                 className="field"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -113,8 +124,11 @@ function CreatePollPage() {
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createPoll.description')}</label>
+            <label htmlFor={`${fieldId}-description`} className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+              {t('createPoll.description')}
+            </label>
             <textarea
+              id={`${fieldId}-description`}
               className="field min-h-24"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -135,13 +149,21 @@ function CreatePollPage() {
                   ) : null}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('eventForm.dateTime')}</label>
+                  {/* The picker is a button, not a field a <label> can name. */}
+                  <div role="group" aria-labelledby={`${fieldId}-${option.key}-datetime`}>
+                    <label id={`${fieldId}-${option.key}-datetime`} className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                      {t('eventForm.dateTime')}
+                    </label>
                     <EventDateTimePicker value={option.datetime} onChange={(value) => updateOption(index, { datetime: value })} />
                   </div>
                   <div>
-                    <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('eventForm.location')}</label>
+                    <label
+                      htmlFor={`${fieldId}-${option.key}-location`}
+                      className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                      {t('eventForm.location')}
+                    </label>
                     <input
+                      id={`${fieldId}-${option.key}-location`}
                       className="field"
                       value={option.location}
                       onChange={(event) => updateOption(index, { location: event.target.value })}
@@ -150,8 +172,11 @@ function CreatePollPage() {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('common.noteOptional')}</label>
+                  <label htmlFor={`${fieldId}-${option.key}-note`} className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                    {t('common.noteOptional')}
+                  </label>
                   <input
+                    id={`${fieldId}-${option.key}-note`}
                     className="field"
                     value={option.note}
                     onChange={(event) => updateOption(index, { note: event.target.value })}

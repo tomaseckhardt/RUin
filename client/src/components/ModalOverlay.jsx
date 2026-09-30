@@ -9,6 +9,11 @@ const FOCUSABLE_SELECTOR =
 // modal is already up) - this tracks which mounted instances are open, in
 // open order, so only the last one reacts to Escape.
 let openModalStack = []
+let bodyOverflowBeforeModals = ''
+
+// Escape in a text field that already has a draft (e.g. a photo comment)
+// would throw the draft away with the modal.
+const TEXT_FIELD_SELECTOR = 'textarea, input:not([type]), input[type="text"], input[type="search"]'
 
 function ModalOverlay({ open, onClose, labelledBy, children }) {
   const containerRef = useRef(null)
@@ -29,6 +34,14 @@ function ModalOverlay({ open, onClose, labelledBy, children }) {
     }
 
     const instanceId = instanceIdRef.current
+
+    // The page behind stays put while any modal is open; the first one to
+    // open saves the body's overflow and the last one to close restores it.
+    if (openModalStack.length === 0) {
+      bodyOverflowBeforeModals = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+    }
+
     openModalStack.push(instanceId)
 
     const container = containerRef.current
@@ -43,7 +56,13 @@ function ModalOverlay({ open, onClose, labelledBy, children }) {
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
-        if (openModalStack[openModalStack.length - 1] !== instanceId) {
+        // defaultPrevented: something inside (e.g. the date picker) already
+        // handled this Escape itself.
+        if (openModalStack[openModalStack.length - 1] !== instanceId || event.defaultPrevented) {
+          return
+        }
+
+        if (event.target instanceof Element && event.target.matches(TEXT_FIELD_SELECTOR) && event.target.value) {
           return
         }
 
@@ -78,6 +97,10 @@ function ModalOverlay({ open, onClose, labelledBy, children }) {
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       openModalStack = openModalStack.filter((entry) => entry !== instanceId)
+
+      if (openModalStack.length === 0) {
+        document.body.style.overflow = bodyOverflowBeforeModals
+      }
 
       if (previouslyFocused instanceof HTMLElement) {
         previouslyFocused.focus()

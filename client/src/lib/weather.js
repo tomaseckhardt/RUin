@@ -1,4 +1,4 @@
-import { parseLocalDateTime } from './format.js'
+import { getEventTimeZoneDateKey, parseEventDateTime } from './format.js'
 
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
@@ -84,15 +84,14 @@ export async function fetchEventWeather(location, datetimeString, language) {
     return null
   }
 
-  const eventDate = parseLocalDateTime(datetimeString)
-
-  if (!eventDate) {
+  if (!parseEventDateTime(datetimeString)) {
     return null
   }
 
-  const eventDayStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()).getTime()
-  const todayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime()
-  const daysUntilEvent = Math.round((eventDayStart - todayStart) / 86400000)
+  // Both days are Prague calendar dates (the event's wall-clock date and
+  // today there), independent of the viewer's timezone.
+  const targetDateKey = datetimeString.slice(0, 10)
+  const daysUntilEvent = Math.round((Date.parse(targetDateKey) - Date.parse(getEventTimeZoneDateKey())) / 86400000)
 
   if (daysUntilEvent < 0 || daysUntilEvent >= MAX_FORECAST_DAYS) {
     return null
@@ -121,7 +120,6 @@ export async function fetchEventWeather(location, datetimeString, language) {
   }
 
   const data = await response.json()
-  const targetDateKey = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`
   const dayIndex = data?.daily?.time?.indexOf(targetDateKey)
 
   if (dayIndex === undefined || dayIndex < 0) {
