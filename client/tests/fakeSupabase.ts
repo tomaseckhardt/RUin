@@ -1,10 +1,14 @@
 // An in-memory stand-in for the Supabase project, so the E2E test never
 // touches a real database. It answers the requests the app makes to
-// SUPABASE_URL (RPCs, Storage, the delete-event-data function) with the
-// shapes the SQL in supabase/sql/all-phases.sql returns, and fakes the
-// Open-Meteo weather API. Only what the E2E flow uses is implemented; any
-// other request is recorded in `unexpected` and fails the test.
+// SUPABASE_URL (RPCs, Storage uploads and downloads, the delete-event-data
+// Edge Function) with the shapes and the Czech error messages of
+// supabase/sql/all-phases.sql and supabase/functions/delete-event-data, and
+// fakes the Open-Meteo weather API. Realtime is a socket that never answers.
+// Only what the E2E flow uses is implemented, but the checks the app relies
+// on (tokens, cooldowns, a photo's folder and file name, ...) follow the
+// real SQL; any other request is recorded in `unexpected` and fails the test.
 
+import { createHash } from 'node:crypto'
 import type { Page, Route } from '@playwright/test'
 
 export const SUPABASE_URL = 'https://e2e.supabase.test'
@@ -29,6 +33,8 @@ type EventRow = {
   id: string
   organizer_token: string
   pin: string
+  pin_failed_attempts: number
+  pin_locked_until: number | null
   name: string
   location: string
   datetime: string
@@ -61,7 +67,7 @@ type SignupItemRow = Row & {
 }
 type SignupClaimRow = Row & { item_id: number; attendee_name: string; seats: number }
 type StopRow = Row & { event_id: string; position: number; name: string; location: string | null; starts_at_label: string | null }
-type PhotoRow = Row & { event_id: string; storage_path: string; uploaded_by: string }
+type PhotoRow = Row & { event_id: string; storage_path: string; uploaded_by: string; delete_token_hash: string | null }
 type PhotoLikeRow = Row & { event_id: string; photo_id: number; liker_name: string }
 type PhotoCommentRow = Row & { event_id: string; photo_id: number; author_name: string; message: string }
 type PollRow = {
@@ -92,6 +98,8 @@ type Tables = {
   options: PollOptionRow[]
   votes: PollVoteRow[]
   feedback: FeedbackRow[]
+  // storage.objects of the event-photos bucket: the uploaded paths.
+  objects: string[]
 }
 
 // The tables insert() can fill: those whose rows extend Row.
@@ -135,6 +143,10 @@ function randomId(length = 10) {
 const sameName = (a: string, b: string) => a.trim().toLocaleLowerCase('cs-CZ') === b.trim().toLocaleLowerCase('cs-CZ')
 // `timestamp without time zone` comes back with seconds.
 const toTimestamp = (value: string) => (value.length === 16 ? `${value}:00` : value)
+const sha256Hex = (value: string) => createHash('sha256').update(value).digest('hex')
+// `now() at time zone 'Europe/Prague'`, comparable with toTimestamp() values.
+const pragueNow = () => new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Prague' }).replace(' ', 'T')
+const MINUTE_MS = 60_000
 
 export function createFakeSupabase() {
   const db: Tables = {
@@ -153,6 +165,7 @@ export function createFakeSupabase() {
     options: [],
     votes: [],
     feedback: [],
+    objects: [],
   }
   const calls: RpcCall[] = []
   const unexpected: string[] = []
@@ -166,10 +179,34 @@ export function createFakeSupabase() {
     return saved
   }
 
-  const findEvent = (id: string) => db.events.find((event) => event.id === id) || fail('Akce neexistuje.')
-  const requireOrganizer = (eventId: string, token: string) => {
-    const event = findEvent(eventId)
-    return event.organizer_token === token ? event : fail('Neplatný organizátorský odkaz.')
+  // Each RPC words a missing event its own way, so the caller names the message.
+  const findEvent = (id: string, missingMessage: string) => db.events.find((event) => event.id === id) || fail(missingMessage)
+  // Like `organizer_token is distinct from p_token`: a missing token never matches.
+  const requireOrganizer = (eventId: string, token: string | null, missingMessage = 'Akce neexistuje.') => {
+    const event = findEvent(eventId, missingMessage)
+    return token != null && event.organizer_token === token ? event : fail('Neplatný organizátorský odkaz.')
+  }
+  const findPoll = (id: string) => db.polls.find((poll) => poll.id === id) || fail('Anketa neexistuje.')
+
+  // What the tables' `on delete cascade` foreign keys remove with a photo or an event.
+  function deletePhotos(photoIds: number[]) {
+    db.likes = db.likes.filter((like) => !photoIds.includes(like.photo_id))
+    db.comments = db.comments.filter((comment) => !photoIds.includes(comment.photo_id))
+    db.photos = db.photos.filter((photo) => !photoIds.includes(photo.id))
+  }
+
+  function deleteEvent(eventId: string) {
+    const itemIds = db.items.filter((item) => item.event_id === eventId).map((item) => item.id)
+    const messageIds = db.messages.filter((message) => message.event_id === eventId).map((message) => message.id)
+    deletePhotos(db.photos.filter((photo) => photo.event_id === eventId).map((photo) => photo.id))
+    db.claims = db.claims.filter((claim) => !itemIds.includes(claim.item_id))
+    db.reactions = db.reactions.filter((reaction) => !messageIds.includes(reaction.message_id))
+    db.items = db.items.filter((item) => item.event_id !== eventId)
+    db.messages = db.messages.filter((message) => message.event_id !== eventId)
+    db.attendees = db.attendees.filter((attendee) => attendee.event_id !== eventId)
+    db.pings = db.pings.filter((ping) => ping.event_id !== eventId)
+    db.stops = db.stops.filter((stop) => stop.event_id !== eventId)
+    db.events = db.events.filter((event) => event.id !== eventId)
   }
 
   function createEvent(args: CreateEventArgs): CreatedEvent {
@@ -181,6 +218,8 @@ export function createFakeSupabase() {
       id: randomId(),
       organizer_token: randomId(24),
       pin: args.p_organizer_pin,
+      pin_failed_attempts: 0,
+      pin_locked_until: null,
       name: args.p_name.trim(),
       location: args.p_location.trim(),
       datetime: toTimestamp(args.p_datetime),
@@ -193,6 +232,8 @@ export function createFakeSupabase() {
       created_at: now(),
     }
     db.events.push(event)
+    // The organizer is the event's first confirmed guest.
+    insert('attendees', { event_id: event.id, name: event.organizer_name, status: 'confirmed', excuse_reason: null, phone: null, checked_in_at: null })
 
     return {
       event: { id: event.id, name: event.name, location: event.location, datetime: event.datetime, description: event.description },
@@ -202,7 +243,7 @@ export function createFakeSupabase() {
   }
 
   function eventPayload(args: { p_event_id: string; p_organizer_token?: string | null }) {
-    const event = findEvent(args.p_event_id)
+    const event = findEvent(args.p_event_id, 'Tahle akce už neexistuje.')
 
     if (args.p_organizer_token != null && args.p_organizer_token !== event.organizer_token) {
       fail('Neplatný organizátorský odkaz.')
@@ -260,11 +301,25 @@ export function createFakeSupabase() {
   const rpcs = {
     create_event: createEvent,
     get_event_payload: eventPayload,
+    // A wrong or locked PIN is returned as { error }, not raised, so the
+    // failed-attempt count sticks (see the SQL).
     get_organizer_path_with_pin(args: { p_event_id: string; p_pin: string }) {
-      const event = findEvent(args.p_event_id)
-      return event.pin === args.p_pin
-        ? { organizerPath: `/event/${event.id}/manage?token=${event.organizer_token}` }
-        : fail('Neplatný správcovský PIN.')
+      const event = findEvent(args.p_event_id, 'Akce neexistuje.')
+
+      if (event.pin_locked_until !== null && event.pin_locked_until > Date.now()) {
+        return { error: 'PIN je dočasně zablokovaný. Zkus to později.' }
+      }
+
+      if ((args.p_pin || '').trim() !== event.pin) {
+        event.pin_failed_attempts += 1
+        const lockMinutes = event.pin_failed_attempts >= 15 ? 24 * 60 : event.pin_failed_attempts >= 10 ? 60 : event.pin_failed_attempts >= 5 ? 15 : 0
+        event.pin_locked_until = lockMinutes ? Date.now() + lockMinutes * MINUTE_MS : event.pin_locked_until
+        return { error: 'Neplatný správcovský PIN.' }
+      }
+
+      event.pin_failed_attempts = 0
+      event.pin_locked_until = null
+      return { organizerPath: `/event/${event.id}/manage?token=${event.organizer_token}` }
     },
     update_event(args: {
       p_event_id: string
@@ -278,39 +333,80 @@ export function createFakeSupabase() {
       p_enable_carpool: boolean
       p_enable_stops: boolean
     }) {
-      const event = requireOrganizer(args.p_event_id, args.p_token)
+      if (!(args.p_token || '').trim()) {
+        fail('Správa vyžaduje platný organizátorský odkaz.')
+      }
+
+      // update_event looks the event up by id and token together.
+      const event =
+        db.events.find((row) => row.id === args.p_event_id && row.organizer_token === args.p_token.trim()) || fail('Neplatný organizátorský odkaz.')
       Object.assign(event, {
         name: args.p_name.trim(),
         location: args.p_location.trim(),
         datetime: toTimestamp(args.p_datetime),
         description: args.p_description.trim(),
-        require_phone: args.p_require_phone,
-        enable_bring_list: args.p_enable_bring_list,
-        enable_carpool: args.p_enable_carpool,
-        enable_stops: args.p_enable_stops,
+        require_phone: args.p_require_phone ?? false,
+        enable_bring_list: args.p_enable_bring_list ?? true,
+        enable_carpool: args.p_enable_carpool ?? true,
+        enable_stops: args.p_enable_stops ?? true,
       })
       return { event: eventPayload({ p_event_id: event.id }).event }
     },
+    // Skips the SQL's phone matching of invited guests; the flow never invites.
     submit_rsvp(args: { p_event_id: string; p_name: string; p_status: AttendeeStatus; p_excuse_reason: string | null; p_phone: string | null }) {
-      findEvent(args.p_event_id)
+      const event = findEvent(args.p_event_id, 'Na tuhle akci se už nedá odpovědět.')
       const name = (args.p_name || '').trim() || fail('Vyplň svoje jméno.')
-      const existing = db.attendees.find((attendee) => attendee.event_id === args.p_event_id && sameName(attendee.name, name))
-      const fields = { status: args.p_status, excuse_reason: args.p_excuse_reason || null, phone: args.p_phone }
-      const attendee = existing
-        ? Object.assign(existing, fields)
-        : insert('attendees', { event_id: args.p_event_id, name, checked_in_at: null, ...fields })
-      return { attendee }
+      const phone = (args.p_phone || '').replace(/[^0-9+]/g, '') || null
+
+      if (args.p_status !== 'confirmed' && args.p_status !== 'excused') {
+        fail('Neplatný typ odpovědi.')
+      }
+
+      if (event.require_phone && !phone) {
+        fail('Vyplň prosím telefonní číslo.')
+      }
+
+      const existing = db.attendees.find((attendee) => attendee.event_id === event.id && sameName(attendee.name, name))
+      const fields = {
+        status: args.p_status,
+        excuse_reason: args.p_status === 'excused' ? (args.p_excuse_reason || '').trim() || null : null,
+        phone: phone ?? existing?.phone ?? null,
+      }
+      const attendee = existing ? Object.assign(existing, fields) : insert('attendees', { event_id: event.id, name, checked_in_at: null, ...fields })
+      // Never the phone: anyone who knows a guest's name can call this.
+      // (JSON drops an undefined field.)
+      return { attendee: { ...attendee, phone: undefined } }
     },
     moderate_attendee(args: { p_event_id: string; p_attendee_id: number; p_token: string; p_status: AttendeeStatus }) {
       requireOrganizer(args.p_event_id, args.p_token)
-      const attendee = db.attendees.find((row) => row.id === args.p_attendee_id) || fail('Účastník nebyl nalezen.')
+
+      if (args.p_status !== 'excused_accepted' && args.p_status !== 'excused_rejected') {
+        fail('Neplatná změna stavu omluvenky.')
+      }
+
+      const attendee =
+        db.attendees.find((row) => row.event_id === args.p_event_id && row.id === args.p_attendee_id) || fail('Účastník nebyl nalezen.')
+
+      if (!attendee.status.startsWith('excused')) {
+        fail('Účastník mezitím změnil stav, zkus to prosím znovu.')
+      }
+
       attendee.status = args.p_status
       return { attendee }
     },
     ping_attendee(args: { p_event_id: string; p_target_attendee_id: number; p_source_name: string; p_message: string | null }) {
-      const target = db.attendees.find((row) => row.id === args.p_target_attendee_id) || fail('Účastník nebyl nalezen.')
+      findEvent(args.p_event_id, 'Akce neexistuje.')
+      const sourceName = (args.p_source_name || '').trim() || fail('Vyplň svoje jméno pro šťouchnutí.')
+      const message = (args.p_message || '').trim() || null
 
-      if (sameName(target.name, args.p_source_name)) {
+      if (message && message.length > 280) {
+        fail('Zpráva ke šťouchnutí může mít maximálně 280 znaků.')
+      }
+
+      const target =
+        db.attendees.find((row) => row.event_id === args.p_event_id && row.id === args.p_target_attendee_id) || fail('Účastník nebyl nalezen.')
+
+      if (sameName(target.name, sourceName)) {
         fail('Nemůžeš šťouchnout sám sebe.')
       }
 
@@ -318,13 +414,20 @@ export function createFakeSupabase() {
         fail('Šťouchnout jde jen účastníka, který nejde.')
       }
 
-      insert('pings', {
-        event_id: args.p_event_id,
-        target_attendee_id: target.id,
-        source_name: args.p_source_name,
-        message: args.p_message || null,
-      })
-      return { success: true, pingCount: db.pings.filter((ping) => ping.target_attendee_id === target.id).length, lastMessage: args.p_message }
+      // One row per target and source, refreshed at most every 10 minutes.
+      const previous = db.pings.find((ping) => ping.target_attendee_id === target.id && sameName(ping.source_name, sourceName))
+
+      if (previous && Date.parse(previous.created_at) > Date.now() - 10 * MINUTE_MS) {
+        fail('Tuhle osobu můžeš šťouchnout znovu až za 10 minut od posledního šťouchnutí.')
+      }
+
+      if (previous) {
+        Object.assign(previous, { message, created_at: now() })
+      } else {
+        insert('pings', { event_id: args.p_event_id, target_attendee_id: target.id, source_name: sourceName, message })
+      }
+
+      return { success: true, pingCount: db.pings.filter((ping) => ping.target_attendee_id === target.id).length, lastMessage: message }
     },
 
     get_event_chat_messages: (args: { p_event_id: string; p_limit: number }) =>
@@ -332,9 +435,27 @@ export function createFakeSupabase() {
         .filter((message) => message.event_id === args.p_event_id)
         .reverse()
         .slice(0, args.p_limit),
-    send_event_chat_message: (args: { p_event_id: string; p_sender_name: string; p_message: string }) => [
-      insert('messages', { event_id: args.p_event_id, sender_name: args.p_sender_name, message: args.p_message }),
-    ],
+    send_event_chat_message(args: { p_event_id: string; p_sender_name: string; p_message: string }) {
+      findEvent(args.p_event_id, 'Akce neexistuje.')
+      const senderName = (args.p_sender_name || '').trim() || fail('Pro odeslání zprávy vyplň svoje jméno.')
+      const message = (args.p_message || '').trim() || fail('Napiš zprávu do chatu.')
+
+      if (message.length > 500) {
+        fail('Text je moc dlouhý (limit 500 znaků).')
+      }
+
+      if (!db.attendees.some((row) => row.event_id === args.p_event_id && sameName(row.name, senderName) && row.status !== 'invited')) {
+        fail('Do chatu může psát jen ten, kdo na akci odpověděl.')
+      }
+
+      const lastSent = db.messages.filter((row) => row.event_id === args.p_event_id && sameName(row.sender_name, senderName)).at(-1)
+
+      if (lastSent && Date.parse(lastSent.created_at) > Date.now() - 3000) {
+        fail('Zprávy posíláš moc rychle, chvilku počkej.')
+      }
+
+      return [insert('messages', { event_id: args.p_event_id, sender_name: senderName, message })]
+    },
     get_chat_reactions: (args: { p_event_id: string; p_message_ids: number[] }) =>
       db.reactions
         .filter((reaction) => args.p_message_ids.includes(reaction.message_id))
@@ -370,7 +491,7 @@ export function createFakeSupabase() {
       p_note: string | null
       p_created_by: string
     }) {
-      findEvent(args.p_event_id)
+      findEvent(args.p_event_id, 'Akce neexistuje.')
       const item = insert('items', {
         event_id: args.p_event_id,
         category: args.p_category,
@@ -382,14 +503,31 @@ export function createFakeSupabase() {
       return { success: true, id: item.id }
     },
     claim_signup_item(args: { p_item_id: number; p_attendee_name: string; p_seats: number }) {
+      const name = (args.p_attendee_name || '').trim() || fail('Chybí jméno.')
+      const seats = Math.max(args.p_seats ?? 1, 1)
       const item = db.items.find((row) => row.id === args.p_item_id) || fail('Položka nebyla nalezena.')
-      const taken = db.claims.filter((claim) => claim.item_id === item.id).reduce((sum, claim) => sum + claim.seats, 0)
 
-      if (taken + args.p_seats > item.capacity) {
+      if (item.category === 'ride' && sameName(item.created_by, name)) {
+        fail('Jako řidič už místo v autě máš, nemůžeš se přihlásit na vlastní nabídku odvozu.')
+      }
+
+      // Someone's own claim is replaced, so it doesn't count against them.
+      const taken = db.claims
+        .filter((claim) => claim.item_id === item.id && !sameName(claim.attendee_name, name))
+        .reduce((sum, claim) => sum + claim.seats, 0)
+
+      if (taken + seats > item.capacity) {
         fail('Už je to obsazené.')
       }
 
-      insert('claims', { item_id: item.id, attendee_name: args.p_attendee_name, seats: args.p_seats })
+      const existing = db.claims.find((claim) => claim.item_id === item.id && sameName(claim.attendee_name, name))
+
+      if (existing) {
+        existing.seats = seats
+      } else {
+        insert('claims', { item_id: item.id, attendee_name: name, seats })
+      }
+
       return { success: true }
     },
 
@@ -409,9 +547,31 @@ export function createFakeSupabase() {
       return { success: true }
     },
 
-    record_event_photo(args: { p_event_id: string; p_storage_path: string; p_uploaded_by: string; p_delete_token: string }) {
-      findEvent(args.p_event_id)
-      insert('photos', { event_id: args.p_event_id, storage_path: args.p_storage_path, uploaded_by: args.p_uploaded_by })
+    record_event_photo(args: { p_event_id: string; p_storage_path: string; p_uploaded_by: string; p_delete_token: string | null }) {
+      findEvent(args.p_event_id, 'Akce neexistuje.')
+      const uploadedBy = (args.p_uploaded_by || '').trim() || fail('Chybí jméno nahrávajícího.')
+      const folders = args.p_storage_path.split('/').slice(0, -1)
+      const fileStem = (args.p_storage_path.split('/').at(-1) ?? '').split('.')[0]
+      const deleteTokenHash = args.p_delete_token ? sha256Hex(args.p_delete_token) : null
+
+      if (folders.length !== 1 || folders[0] !== args.p_event_id) {
+        fail('Fotka nepatří k této akci.')
+      }
+
+      // The file is named after the hash of its delete token.
+      if ((deleteTokenHash !== null || /^[0-9a-f]{64}$/.test(fileStem)) && deleteTokenHash !== fileStem) {
+        fail('Fotku může přidat jen ten, kdo ji nahrál.')
+      }
+
+      if (!db.objects.includes(args.p_storage_path)) {
+        fail('Nahraná fotka nebyla nalezena.')
+      }
+
+      if (db.photos.some((photo) => photo.storage_path === args.p_storage_path)) {
+        fail('Fotka už byla přidána.')
+      }
+
+      insert('photos', { event_id: args.p_event_id, storage_path: args.p_storage_path, uploaded_by: uploadedBy, delete_token_hash: deleteTokenHash })
       return { success: true }
     },
     get_event_photos: (args: { p_event_id: string }) =>
@@ -468,7 +628,7 @@ export function createFakeSupabase() {
       return { pollId: poll.id, votePath: `/poll/${poll.id}`, creatorPath: `/poll/${poll.id}?token=${poll.creator_token}` }
     },
     get_poll_payload(args: { p_poll_id: string; p_token: string | null }) {
-      const poll = db.polls.find((row) => row.id === args.p_poll_id) || fail('Anketa neexistuje.')
+      const poll = findPoll(args.p_poll_id)
       return {
         poll: {
           id: poll.id,
@@ -477,7 +637,7 @@ export function createFakeSupabase() {
           creatorName: poll.creator_name,
           finalizedEventId: poll.finalized_event_id,
         },
-        isCreator: args.p_token === poll.creator_token,
+        isCreator: args.p_token != null && args.p_token === poll.creator_token,
         options: db.options
           .filter((option) => option.poll_id === poll.id)
           .map((option) => ({
@@ -490,18 +650,36 @@ export function createFakeSupabase() {
       }
     },
     vote_event_poll(args: { p_poll_id: string; p_option_id: number; p_voter_name: string }) {
-      db.votes = db.votes.filter((vote) => !(vote.poll_id === args.p_poll_id && sameName(vote.voter_name, args.p_voter_name)))
-      insert('votes', { poll_id: args.p_poll_id, option_id: args.p_option_id, voter_name: args.p_voter_name })
+      const poll = findPoll(args.p_poll_id)
+
+      if (poll.finalized_event_id) {
+        fail('Tahle anketa už byla vyhodnocená.')
+      }
+
+      const name = (args.p_voter_name || '').trim() || fail('Napiš svoje jméno pro hlasování.')
+      const option = pollOption(poll.id, args.p_option_id)
+      // One vote per name and poll: a new vote replaces the old one.
+      db.votes = db.votes.filter((vote) => !(vote.poll_id === poll.id && sameName(vote.voter_name, name)))
+      insert('votes', { poll_id: poll.id, option_id: option.id, voter_name: name })
       return { success: true }
     },
     finalize_event_poll(args: { p_poll_id: string; p_token: string; p_option_id: number; p_organizer_pin: string; p_description: string | null }) {
-      const poll = db.polls.find((row) => row.id === args.p_poll_id && row.creator_token === args.p_token) || fail('Neplatný odkaz tvůrce ankety.')
-      const option = db.options.find((row) => row.id === args.p_option_id) || fail('Tahle možnost neexistuje.')
+      const poll = db.polls.find((row) => row.id === args.p_poll_id)
+
+      if (!poll || args.p_token == null || poll.creator_token !== args.p_token) {
+        fail('Neplatný odkaz tvůrce ankety.')
+      }
+
+      if (poll.finalized_event_id) {
+        fail('Tahle anketa už byla vyhodnocená.')
+      }
+
+      const option = pollOption(poll.id, args.p_option_id)
       const result = createEvent({
         p_name: poll.name,
         p_location: option.location,
         p_datetime: option.datetime,
-        p_description: args.p_description || poll.name,
+        p_description: (args.p_description || '').trim() || 'Vzniklo z ankety.',
         p_organizer_name: poll.creator_name,
         p_organizer_pin: args.p_organizer_pin,
       })
@@ -513,6 +691,12 @@ export function createFakeSupabase() {
       insert('feedback', { type: args.p_type, name: args.p_name, message: args.p_message })
       return { success: true }
     },
+  }
+
+  // An option of this poll whose date is still ahead (vote and finalize check both).
+  function pollOption(pollId: string, optionId: number) {
+    const option = db.options.find((row) => row.id === optionId && row.poll_id === pollId) || fail('Tahle možnost neexistuje.')
+    return option.datetime > pragueNow() ? option : fail('Termín možnosti musí být v budoucnosti.')
   }
 
   type RpcName = keyof typeof rpcs
@@ -549,18 +733,93 @@ export function createFakeSupabase() {
       }
     }
 
+    if (request.method() === 'POST' && pathname === '/functions/v1/delete-event-data') {
+      const body: unknown = request.postDataJSON()
+      calls.push({ name: 'delete-event-data', args: (body ?? {}) as Record<string, unknown> })
+      const { status, payload } = deleteEventData(body)
+      return json(route, payload, status)
+    }
+
     if (request.method() === 'POST' && pathname.startsWith('/storage/v1/object/event-photos/')) {
-      const path = pathname.slice('/storage/v1/object/event-photos/'.length)
+      const path = decodeURIComponent(pathname.slice('/storage/v1/object/event-photos/'.length))
       calls.push({ name: 'storage.upload', args: { path } })
+
+      // Uploads don't upsert, so an existing file is refused.
+      if (db.objects.includes(path)) {
+        return json(route, { statusCode: '409', error: 'Duplicate', message: 'The resource already exists' }, 400)
+      }
+
+      db.objects.push(path)
       return json(route, { Key: `event-photos/${path}`, Id: crypto.randomUUID() })
     }
 
     if (request.method() === 'GET' && pathname.startsWith('/storage/v1/object/public/event-photos/')) {
-      return route.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'image/png', body: PHOTO_PNG })
+      const path = decodeURIComponent(pathname.slice('/storage/v1/object/public/event-photos/'.length))
+      return db.objects.includes(path)
+        ? route.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'image/png', body: PHOTO_PNG })
+        : json(route, { statusCode: '404', error: 'not_found', message: 'Object not found' }, 400)
     }
 
     unexpected.push(`${request.method()} ${pathname}`)
     return json(route, { message: `Not faked: ${pathname}` }, 404)
+  }
+
+  // supabase/functions/delete-event-data: the same checks and answers, with
+  // authorize_event_photo_delete for a photo.
+  function deleteEventData(input: unknown): { status: number; payload: Record<string, unknown> } {
+    const refuse = (status: number, error: string) => ({ status, payload: { error } })
+
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return refuse(400, 'Neplatný požadavek.')
+    }
+
+    const body = input as { action?: unknown; eventId?: unknown; token?: unknown; photoId?: unknown; photoToken?: unknown }
+    const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : ''
+    const token = typeof body.token === 'string' ? body.token : ''
+    const photoToken = typeof body.photoToken === 'string' ? body.photoToken : ''
+    const hasCredentials = token !== '' || (body.action === 'delete_photo' && photoToken !== '')
+
+    if (!eventId || !hasCredentials || (body.action !== 'delete_event' && body.action !== 'delete_photo')) {
+      return refuse(400, 'Neplatný požadavek.')
+    }
+
+    const event = db.events.find((row) => row.id === eventId)
+    const isOrganizer = Boolean(event && token && event.organizer_token === token)
+
+    if (body.action === 'delete_photo') {
+      const photoId = String(body.photoId ?? '')
+
+      if (!/^\d{1,18}$/.test(photoId)) {
+        return refuse(400, 'Fotka nebyla nalezena.')
+      }
+
+      if (!isOrganizer && !photoToken) {
+        return refuse(403, 'Neplatný organizátorský odkaz.')
+      }
+
+      const photo = db.photos.find((row) => row.id === Number(photoId) && row.event_id === eventId)
+
+      if (!photo) {
+        return refuse(403, 'Fotka nebyla nalezena.')
+      }
+
+      if (!isOrganizer && photo.delete_token_hash !== sha256Hex(photoToken)) {
+        return refuse(403, 'Tuhle fotku může smazat jen ten, kdo ji nahrál, nebo organizátor.')
+      }
+
+      db.objects = db.objects.filter((path) => path !== photo.storage_path)
+      deletePhotos([photo.id])
+      return { status: 200, payload: { success: true } }
+    }
+
+    // A missing event gets the same answer as a wrong token.
+    if (!isOrganizer) {
+      return refuse(401, 'Neplatný organizátorský odkaz.')
+    }
+
+    db.objects = db.objects.filter((path) => !path.startsWith(`${eventId}/`))
+    deleteEvent(eventId)
+    return { status: 200, payload: { success: true } }
   }
 
   // Open-Meteo: every place is in Prague and every day is sunny, 18-26 °C.

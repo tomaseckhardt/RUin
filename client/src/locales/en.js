@@ -152,6 +152,7 @@ export default {
     submitHint: 'Once it’s created, you get a public link plus a private organizer link.',
     dateMustBeFuture: 'The event date and time must be in the future.',
     afterpartyFailed: 'The event is created, but the afterparty couldn’t be saved: {error}',
+    afterpartyIncomplete: 'The afterparty needs both a place and a time, with the itinerary turned on. Fill it in or close it.',
     invitesFailed: 'The event is created, but the invites couldn’t be saved: {error}',
     groupFailed: 'The event is created, but the group couldn’t be saved: {error}',
     templateFailed: 'The event is created, but the template couldn’t be saved: {error}',
@@ -200,6 +201,8 @@ export default {
     currentStatus: 'Current status: {status}.',
     loadingStatus: 'Loading your current status…',
     excuseRejectedNotice: 'The organizer rejected your excuse. You can edit your response and send it again.',
+    removedNotice: 'The organizer removed you from the invite — you’re no longer on the list.',
+    rsvpAgain: 'Reply again',
     checkedIn: '📍 Checked in - you’re here',
     checkingIn: 'Checking in…',
     checkIn: '📍 I’m here',
@@ -310,6 +313,9 @@ export default {
     nameAndOptionRequired: 'Enter your name and pick an option.',
     voteSaved: 'Vote saved.',
     eventCreated: 'Event created from the poll!',
+    shareHint: 'Send the crew the voting link. Only you, in this browser, see the results view.',
+    copyVoteLink: 'Copy the voting link',
+    voteLinkCopied: 'Voting link copied to the clipboard.',
   },
 
   createPoll: {
@@ -473,7 +479,7 @@ export default {
     previous: 'Previous photo',
     next: 'Next photo',
     nameRequired: 'Enter your name in the RSVP so we know who the photo is from.',
-    imageOnly: 'Please upload an image.',
+    imageOnly: 'Please upload a JPG, PNG, WebP or GIF image.',
     uploadedOne: 'Photo uploaded.',
     uploadedMany: 'Uploaded {uploaded}/{total} photos.',
     deleting: 'Deleting…',
@@ -618,6 +624,7 @@ export default {
 
   api: {
     offline: 'You’re offline - check your connection and try again.',
+    queuedOffline: 'You’re offline - saved, it will be sent when you’re back online.',
     queuedFailed: 'Couldn’t finish a queued action: {error}',
     unknownError: 'unknown error',
     queuedSent: {
@@ -625,7 +632,7 @@ export default {
       other: '{count} queued actions were sent successfully.',
     },
     requestFailed: 'The request failed.',
-    imageOnly: 'Only images can be uploaded.',
+    imageOnly: 'Only JPG, PNG, WebP or GIF images can be uploaded.',
     photoTooBig: 'The photo is too big (the limit is 10 MB).',
     photoLimitReached: 'This event has reached its 50-photo limit.',
     uploadFailed: 'Photo upload failed.',

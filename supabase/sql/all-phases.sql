@@ -68,6 +68,14 @@ create table if not exists public.events (
   enable_stops boolean not null default true,
   created_at timestamptz not null default now()
 );
+alter table public.events add column if not exists organizer_name text;
+alter table public.events add column if not exists organizer_pin_hash text;
+alter table public.events add column if not exists organizer_pin_failed_attempts integer not null default 0;
+alter table public.events add column if not exists organizer_pin_locked_until timestamptz;
+alter table public.events add column if not exists require_phone boolean not null default false;
+alter table public.events add column if not exists enable_bring_list boolean not null default true;
+alter table public.events add column if not exists enable_carpool boolean not null default true;
+alter table public.events add column if not exists enable_stops boolean not null default true;
 
 create table if not exists public.attendees (
   id bigint generated always as identity primary key,
@@ -81,6 +89,8 @@ create table if not exists public.attendees (
   checked_in_at timestamptz,
   created_at timestamptz not null default now()
 );
+alter table public.attendees add column if not exists phone text;
+alter table public.attendees add column if not exists checked_in_at timestamptz;
 
 create table if not exists public.attendee_pings (
   id bigint generated always as identity primary key,
@@ -90,6 +100,7 @@ create table if not exists public.attendee_pings (
   message text,
   created_at timestamptz not null default now()
 );
+alter table public.attendee_pings add column if not exists message text;
 
 create table if not exists public.event_chat_messages (
   id bigint generated always as identity primary key,
@@ -108,9 +119,24 @@ create table if not exists public.event_chat_message_reactions (
   unique (message_id, sender_name, emoji)
 );
 
+-- Readable by anyone (Realtime needs it), so a tick names its event only by
+-- event_key, the SHA-256 of the event id: the table can't be used to list
+-- event ids. Ticks are throwaway, so an older table keyed by the plain
+-- event_id is simply dropped and recreated.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'event_realtime_ticks' and column_name = 'event_id'
+  ) then
+    drop table public.event_realtime_ticks;
+  end if;
+end;
+$$;
+
 create table if not exists public.event_realtime_ticks (
   id bigint generated always as identity primary key,
-  event_id text not null references public.events(id) on delete cascade,
+  event_key text not null,
   reason text not null check (reason in (
     'event', 'attendee', 'ping', 'chat_message', 'chat_reaction', 'signup_item', 'signup_claim', 'stop',
     'photo', 'photo_like', 'photo_comment'
@@ -125,13 +151,6 @@ create table if not exists public.push_subscriptions (
   p256dh text not null,
   auth text not null,
   created_at timestamptz not null default now()
-);
-
-create table if not exists public.event_reminders_sent (
-  event_id text not null references public.events(id) on delete cascade,
-  reminder_type text not null check (reminder_type in ('day_before', 'hour_before')),
-  sent_at timestamptz not null default now(),
-  primary key (event_id, reminder_type)
 );
 
 create table if not exists public.event_reminder_deliveries (
@@ -209,6 +228,7 @@ create table if not exists public.event_photos (
   delete_token_hash text,
   created_at timestamptz not null default now()
 );
+alter table public.event_photos add column if not exists delete_token_hash text;
 
 create table if not exists public.event_photo_likes (
   id bigint generated always as identity primary key,
@@ -280,7 +300,6 @@ alter table public.event_chat_messages enable row level security;
 alter table public.event_chat_message_reactions enable row level security;
 alter table public.event_realtime_ticks enable row level security;
 alter table public.push_subscriptions enable row level security;
-alter table public.event_reminders_sent enable row level security;
 alter table public.event_reminder_deliveries enable row level security;
 alter table public.event_signup_items enable row level security;
 alter table public.event_signup_claims enable row level security;
@@ -317,8 +336,8 @@ create index if not exists events_created_at_idx
   on public.events (created_at desc);
 create index if not exists events_datetime_idx
   on public.events (datetime);
-create index if not exists event_realtime_ticks_event_created_idx
-  on public.event_realtime_ticks (event_id, created_at desc);
+create index if not exists event_realtime_ticks_event_key_created_idx
+  on public.event_realtime_ticks (event_key, created_at desc);
 create unique index if not exists attendees_event_phone_normalized_uidx
   on public.attendees (event_id, public.normalize_phone(phone))
   where public.normalize_phone(phone) is not null;
@@ -393,8 +412,10 @@ begin
     raise exception 'Správa přes PIN zatím pro tuto akci není dostupná.';
   end if;
 
+  -- A wrong or locked PIN returns {error} instead of raising: a raise would
+  -- roll back the failed-attempt count below and the lockout would never start.
   if v_event.organizer_pin_locked_until is not null and v_event.organizer_pin_locked_until > now() then
-    raise exception 'PIN je dočasně zablokovaný. Zkus to později.';
+    return jsonb_build_object('error', 'PIN je dočasně zablokovaný. Zkus to později.');
   end if;
 
   if v_pin is null or extensions.crypt(v_pin, v_event.organizer_pin_hash) <> v_event.organizer_pin_hash then
@@ -409,7 +430,7 @@ begin
       end
     where id = p_event_id;
 
-    raise exception 'Neplatný správcovský PIN.';
+    return jsonb_build_object('error', 'Neplatný správcovský PIN.');
   end if;
 
   update public.events
@@ -448,7 +469,7 @@ begin
     raise exception 'Akce neexistuje.';
   end if;
 
-  if v_event.organizer_token <> p_token then
+  if v_event.organizer_token is distinct from p_token then
     raise exception 'Neplatný organizátorský odkaz.';
   end if;
 
@@ -532,6 +553,10 @@ begin
     raise exception 'Vyplň svoje jméno pro šťouchnutí.';
   end if;
 
+  if length(v_source_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
   if v_message is not null and length(v_message) > 280 then
     raise exception 'Zpráva ke šťouchnutí může mít maximálně 280 znaků.';
   end if;
@@ -611,7 +636,7 @@ begin
     raise exception 'Akce neexistuje.';
   end if;
 
-  if v_event.organizer_token <> p_token then
+  if v_event.organizer_token is distinct from p_token then
     raise exception 'Neplatný organizátorský odkaz.';
   end if;
 
@@ -664,7 +689,7 @@ begin
     raise exception 'Akce už neexistuje.';
   end if;
 
-  if v_event.organizer_token <> p_token then
+  if v_event.organizer_token is distinct from p_token then
     raise exception 'Neplatný organizátorský odkaz.';
   end if;
 
@@ -702,7 +727,7 @@ begin
     raise exception 'Akce neexistuje.';
   end if;
 
-  if v_event.organizer_token <> p_token then
+  if v_event.organizer_token is distinct from p_token then
     raise exception 'Neplatný organizátorský odkaz.';
   end if;
 
@@ -720,6 +745,11 @@ begin
     v_phone := public.normalize_phone(v_item->>'phone');
 
     if v_name is null then
+      continue;
+    end if;
+
+    if length(v_name) > 80 then
+      v_skipped := v_skipped + 1;
       continue;
     end if;
 
@@ -794,6 +824,14 @@ begin
 
   if v_name is null then
     raise exception 'Vyplň svoje jméno.';
+  end if;
+
+  if length(v_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
+  if length(v_excuse_reason) > 500 then
+    raise exception 'Text je moc dlouhý (limit 500 znaků).';
   end if;
 
   if p_status not in ('confirmed', 'excused') then
@@ -910,6 +948,14 @@ begin
     raise exception 'Vyplň svoje jméno, název, místo, datum a stručný popis akce.';
   end if;
 
+  if length(v_organizer_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
+  if length(v_name) > 120 or length(v_location) > 200 or length(v_description) > 2000 then
+    raise exception 'Název akce může mít nejvýš 120 znaků, místo 200 a popis 2000.';
+  end if;
+
   if v_organizer_pin is null or v_organizer_pin !~ '^[0-9]{4}$' then
     raise exception 'Správcovský PIN musí mít přesně 4 číslice.';
   end if;
@@ -1017,6 +1063,10 @@ begin
     raise exception 'Vyplň název, místo, datum a stručný popis akce.';
   end if;
 
+  if length(v_name) > 120 or length(v_location) > 200 or length(v_description) > 2000 then
+    raise exception 'Název akce může mít nejvýš 120 znaků, místo 200 a popis 2000.';
+  end if;
+
   select e.datetime into v_previous_datetime
   from public.events e
   where e.id = p_event_id and e.organizer_token = v_token
@@ -1032,7 +1082,7 @@ begin
     location = v_location,
     datetime = p_datetime,
     description = v_description,
-    require_phone = p_require_phone,
+    require_phone = coalesce(p_require_phone, false),
     enable_bring_list = coalesce(p_enable_bring_list, true),
     enable_carpool = coalesce(p_enable_carpool, true),
     enable_stops = coalesce(p_enable_stops, true)
@@ -1045,7 +1095,6 @@ begin
   end if;
 
   if v_previous_datetime is distinct from p_datetime then
-    delete from public.event_reminders_sent where event_id = p_event_id;
     delete from public.event_reminder_deliveries where event_id = p_event_id;
   end if;
 
@@ -1216,6 +1265,10 @@ begin
     raise exception 'Chybí jméno pro reakci.';
   end if;
 
+  if length(v_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
   if p_emoji not in ('👍', '❤️', '😂', '🎉', '🍻') then
     raise exception 'Tenhle emoji není podporovaný.';
   end if;
@@ -1271,6 +1324,7 @@ as $$
 declare
   v_sender_name text := nullif(trim(p_sender_name), '');
   v_message text := nullif(trim(p_message), '');
+  v_last_message_at timestamptz;
 begin
   if not exists (select 1 from public.events e where e.id = p_event_id) then
     raise exception 'Akce neexistuje.';
@@ -1282,6 +1336,29 @@ begin
 
   if v_message is null then
     raise exception 'Napiš zprávu do chatu.';
+  end if;
+
+  if length(v_message) > 500 then
+    raise exception 'Text je moc dlouhý (limit 500 znaků).';
+  end if;
+
+  if not exists (
+    select 1
+    from public.attendees a
+    where a.event_id = p_event_id
+      and lower(trim(a.name)) = lower(v_sender_name)
+      and a.status <> 'invited'
+  ) then
+    raise exception 'Do chatu může psát jen ten, kdo na akci odpověděl.';
+  end if;
+
+  select max(m.created_at)
+  into v_last_message_at
+  from public.event_chat_messages m
+  where m.event_id = p_event_id and lower(trim(m.sender_name)) = lower(v_sender_name);
+
+  if v_last_message_at > now() - interval '3 seconds' then
+    raise exception 'Zprávy posíláš moc rychle, chvilku počkej.';
   end if;
 
   return query
@@ -1345,6 +1422,18 @@ begin
     raise exception 'Chybí jméno.';
   end if;
 
+  if length(v_created_by) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
+  if length(v_label) > 120 then
+    raise exception 'Text je moc dlouhý (limit 120 znaků).';
+  end if;
+
+  if length(trim(p_note)) > 500 then
+    raise exception 'Text je moc dlouhý (limit 500 znaků).';
+  end if;
+
   insert into public.event_signup_items (event_id, category, label, capacity, note, created_by)
   values (p_event_id, p_category, v_label, greatest(coalesce(p_capacity, 1), 1), nullif(trim(coalesce(p_note, '')), ''), v_created_by)
   returning id into v_id;
@@ -1393,6 +1482,10 @@ declare
 begin
   if v_name is null then
     raise exception 'Chybí jméno.';
+  end if;
+
+  if length(v_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
   end if;
 
   select * into v_item from public.event_signup_items where id = p_item_id for update;
@@ -1562,6 +1655,18 @@ begin
     raise exception 'Pojmenuj zastávku.';
   end if;
 
+  if length(v_name) > 120 then
+    raise exception 'Text je moc dlouhý (limit 120 znaků).';
+  end if;
+
+  if length(trim(p_location)) > 200 then
+    raise exception 'Text je moc dlouhý (limit 200 znaků).';
+  end if;
+
+  if length(trim(p_starts_at_label)) > 120 then
+    raise exception 'Text je moc dlouhý (limit 120 znaků).';
+  end if;
+
   select coalesce(max(position), 0) + 1 into v_next_position
   from public.event_stops where event_id = p_event_id;
 
@@ -1627,6 +1732,7 @@ begin
   return v_deleted;
 end;
 $$;
+revoke all on function public._delete_expired_polls() from public, anon, authenticated;
 
 create or replace function public.create_event_poll(
   p_creator_name text,
@@ -1652,6 +1758,18 @@ begin
 
   if v_creator_name is null or v_name is null then
     raise exception 'Vyplň svoje jméno a název ankety.';
+  end if;
+
+  if length(v_creator_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
+  if length(v_name) > 120 then
+    raise exception 'Text je moc dlouhý (limit 120 znaků).';
+  end if;
+
+  if length(trim(p_description)) > 2000 then
+    raise exception 'Text je moc dlouhý (limit 2000 znaků).';
   end if;
 
   if p_options is null or jsonb_typeof(p_options) <> 'array' then
@@ -1683,6 +1801,14 @@ begin
       or nullif(trim(v_option->>'datetime'), '') is null
       or nullif(trim(v_option->>'location'), '') is null then
       raise exception 'Každá možnost musí mít platné datum a místo.';
+    end if;
+
+    if length(trim(v_option->>'location')) > 200 then
+      raise exception 'Text je moc dlouhý (limit 200 znaků).';
+    end if;
+
+    if length(trim(v_option->>'note')) > 500 then
+      raise exception 'Text je moc dlouhý (limit 500 znaků).';
     end if;
 
     v_option_datetime := (v_option->>'datetime')::timestamp without time zone;
@@ -1789,6 +1915,10 @@ begin
     raise exception 'Napiš svoje jméno pro hlasování.';
   end if;
 
+  if length(v_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
   select o.datetime into v_option_datetime
   from public.event_poll_options o
   where o.id = p_option_id and o.poll_id = p_poll_id;
@@ -1837,7 +1967,7 @@ begin
   -- second, orphaned duplicate event.
   select * into v_poll from public.event_polls where id = p_poll_id for update;
 
-  if not found or v_poll.creator_token <> p_token then
+  if not found or v_poll.creator_token is distinct from p_token then
     raise exception 'Neplatný odkaz tvůrce ankety.';
   end if;
 
@@ -1913,11 +2043,19 @@ begin
     return false;
   end if;
 
-  select count(*)::integer
-  into v_photo_count
-  from storage.objects o
-  where o.bucket_id = 'event-photos'
-    and (storage.foldername(o.name))[1] = v_event_id;
+  -- Recorded photos, plus uploads still waiting for record_event_photo.
+  -- Files that were never recorded stop counting after an hour, so failed
+  -- uploads can't use up the event's limit for good.
+  select (select count(*) from public.event_photos p where p.event_id = v_event_id)
+    + (
+      select count(*)
+      from storage.objects o
+      where o.bucket_id = 'event-photos'
+        and (storage.foldername(o.name))[1] = v_event_id
+        and o.created_at > now() - interval '1 hour'
+        and not exists (select 1 from public.event_photos p where p.event_id = v_event_id and p.storage_path = o.name)
+    )
+  into v_photo_count;
 
   return v_photo_count < 50;
 end;
@@ -1948,6 +2086,10 @@ begin
 
   if v_uploaded_by is null then
     raise exception 'Chybí jméno nahrávajícího.';
+  end if;
+
+  if length(v_uploaded_by) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
   end if;
 
   if coalesce(array_length(v_folders, 1), 0) <> 1 or v_folders[1] <> p_event_id then
@@ -2299,6 +2441,10 @@ as $$
 $$;
 grant execute on function public.is_push_subscribed(text, text) to anon, authenticated;
 
+-- An event's reminder is pending while, inside its window, some subscription
+-- still has no delivery row or one that claim_event_reminder_deliveries would
+-- claim - a subscriber who turns up late still gets it, and the per-endpoint
+-- rows keep anyone from getting it twice.
 create or replace function public.get_pending_event_reminders()
 returns table (
   event_id text,
@@ -2325,9 +2471,14 @@ as $$
   from public.events e, now_local
   where e.datetime <= now_local.ts + interval '24 hours'
     and e.datetime > now_local.ts + interval '2 hours'
-    and not exists (
-      select 1 from public.event_reminders_sent r
-      where r.event_id = e.id and r.reminder_type = 'day_before'
+    and exists (
+      select 1
+      from public.push_subscriptions s
+      left join public.event_reminder_deliveries d
+        on d.event_id = s.event_id and d.reminder_type = 'day_before' and d.endpoint = s.endpoint
+      where s.event_id = e.id
+        and (d.endpoint is null
+          or (d.attempt_count < 5 and (d.status = 'pending' or (d.status = 'sending' and d.lease_until <= now()))))
     )
   union all
   select
@@ -2338,9 +2489,14 @@ as $$
   from public.events e, now_local
   where e.datetime <= now_local.ts + interval '1 hour'
     and e.datetime > now_local.ts
-    and not exists (
-      select 1 from public.event_reminders_sent r
-      where r.event_id = e.id and r.reminder_type = 'hour_before'
+    and exists (
+      select 1
+      from public.push_subscriptions s
+      left join public.event_reminder_deliveries d
+        on d.event_id = s.event_id and d.reminder_type = 'hour_before' and d.endpoint = s.endpoint
+      where s.event_id = e.id
+        and (d.endpoint is null
+          or (d.attempt_count < 5 and (d.status = 'pending' or (d.status = 'sending' and d.lease_until <= now()))))
     );
 $$;
 revoke all on function public.get_pending_event_reminders() from public, anon, authenticated;
@@ -2375,6 +2531,8 @@ begin
     where d.event_id = p_event_id
       and d.reminder_type = p_reminder_type
       and (d.status = 'pending' or (d.status = 'sending' and d.lease_until <= now()))
+      -- Gives up on an endpoint after 5 failed attempts.
+      and d.attempt_count < 5
     order by d.endpoint
     limit 100
     for update of d skip locked
@@ -2420,39 +2578,6 @@ as $$
 $$;
 revoke all on function public.mark_event_reminder_delivery(text, text, text, boolean) from public, anon, authenticated;
 grant execute on function public.mark_event_reminder_delivery(text, text, text, boolean) to service_role;
-
-create or replace function public.complete_event_reminder(
-  p_event_id text,
-  p_reminder_type text
-)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if exists (
-    select 1
-    from public.push_subscriptions s
-    left join public.event_reminder_deliveries d
-      on d.event_id = s.event_id
-     and d.reminder_type = p_reminder_type
-     and d.endpoint = s.endpoint
-    where s.event_id = p_event_id
-      and d.status is distinct from 'sent'
-  ) then
-    return false;
-  end if;
-
-  insert into public.event_reminders_sent (event_id, reminder_type)
-  values (p_event_id, p_reminder_type)
-  on conflict (event_id, reminder_type) do nothing;
-
-  return true;
-end;
-$$;
-revoke all on function public.complete_event_reminder(text, text) from public, anon, authenticated;
-grant execute on function public.complete_event_reminder(text, text) to service_role;
 
 create or replace function public.delete_push_subscription_by_endpoint(p_endpoint text)
 returns void
@@ -2508,10 +2633,18 @@ security definer
 set search_path = public
 as $$
 begin
-  perform public.emit_event_realtime_tick(coalesce(new.id, old.id), 'event');
-  return coalesce(new, old);
+  -- Ticks have no foreign key to events (see the table), so they go here.
+  if tg_op = 'DELETE' then
+    delete from public.event_realtime_ticks t
+    where t.event_key = encode(extensions.digest(old.id, 'sha256'), 'hex');
+    return old;
+  end if;
+
+  perform public.emit_event_realtime_tick(new.id, 'event');
+  return new;
 end;
 $$;
+revoke all on function public.emit_event_realtime_tick_from_events() from public, anon, authenticated;
 
 create or replace function public.emit_event_realtime_tick(
   p_event_id text,
@@ -2535,10 +2668,11 @@ begin
     return;
   end if;
 
-  insert into public.event_realtime_ticks (event_id, reason)
-  values (p_event_id, p_reason);
+  insert into public.event_realtime_ticks (event_key, reason)
+  values (encode(extensions.digest(p_event_id, 'sha256'), 'hex'), p_reason);
 end;
 $$;
+revoke all on function public.emit_event_realtime_tick(text, text) from public, anon, authenticated;
 
 create or replace function public.emit_event_realtime_tick_from_chat_reactions()
 returns trigger
@@ -2557,6 +2691,7 @@ begin
   return coalesce(new, old);
 end;
 $$;
+revoke all on function public.emit_event_realtime_tick_from_chat_reactions() from public, anon, authenticated;
 
 create or replace function public.emit_event_realtime_tick_from_signup_claims()
 returns trigger
@@ -2575,6 +2710,7 @@ begin
   return coalesce(new, old);
 end;
 $$;
+revoke all on function public.emit_event_realtime_tick_from_signup_claims() from public, anon, authenticated;
 
 create or replace function public.emit_event_realtime_tick_from_event_row()
 returns trigger
@@ -2587,6 +2723,7 @@ begin
   return coalesce(new, old);
 end;
 $$;
+revoke all on function public.emit_event_realtime_tick_from_event_row() from public, anon, authenticated;
 
 -- ==================== Feedback ====================
 
@@ -2673,6 +2810,14 @@ begin
     raise exception 'Vyplň telefonní číslo.';
   end if;
 
+  if length(v_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
+  end if;
+
+  if length(v_phone) > 20 then
+    raise exception 'Telefonní číslo je příliš dlouhé.';
+  end if;
+
   if v_code is null or v_code !~ '^[0-9]{6}$' then
     raise exception 'Kód musí mít přesně 6 číslic.';
   end if;
@@ -2684,8 +2829,10 @@ begin
   for update;
 
   if found then
+    -- Returned, not raised, so the failed-attempt count commits (see
+    -- get_organizer_path_with_pin).
     if v_owner.code_locked_until is not null and v_owner.code_locked_until > now() then
-      raise exception 'Kód je dočasně zablokovaný. Zkus to později.';
+      return jsonb_build_object('error', 'Kód je dočasně zablokovaný. Zkus to později.');
     end if;
 
     if extensions.crypt(v_code, v_owner.code_hash) <> v_owner.code_hash then
@@ -2700,7 +2847,7 @@ begin
         end
       where id = v_owner.id;
 
-      raise exception 'Neplatný kód.';
+      return jsonb_build_object('error', 'Neplatný kód.');
     end if;
 
     update public.owners
@@ -2761,7 +2908,7 @@ begin
   from public.owners o
   where o.id = p_owner_id;
 
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
@@ -2832,12 +2979,16 @@ declare
   v_group public.contact_groups%rowtype;
 begin
   select * into v_owner from public.owners o where o.id = p_owner_id;
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
   if v_name is null then
     raise exception 'Vyplň název skupiny.';
+  end if;
+
+  if length(v_name) > 120 then
+    raise exception 'Text je moc dlouhý (limit 120 znaků).';
   end if;
 
   if (select count(*) from public.contact_groups g where g.owner_id = p_owner_id) >= 25 then
@@ -2877,12 +3028,16 @@ declare
   v_group public.contact_groups%rowtype;
 begin
   select * into v_owner from public.owners o where o.id = p_owner_id;
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
   if v_name is null then
     raise exception 'Vyplň název skupiny.';
+  end if;
+
+  if length(v_name) > 120 then
+    raise exception 'Text je moc dlouhý (limit 120 znaků).';
   end if;
 
   begin
@@ -2918,7 +3073,7 @@ declare
   v_owner public.owners%rowtype;
 begin
   select * into v_owner from public.owners o where o.id = p_owner_id;
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
@@ -2952,7 +3107,7 @@ declare
   v_member public.contact_group_members%rowtype;
 begin
   select * into v_owner from public.owners o where o.id = p_owner_id;
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
@@ -2962,6 +3117,10 @@ begin
 
   if v_name is null then
     raise exception 'Vyplň jméno.';
+  end if;
+
+  if length(v_name) > 80 then
+    raise exception 'Jméno je moc dlouhé.';
   end if;
 
   if v_phone is null then
@@ -3005,7 +3164,7 @@ declare
   v_owner public.owners%rowtype;
 begin
   select * into v_owner from public.owners o where o.id = p_owner_id;
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
@@ -3048,12 +3207,16 @@ declare
   v_template public.event_templates%rowtype;
 begin
   select * into v_owner from public.owners o where o.id = p_owner_id;
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
   if v_name is null or v_event_name is null or v_location is null or v_description is null then
     raise exception 'Vyplň název šablony, název akce, místo a popis.';
+  end if;
+
+  if length(v_name) > 120 or length(v_event_name) > 120 or length(v_location) > 200 or length(v_description) > 2000 then
+    raise exception 'Název šablony i akce může mít nejvýš 120 znaků, místo 200 a popis 2000.';
   end if;
 
   if p_default_group_id is not null
@@ -3104,12 +3267,16 @@ declare
   v_template public.event_templates%rowtype;
 begin
   select * into v_owner from public.owners o where o.id = p_owner_id;
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
   if v_name is null or v_event_name is null or v_location is null or v_description is null then
     raise exception 'Vyplň název šablony, název akce, místo a popis.';
+  end if;
+
+  if length(v_name) > 120 or length(v_event_name) > 120 or length(v_location) > 200 or length(v_description) > 2000 then
+    raise exception 'Název šablony i akce může mít nejvýš 120 znaků, místo 200 a popis 2000.';
   end if;
 
   if p_default_group_id is not null
@@ -3156,7 +3323,7 @@ declare
   v_owner public.owners%rowtype;
 begin
   select * into v_owner from public.owners o where o.id = p_owner_id;
-  if not found or v_owner.token <> p_token then
+  if not found or v_owner.token is distinct from p_token then
     raise exception 'Neplatný přístupový token.';
   end if;
 
@@ -3182,11 +3349,9 @@ create policy "event_realtime_ticks_select_allowed"
   to anon, authenticated
   using (true);
 
-drop policy if exists "event_photos_storage_select" on storage.objects;
-create policy "event_photos_storage_select"
-  on storage.objects for select to anon, authenticated
-  using (bucket_id = 'event-photos');
-
+-- No select policy on purpose: the bucket is public, so photo URLs work
+-- without one, and one would let anyone list every event's photos.
+-- Uploads don't upsert, so they need insert only.
 drop policy if exists "event_photos_storage_insert" on storage.objects;
 create policy "event_photos_storage_insert"
   on storage.objects for insert to anon, authenticated
@@ -3279,8 +3444,8 @@ insert into storage.buckets (id, name, public)
 values ('event-photos', 'event-photos', true)
 on conflict (id) do nothing;
 update storage.buckets
-set file_size_limit = 10485760, 
-    allowed_mime_types = array['image/*']
+set file_size_limit = 10485760,
+    allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 where id = 'event-photos';
 
 -- ==================== Retired objects ====================
@@ -3304,7 +3469,6 @@ drop policy if exists "event_realtime_ticks_update_none" on public.event_realtim
 drop policy if exists "event_realtime_ticks_delete_none" on public.event_realtime_ticks;
 drop policy if exists "event_reminder_deliveries_no_direct_access" on public.event_reminder_deliveries;
 drop policy if exists "push_subscriptions_no_direct_access" on public.push_subscriptions;
-drop policy if exists "event_reminders_sent_no_direct_access" on public.event_reminders_sent;
 drop policy if exists "event_chat_message_reactions_no_direct_write" on public.event_chat_message_reactions;
 drop policy if exists "event_chat_message_reactions_no_direct_delete" on public.event_chat_message_reactions;
 drop policy if exists "event_signup_items_no_direct_write" on public.event_signup_items;
@@ -3350,6 +3514,7 @@ drop policy if exists "event_templates_update_none" on public.event_templates;
 drop policy if exists "event_templates_delete_none" on public.event_templates;
 drop policy if exists "event_photo_likes_no_direct_access" on public.event_photo_likes;
 drop policy if exists "event_photo_comments_no_direct_access" on public.event_photo_comments;
+drop policy if exists "event_photos_storage_select" on storage.objects;
 drop function if exists public.can_post_event_chat(text, text, text);
 drop function if exists public.normalize_event_chat_message();
 drop function if exists public.event_exists(text);
@@ -3360,6 +3525,10 @@ drop function if exists public.emit_event_realtime_tick_from_signup_items();
 drop function if exists public.emit_event_realtime_tick_from_stops();
 drop function if exists public.mark_event_reminder_sent(text, text);
 drop function if exists public.get_push_subscriptions_for_event(text);
+-- The per-endpoint gate in get_pending_event_reminders() replaced these: they
+-- marked a reminder done for good, even before anyone had subscribed.
+drop function if exists public.complete_event_reminder(text, text);
+drop table if exists public.event_reminders_sent;
 
 do $$
 declare

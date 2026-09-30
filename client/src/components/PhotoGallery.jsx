@@ -13,6 +13,7 @@ import {
   getEventPhotoUrl,
   getEventPhotos,
   recordEventPhoto,
+  PHOTO_EXTENSIONS,
   toggleEventPhotoLike,
   uploadEventPhoto,
 } from '../lib/api.js'
@@ -164,7 +165,7 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
 
     try {
       for (const file of files) {
-        if (!file.type.startsWith('image/')) {
+        if (!PHOTO_EXTENSIONS[file.type]) {
           toast.error(t('photos.imageOnly'))
           continue
         }
@@ -345,7 +346,14 @@ function PhotoGallery({ eventId, currentName, isOrganizer = false, organizerToke
             {isUploading ? t('photos.uploading') : t('photos.add')}
           </button>
         </div>
-        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          multiple
+          className="hidden"
+          onChange={handleFileChange}
+        />
       </div>
 
       {photos.length === 0 ? (

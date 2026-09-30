@@ -16,6 +16,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 - [Quick start (local)](#quick-start-local)
 - [Environment configuration](#environment-configuration)
 - [Supabase setup (SQL)](#supabase-setup-sql)
+  - [Database security test](#database-security-test)
 - [NPM scripts](#npm-scripts)
 - [Tests and CI](#tests-and-ci)
 - [Deploying to GitHub Pages](#deploying-to-github-pages)
@@ -35,11 +36,11 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 
 - create an event (name, place, date and time, description) with a 4-digit admin PIN - the organizer gets a public link for guests and a private management link
 - optional event modules: "who brings what", carpool and an itinerary with stops; the organizer turns them on when creating the event or later, and can prefill items, rides and an afterparty right away
-- a date/place poll before creating an event - the poll has its own public link and creator link, and once it's decided it creates the real event right away
+- a date/place poll before creating an event - the creator's link is remembered by their browser (the address bar keeps only the public voting link, which a button copies), the results refresh every 10 s, and once it's decided the poll creates the real event right away
 - RSVPs (coming / excuse with a reason), optionally with a required phone number
 - on-site check-in ("📍 I’m here")
 - nudges (pings) with a message for people who aren't coming (the same person can be nudged again only after 10 minutes)
-- a chat for each event, with emoji reactions to messages
+- a chat for each event, with emoji reactions to messages; only someone who has answered the invite can write in it, at most one message per 3 seconds and up to 500 characters
 - Enter sends everywhere: a chat message, a comment, an excuse, a nudge or a whole form (from multi-line fields too; Shift+Enter starts a new line, and phone keyboards show Enter as "Send")
 - an event photo album with a clickable preview (arrows between photos) and a bulk download of everyone else's photos (one click, as a ZIP, without the ones the signed-in user uploaded themselves)
 - likes and comments on photos: anyone with the invite can like and comment on a photo under their name, and the counts show right in the album
@@ -72,7 +73,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
 | `/event/:id` | the public invite for guests (RSVP, guest list, chat, photos, …) |
 | `/event/:id/manage?token=…` | event management for the organizer; without a valid token it offers to enter the PIN |
 | `/poll/new` | creating a date/place poll |
-| `/poll/:id` | voting in a poll; with `?token=…` deciding it, for its creator |
+| `/poll/:id` | voting in a poll; its creator (whose browser has the token saved) gets the results view. A link with `?token=…` saves the token and drops it from the address |
 | `/moje` | my groups & templates |
 | `/feedback` | the list of reported bugs and ideas |
 
@@ -81,7 +82,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
 - Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasts), `qrcode` (QR codes), `jszip` (photo ZIPs)
 - Backend: Supabase - Postgres + RPC functions (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - External services: Open-Meteo (geocoding and weather forecast), Google Fonts (Space Grotesk)
-- Tests: Jest + Testing Library (`client/tests/componentsTests/*.test.ts(x)`), `jest-axe` for a11y assertions in tests (`npm --prefix client run test:a11y`)
+- Tests: Jest + Testing Library (`client/tests/componentsTests/*.test.ts(x)`), `jest-axe` for a11y assertions in tests (`npm --prefix client run test:a11y`), a Playwright E2E test (`client/tests/app.e2e.ts`) and a database security test (`supabase/tests/security.sql`)
 - Deploy: GitHub Actions -> GitHub Pages (custom domain `ruin.eckhardt.cz`)
 
 ## Repository structure
@@ -153,19 +154,19 @@ What `all-phases.sql` contains:
 
 - Base schema: `events`, `attendees`, `attendee_pings`, `event_chat_messages`, RLS on the key tables, RPC functions for create/get event, submit RSVP, ping, moderation and deletion.
 - Local date/time without time zone shifts.
-- Realtime payload refresh (`event_realtime_ticks` + triggers) when guests/nudges change.
+- Realtime payload refresh (`event_realtime_ticks` + triggers) when guests/nudges change. A tick carries only `event_key` (the SHA-256 hash of the event id) instead of the id, so the publicly readable table doesn't reveal event ids.
 - Optional phone number collection (`events.require_phone`, `attendees.phone`) with normalization and a unique index against duplicate numbers within an event.
 - Organizer editing of event details (name, place, date/time, description, required phone).
-- Web Push reminders (`push_subscriptions`, `event_reminders_sent`, RPCs for both the client and the Edge Function) - this also needs the Edge Function deployed and scheduled jobs, see [Service worker, offline mode and push notifications](#service-worker-offline-mode-and-push-notifications).
+- Web Push reminders (`push_subscriptions`, `event_reminder_deliveries` with delivery tracked per browser, RPCs for both the client and the Edge Function) - this also needs the Edge Function deployed and scheduled jobs, see [Service worker, offline mode and push notifications](#service-worker-offline-mode-and-push-notifications).
 - Community features: check-in, emoji reactions in the chat, "who brings what" / carpool lists, several stops per night, date/place polls before creating an event (with their own public link and creator link), event photos (Storage bucket `event-photos`).
 - Case-insensitive voting in polls.
 - Nudges with a repeatable 10-minute cooldown instead of "once, forever" (an atomic `on conflict ... do update ... where`), with RLS on `attendee_pings`.
-- Security hardening: `_random_token` via `pgcrypto`/`gen_random_bytes()` instead of the non-cryptographic `random()` (the token is the only authorization for `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` returns phone numbers only with a valid `p_organizer_token` and refuses an invalid one (the management page then asks for the PIN again); a fixed race condition in `moderate_attendee`; a readable message instead of a raw Postgres error on a phone number conflict. Deliberately not addressed: `organizer_token` stays readable (not hashed), because the app can "recover" a forgotten manage link via the PIN, and that isn't possible with a one-way hash without rebuilding the whole recovery flow. The whole identity/authorization model (the app has no auth at all, the only "permissions" are tokens in links, RLS must deny everything by default) is written up in [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md).
+- Security hardening: `_random_token` via `pgcrypto`/`gen_random_bytes()` instead of the non-cryptographic `random()` (the token is the only authorization for `update_event`/`delete_event`/`delete_attendee`/`moderate_attendee`); `get_event_payload` returns phone numbers only with a valid `p_organizer_token` and refuses an invalid one (the management page then asks for the PIN again); a fixed race condition in `moderate_attendee`; a readable message instead of a raw Postgres error on a phone number conflict. Deliberately not addressed: `organizer_token` stays readable (not hashed), because the app can "recover" a forgotten manage link via the PIN, and that isn't possible with a one-way hash without rebuilding the whole recovery flow. Tokens are compared with `is distinct from`, so a missing (NULL) token never passes. The whole identity/authorization model (the app has no auth at all, the only "permissions" are tokens in links, RLS must deny everything by default) is written up in [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md).
 - Deleting photos from Storage - manual deletion goes through the `delete-event-data` Edge Function, which validates the organizer token, or the delete token of whoever uploaded the photo; automatic deletion after 7 days goes through `get_expired_event_ids()` and the `cleanup-expired-events` Edge Function - and polls have their own lifecycle (an undecided poll expires 14 days after it was created, a decided one is removed automatically together with the event it created).
 - Blocking a driver from signing up for their own ride offer + the option to remove a specific passenger from your own offer.
-- Read hardening: chat, photos, polls, lists and stops can only be read through RPCs scoped to a specific event (RLS doesn't allow reading the tables directly), and realtime goes through `event_realtime_ticks`.
+- Read hardening: chat, photos, polls, lists and stops can only be read through RPCs scoped to a specific event (RLS doesn't allow reading the tables directly), and realtime goes through `event_realtime_ticks` (keyed by the hash of the event id). The internal helpers (`emit_event_realtime_tick`, `_delete_expired_polls`, the trigger functions, …) have no anon or authenticated privileges.
 - The organizer as a separate identity (`events.organizer_name`) - chat messages, nudges, photos and items from event management are signed with the organizer's name.
-- Server-side limits on photo uploads (bucket `event-photos`: 10 MB max, images only, at most 50 photos per event, and uploads restricted to folders for existing events).
+- Server-side limits on photo uploads (bucket `event-photos`: 10 MB max, JPEG, PNG, WebP and GIF only, at most 50 photos per event, and uploads restricted to folders for existing events). The limit counts recorded photos plus uploaded but not yet recorded files younger than an hour. The bucket is public only for reading a photo by its URL - its contents can't be listed (no select policy on `storage.objects`).
 - Photo likes and comments (`event_photo_likes`, `event_photo_comments`): reads and writes go through RPCs only (`get_event_photo_likes`, `get_event_photo_comments`, `toggle_event_photo_like`, `add_event_photo_comment`, `delete_event_photo_comment`), one like per name and photo, comments up to 500 characters, at most 200 comments per photo, and only the organizer can delete comments. Open albums refresh through the `photo`, `photo_like` and `photo_comment` realtime ticks.
 - Feedback (bug reports and ideas): `feedback_reports` + RPCs `submit_feedback_report`/`get_feedback_reports`. Reading them at `/feedback` is deliberately public, without a PIN - anyone at that address sees the name and text of every report.
 - Contact groups and event templates (`owners`, `contact_groups`, `contact_group_members`, `event_templates`) tied to an account identified by name, phone and a 6-digit code (`access_owner_account`; the code is stored as a bcrypt hash and is temporarily locked after repeated wrong attempts) + inviting people into an event in bulk (`invite_attendees`, status `invited`).
@@ -178,6 +179,10 @@ Recommendations:
 
 - run it in the Supabase SQL Editor on the same project you use in `.env.local`
 - after every run, test creating an event, an RSVP and the event detail
+
+### Database security test
+
+`supabase/tests/security.sql` checks the main security rules against the live schema: that a missing (NULL) or wrong token is refused by `delete_attendee`, `moderate_attendee`, `invite_attendees`, `finalize_event_poll`, `delete_event` and the account functions, that five wrong PINs lock the PIN (and the counter really is saved), that anon and authenticated have no `EXECUTE` on `emit_event_realtime_tick`, `_delete_expired_polls`, `delete_event_photo`, `list_event_photo_paths` and other internal functions, that nobody who hasn't answered can write in the chat and the 3-second limit holds, and that the photo bucket can't be listed. Paste the whole file into the Supabase SQL Editor and run it after `all-phases.sql`. It runs in one transaction that ends with `rollback`, so it changes nothing and leaves nothing behind - the event, poll and account it creates for the test are thrown away. A failure stops the script with `FAIL …`; when everything passes, the last result is `All security checks passed.`
 
 ## NPM scripts
 
@@ -197,21 +202,22 @@ Client (`client/package.json`):
 - `npm --prefix client run test` - Jest (unit, component + a11y tests, `*.test.ts(x)`)
 - `npm --prefix client run test:a11y` - only the tests matching the `a11y` pattern
 - `npm --prefix client run typecheck` - type-checks the tests (`tsc -p tests`). The tests are TypeScript while the app stays JavaScript; Jest and Playwright only strip the types, so this script (and CI) is what checks them.
-- `npm --prefix client run test:e2e` - the Playwright E2E test: walks through the whole app (creating an event, editing it, RSVPs, chat, bring list, photos, pings, accepting an excuse, a poll, feedback, dark mode) once in Czech and once in English. It starts its own dev server against an in-memory fake Supabase and never touches the real project. Run `npx playwright install chromium` once first.
+- `npm --prefix client run test:e2e` - the Playwright E2E test: walks through the whole app (creating an event, editing it, RSVPs, chat, bring list, uploading and deleting your own photo, pings, unlocking with the PIN including a wrong one, accepting an excuse, a poll voted on from a second browser, feedback, dark mode, deleting the event) once in Czech and once in English. It starts its own dev server against an in-memory fake Supabase and never touches the real project. Run `npx playwright install chromium` once first.
 
 The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-safe.mjs`. It copies the project into a temporary folder (only symlinking `src` and `public`) and runs Vite there, because Vite can't cope with a path that contains e.g. a `?` (the "Are you in?" folder). Changes in `src/` and `public/` show up right away; after changing `vite.config.js` or `package.json`, restart the dev server. Pass your own Vite options straight to this script, e.g. `node scripts/run-vite-safe.mjs dev --host 127.0.0.1` in the `client` directory - they don't get through `npm run dev -- ...`.
 
 ## Tests and CI
 
 - `npm test` runs Jest (jsdom + Testing Library + `jest-axe`): unit tests for `lib/`, component tests and a11y tests.
-- The localization tests check that `cs.js` and `en.js` have the same keys and `{placeholders}`, and that every message in `all-phases.sql` has an English translation (see [Localization](#localization-czech-and-english)).
+- The localization tests check that `cs.js` and `en.js` have the same keys and `{placeholders}`, and that every message in `all-phases.sql` and in the `delete-event-data` Edge Function has an English translation (see [Localization](#localization-czech-and-english)).
 - The Jest setup (`client/tests/componentsTests/setup.ts`) switches the UI to Czech - jsdom reports itself as `en-US`, so the app would otherwise run in English.
-- CI (the `ci` job in `.github/workflows/deploy-pages.yml`) runs lint and tests on every pull request to `main` and on every push to `main`. Build and deploy run only on a push to `main` (or a manual run), and only when `ci` passes.
+- The E2E test (`npm --prefix client run test:e2e`) runs against an in-memory fake Supabase (`client/tests/fakeSupabase.ts`) that checks the same things as the SQL wherever the client depends on them (tokens, cooldowns, a photo's folder and file name, …). When you change an RPC the E2E test uses, update the fake too.
+- CI (the `ci` job in `.github/workflows/deploy-pages.yml`) runs lint, the test type-check, Jest and the E2E test (with no retries of failed tests) on every pull request to `main` and on every push to `main`; when E2E fails, it uploads the traces as an artifact. Build and deploy run only on a push to `main` (or a manual run), and only when `ci` passes.
 - Jest doesn't work when the project path contains a `?` - see [Troubleshooting](#troubleshooting).
 
 ## Deploying to GitHub Pages
 
-The repo is deployed automatically by the `.github/workflows/deploy-pages.yml` workflow: the `ci` job (lint + tests), then `build` (production build of `client/dist`) and `deploy` (publishing to GitHub Pages).
+The repo is deployed automatically by the `.github/workflows/deploy-pages.yml` workflow: the `ci` job (lint, type-check, Jest and E2E), then `build` (production build of `client/dist`) and `deploy` (publishing to GitHub Pages).
 
 ### 1. Set the repository variables
 
@@ -239,8 +245,8 @@ Production runs at `ruin.eckhardt.cz` (set in `Settings -> Pages -> Custom domai
 
 The workflow runs:
 
-- on a push to `main` - lint, tests, build and deploy
-- on a pull request to `main` - lint and tests only
+- on a push to `main` - lint, type-check, Jest, E2E, build and deploy
+- on a pull request to `main` - lint, type-check, Jest and E2E only (a newer push to the same PR cancels the older run; a run on `main` is never cancelled)
 - manually via `workflow_dispatch`
 
 ### 5. Check the result
@@ -257,10 +263,10 @@ The app uses `HashRouter` (`/#/`), which is the right choice for GitHub Pages wi
 ## Service worker, offline mode and push notifications
 
 - the service worker is in `client/public/sw.js`, and the client registers it as soon as the app starts
-- navigations go to the network first and fall back to the last saved copy of the page when offline, static files are served from the cache - so an app the browser has loaded before opens even offline
+- navigations go to the network first and fall back to the last saved copy of the page when offline; build files in `assets/` (with a content hash in their names) are served from the cache, which keeps at most the 100 newest, and other static files (manifest, icons, …) are served from the cache and refreshed from the network in the background - so an app the browser has loaded before opens even offline
 - requests to Supabase and other domains are never cached; neither are files from the Vite dev server (`/src/`, `/node_modules/`, `/@vite/`, …), so you always see the current code during development
 - when you change the caching strategy, bump the version in `APP_SHELL_CACHE` - the `activate` handler then deletes the old cache
-- offline mode in the app: when the connection drops, a notice appears, and writes that are safe to repeat (RSVPs, check-ins, signing up for and backing out of items) are saved and sent once the connection is back (`client/src/lib/api.js`)
+- offline mode in the app: when the connection drops, a notice appears, and writes that are safe to repeat (RSVPs, check-ins, signing up for and backing out of items) are saved and sent once the connection is back (`client/src/lib/api.js`). Of two waiting calls for the same thing (the same RSVP, check-in or item) only the newer one stays, calls older than 6 hours are dropped, and only one open tab replays the queue at a time (`navigator.locks`)
 - push notifications are shown by the service worker (the `push` event), and clicking one opens the event page; sending them is handled by Supabase Edge Functions (`supabase/functions/`)
 
 If push notifications don't arrive, the usual cause is missing configuration in Supabase or missing notification permission in the browser.
@@ -288,7 +294,7 @@ select status_code, content, created from net._http_response order by created de
 
 ### Automatic event reminders (a day and an hour before)
 
-After RSVPing, a guest can turn on the "🔔 Remind me a day and an hour before" button in the app - that registers a Web Push subscription for the event. The browser has one push subscription for the whole app, but the database keeps one row per event (`push_subscriptions` with a unique `event_id` + `endpoint` pair), so reminders can be turned on and off for each event separately. The notification itself is sent by the scheduled Edge Function `send-event-reminders`, which needs a one-time setup:
+After RSVPing, a guest can turn on the "🔔 Remind me a day and an hour before" button in the app - that registers a Web Push subscription for the event. The browser has one push subscription for the whole app, but the database keeps one row per event (`push_subscriptions` with a unique `event_id` + `endpoint` pair), so reminders can be turned on and off for each event separately. When the VAPID key changes, the browser gets a new subscription and the client moves the events it had reminders on for over to it. The notification itself is sent by the scheduled Edge Function `send-event-reminders`, which needs a one-time setup:
 
 **1. Generate VAPID keys** (only once per project):
 
@@ -340,11 +346,13 @@ Without steps 3-5, the reminder button shows up in the app and the subscription 
 
 The "a day before" reminder goes out when the event is 2-24 hours away and, depending on the date, reads "Today at 18:00" or "Tomorrow at 18:00" (in Czech). When the event is less than 2 hours away, only the "an hour before" reminder arrives ("In 45 min: …"). Every push message has a TTL until the event starts, so an offline device doesn't get it after the event. The reminder texts are put together by the Edge Function and are only in Czech for now.
 
-After a reminders change, first run the current `all-phases.sql`, then redeploy `send-event-reminders`, and only then deploy the client (merge into `main`): the function and the client call RPCs that the SQL adds (`claim_event_reminder_deliveries`, `is_push_subscribed` and so on).
+Delivery is tracked per browser (`event_reminder_deliveries`): an event stays pending for its whole reminder window while some subscription hasn't been delivered to, so someone who turns reminders on later still gets it, and nobody gets it twice. The function gives up on an endpoint after 5 failed sends, and deletes a subscription the push service rejects for good (400, 403, 404, 410). One run keeps claiming batches of subscriptions until all are sent, for at most 60 seconds - the rest waits for the next run.
+
+After a reminders change, first run the current `all-phases.sql`, then redeploy `send-event-reminders`, and only then deploy the client (merge into `main`): the function and the client call RPCs that the SQL adds (`claim_event_reminder_deliveries`, `is_push_subscribed` and so on). An older version of the function called `complete_event_reminder()`, which the current SQL drops (together with the `event_reminders_sent` table) - until you redeploy it, it only logs an error.
 
 ### Automatic cleanup of expired events (and their photos)
 
-Events that are 7+ days past their date (in Europe/Prague time) are deleted by the scheduled Edge Function `cleanup-expired-events`: it first deletes their photos from the `event-photos` bucket through the Storage Admin API, and only then the events themselves (`delete_events_by_ids()`). An event whose photos couldn't be deleted stays and is retried on the next run. This can't be done straight from SQL - this Supabase project rejects deleting from the storage tables with `"Direct deletion from storage tables is not allowed. Use the Storage API instead."`.
+Events that are 7+ days past their date (in Europe/Prague time) are deleted by the scheduled Edge Function `cleanup-expired-events`: it first deletes their photos from the `event-photos` bucket through the Storage Admin API, and right after that the event's row (`delete_events_by_ids()`). An event whose photos couldn't be deleted stays and is retried on the next run. One run handles at most 50 events, so it fits the function's time limit; the rest waits for the next run. This can't be done straight from SQL - this Supabase project rejects deleting from the storage tables with `"Direct deletion from storage tables is not allowed. Use the Storage API instead."`.
 
 **1. Deploy the Edge Function:**
 
@@ -385,14 +393,16 @@ Manual organizer deletion uses an Edge Function with the service-role key so Sto
 supabase functions deploy delete-event-data --no-verify-jwt
 ```
 
-The function validates the organizer token against the requested event; it needs no schedule, and the service-role key never goes to the client. A single photo can also be deleted by whoever uploaded it: they send the delete token their browser saved for the photo on upload, and `authorize_event_photo_delete()` checks it in the database (see [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md)). The general order is: SQL first, then the Edge Functions, then the client (merge into `main`), because newer functions and clients call RPCs that only the SQL adds.
+The function validates the organizer token against the requested event (in constant time; a missing event and a wrong token get the same 401, so it can't be used to find out which event ids exist, and a malformed request gets a 400). It needs no schedule, and the service-role key never goes to the client. A single photo can also be deleted by whoever uploaded it: they send the delete token their browser saved for the photo on upload, and `authorize_event_photo_delete()` checks it in the database (see [SECURITY_MODEL.en.md](SECURITY_MODEL.en.md)). The general order is: SQL first, then the Edge Functions, then the client (merge into `main`), because newer functions and clients call RPCs that only the SQL adds.
+
+**Deploying this round of fixes:** run `all-phases.sql` first, then redeploy all three Edge Functions (`delete-event-data`, `cleanup-expired-events`, `send-event-reminders` - which no longer calls `complete_event_reminder()`, dropped by the new SQL), and only then merge the client into `main`. Between running the SQL and deploying the client, the old client gets no realtime ticks (it looks them up by `event_id`, the new SQL keys them by the `event_key` hash) - the pages still refresh by polling, so changes just show up with a delay. After the SQL is in, you can run `supabase/tests/security.sql` (see [Database security test](#database-security-test)).
 
 ## Localization (Czech and English)
 
 The UI comes in two languages. Czech is the source language; English has the same keys.
 
 - On the first visit, the language is picked from the browser (`cs` and `sk` -> Czech, anything else -> English), and it's switched with the CZ | EN toggle in the top-right corner of every page's header. The choice is saved in `localStorage` (`ruin-locale`), and `<html lang>` is set as well.
-- Dates and times are formatted for the language (`cs-CZ`; in English `en-GB` with a 24-hour clock).
+- Dates and times are formatted for the language (`cs-CZ`; in English `en-GB` with a 24-hour clock), but always in Europe/Prague time, which `events.datetime` is stored in - not in the device's time zone (`parseEventDateTime` in `client/src/lib/format.js`).
 - The texts live in `client/src/locales/cs.js` and `client/src/locales/en.js`. In a component: `const { t } = useI18n()` and `t('section.key', { param })`; outside React (`lib/`), just import `t` from `client/src/lib/i18n.js`. Plurals are objects keyed by `Intl.PluralRules` category (`{ one, few, other }`); a missing form falls back to `other`.
 - Add every new text to both dictionaries - `client/tests/componentsTests/i18n.test.tsx` checks that they have the same keys and the same `{placeholders}`.
 - Database error messages (`raise exception` in `all-phases.sql`) stay in Czech; for the English UI, the client translates them by their exact text using `client/src/locales/serverMessages.en.js`. When you add or reword a message in the SQL, add it there too - otherwise the same test fails. Code that branches on a specific message compares the original text from `error.serverMessage`, not the translated `error.message`.
@@ -440,7 +450,7 @@ Usually the Supabase project that `.env.local` points to isn't running the curre
 
 ### Organizer mode won't open
 
-Event management is tied to the token in the management link. Without the token, management can be unlocked with the 4-digit admin PIN (the "Manage event" button on the invite). After 5 wrong attempts the PIN is locked for 15 minutes, after 10 for an hour and after 15 for 24 hours.
+Event management is tied to the token in the management link. Without the token, management can be unlocked with the 4-digit admin PIN (the "Manage event" button on the invite). After 5 wrong attempts the PIN is locked for 15 minutes, after 10 for an hour and after 15 for 24 hours. The counter is saved even for a refused attempt: `get_organizer_path_with_pin` returns a wrong or locked PIN as `{ error }` instead of raising (which would roll the counter back), and the client turns it into an ordinary error. The 6-digit account code on `/moje` works the same way.
 
 ### Error "Could not find the function ... in the schema cache"
 

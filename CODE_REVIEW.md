@@ -9,6 +9,17 @@ Výsledek: 91 nahlášených nálezů → **40 potvrzených** (critical/high/med
 
 Recenzovaný stav: aktuální obsah souborů na disku ke dni reviewu (větev `refactoringBranch`), včetně needitovaných změn.
 
+**Stav k 2026-09-30:** text níž je záznam stavu ke dni reviewu, čísla řádků neodpovídají dnešnímu kódu. Z uvedených nálezů jsou teď opravené mimo jiné:
+
+- CI (#3, CI a Build níž): při každém pull requestu spouští lint, typovou kontrolu testů, Jest (včetně a11y testů) a E2E test v Playwrightu, instaluje přes `npm ci`; testy (#4) běží.
+- Porovnávání tokenů: Edge Functions porovnávají klíč scheduleru i organizátorský token v konstantním čase (`timingSafeEqualStrings`), SQL funkce kontrolují tokeny přes `is distinct from`, takže chybějící (NULL) token neprojde. Porovnání uvnitř SQL funkcí konstantní čas dál nemají.
+- Horní limity délky jmen, názvů, míst, popisů a textů hlídají RPC funkce na serveru.
+- Přípona nahrané fotky se bere z typu souboru (jen JPEG, PNG, WebP, GIF - stejně jako v bucketu), ne z jeho názvu.
+- `send-event-reminders`: odběr, který push služba odmítne natrvalo (400, 403, 404, 410), se smaže, endpoint se vzdá po 5 pokusech a běh má časový limit 60 s; `cleanup-expired-events` zachytí chybu u každé akce zvlášť a zpracuje nejvýš 50 akcí za běh.
+- `sw.js` zachytí push zprávu, která není JSON; `.ics` export používá sdílený `parseEventDateTime` (čas Europe/Prague).
+- `ModalOverlay` zamyká scroll pozadí; `PollPage` (i pozvánka a správa akce) se při přechodu na jiné id vykreslí znovu od nuly.
+- `run-vite-safe.mjs` po sobě uklidí dočasnou kopii projektu i po SIGINT/SIGTERM (E2E test dev server ukončuje přes SIGTERM).
+
 ---
 
 ## Obsah

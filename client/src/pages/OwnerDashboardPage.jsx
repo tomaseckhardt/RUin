@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '../components/PageShell.jsx'
@@ -17,6 +17,8 @@ import { clearSavedOwnerIdentity, getSavedOwner } from '../lib/ownerLinkStorage.
 
 // Matched against the database's original text, not the (possibly
 // translated) error.message - see toRequestError in lib/api.js.
+const REFRESH_ERROR_TOAST_ID = 'owner-refresh-error'
+
 function isInvalidOwnerTokenError(error) {
   return typeof error?.serverMessage === 'string' && error.serverMessage.includes('Neplatný přístupový token')
 }
@@ -31,22 +33,31 @@ function OwnerDashboardPage() {
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
   const [memberForms, setMemberForms] = useState({})
   const [busyMemberId, setBusyMemberId] = useState(null)
+  const [addingMemberGroupId, setAddingMemberGroupId] = useState(null)
   const isLoading = Boolean(owner) && !payload && !error
+  const hasLoadedOnceRef = useRef(false)
 
   const loadPayload = useCallback(async (activeOwner) => {
     try {
       const nextPayload = await getOwnerPayload(activeOwner.ownerId, activeOwner.token)
       setPayload(nextPayload)
+      hasLoadedOnceRef.current = true
       setError('')
     } catch (loadError) {
       if (isInvalidOwnerTokenError(loadError)) {
         clearSavedOwnerIdentity()
         setOwner(null)
         setPayload(null)
+        hasLoadedOnceRef.current = false
         return
       }
 
-      setError(loadError.message)
+      // Once the page is up, a failed refresh doesn't replace it.
+      if (hasLoadedOnceRef.current) {
+        toast.error(loadError.message, { id: REFRESH_ERROR_TOAST_ID })
+      } else {
+        setError(loadError.message)
+      }
     }
   }, [])
 
@@ -111,6 +122,8 @@ function OwnerDashboardPage() {
       return
     }
 
+    setAddingMemberGroupId(groupId)
+
     try {
       await addContactGroupMember(owner.ownerId, owner.token, groupId, form)
       toast.success(t('owner.memberAdded'))
@@ -118,6 +131,8 @@ function OwnerDashboardPage() {
       await loadPayload(owner)
     } catch (addError) {
       toast.error(addError.message)
+    } finally {
+      setAddingMemberGroupId(null)
     }
   }
 
@@ -180,6 +195,7 @@ function OwnerDashboardPage() {
           <form className="mt-3 flex flex-wrap gap-3" onSubmit={handleCreateGroup}>
             <input
               className="field flex-1"
+              aria-label={t('owner.newGroup')}
               value={newGroupName}
               onChange={(event) => setNewGroupName(event.target.value)}
               placeholder={t('owner.groupNamePlaceholder')}
@@ -235,6 +251,7 @@ function OwnerDashboardPage() {
                 <form className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={(event) => handleAddMember(event, group.id)}>
                   <input
                     className="field"
+                    aria-label={t('common.name')}
                     value={memberForm.name}
                     onChange={(event) => updateMemberForm(group.id, { name: event.target.value })}
                     placeholder={t('common.name')}
@@ -242,11 +259,12 @@ function OwnerDashboardPage() {
                   <input
                     className="field"
                     type="tel"
+                    aria-label={t('common.phone')}
                     value={memberForm.phone}
                     onChange={(event) => updateMemberForm(group.id, { phone: event.target.value })}
                     placeholder={t('common.phone')}
                   />
-                  <button type="submit" className="secondary-button">
+                  <button type="submit" className="secondary-button" disabled={addingMemberGroupId === group.id}>
                     {t('common.add')}
                   </button>
                 </form>

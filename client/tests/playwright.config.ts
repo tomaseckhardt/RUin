@@ -8,11 +8,14 @@ export default defineConfig({
   testMatch: '*.e2e.ts',
   outputDir: 'test-results',
   timeout: 180_000,
-  // One language after the other: the dev server is slow when both hit it.
+  // Both languages at once. Both tests live in one file, and Playwright only
+  // splits a file between workers when fullyParallel is on.
+  fullyParallel: true,
   workers: 2,
   // The RSVP celebration alone keeps the page busy for 4.5 s.
   expect: { timeout: 15_000 },
-  retries: process.env.CI ? 1 : 0,
+  // No retries, in CI either: a flaky step should fail loudly, not pass on a rerun.
+  retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     ...devices['Desktop Chrome'],
@@ -30,6 +33,9 @@ export default defineConfig({
     cwd: '..',
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
+    // SIGTERM lets run-vite-safe.mjs delete its temp copy of the project
+    // (~240 MB); the default SIGKILL left one behind in /tmp on every run.
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
     timeout: 120_000,
     env: { VITE_SUPABASE_URL: SUPABASE_URL, VITE_SUPABASE_ANON_KEY: 'e2e-anon-key', VITE_VAPID_PUBLIC_KEY: '' },
   },

@@ -44,6 +44,11 @@ odhlašuje, i jméno volajícího a vyžaduje, aby se shodovala. Tím jedno pole
 přestalo dělat dvojí roli, ale identitu to neověří - kdo pošle cizí jméno
 dvakrát, projde.
 
+Kde to jde, appka aspoň zužuje, kdo se jménem může co dělat: do chatu
+(`send_event_chat_message`) smí psát jen jméno, které na akci odpovědělo
+(pozvaný, který ještě neodpověděl, ne), nejvýš jednu zprávu za 3 sekundy a do
+500 znaků. Cizí jméno ze stejné akce tím ale neodfiltruje.
+
 Co z toho plyne pro nový kód: nikdy nepočítej s tím, že `p_attendee_name`,
 `p_sender_name` apod. je důkaz, kdo volání skutečně provedl. Je to jen popisek,
 který si vymyslel volající.
@@ -68,7 +73,10 @@ Kdo odkaz nemá, může správu odemknout 4místným správcovským PINem, kter�
 organizátor zvolí při založení akce (`get_organizer_path_with_pin`). PIN je
 uložený jako bcrypt hash (`events.organizer_pin_hash`) a protože 4 číslice jsou
 jen 10 000 kombinací, po chybných pokusech se zamyká: po 5 na 15 minut, po 10 na
-hodinu, po 15 na 24 hodin.
+hodinu, po 15 na 24 hodin. Chybný i zamčený PIN funkce **vrací** jako
+`{ error }`, místo aby vyhodila výjimku: výjimka by vrátila celou transakci
+zpátky i s navýšeným počítadlem chybných pokusů a zámek by se nikdy nespustil.
+Klient (`throwReturnedError` v `api.js`) z `{ error }` udělá běžnou chybu.
 
 Token je záměrně uložený jako čitelný plaintext, ne jako jednosměrný hash.
 Tohle je vědomý kompromis, ne opomenutí - flow "zapomněl jsi odkaz na správu?
@@ -82,7 +90,11 @@ funkci) je vědomé rozhodnutí.
 
 Stejný princip (server-side ověření tokenu proti uloženému, žádná session)
 platí i pro `event_polls.creator_token` u ještě nezaložených akcí (anket na
-termín/místo) - odkaz tvůrce má tvar `.../#/poll/:pollId?token=...`.
+termín/místo) - odkaz tvůrce má tvar `.../#/poll/:pollId?token=...`. Klient si
+token uloží do `localStorage` (`ruin-poll-creator-tokens`, posledních 30 anket,
+`lib/pollCreatorStorage.js`) a z adresy ho odstraní, takže adresa ankety v
+prohlížeči tvůrce je rovnou veřejný odkaz pro hlasující (tvůrce ho zkopíruje
+tlačítkem) a token se nerozešle omylem.
 
 ### Skupiny a šablony: `owners.token`, telefon a 6místný kód
 
@@ -91,9 +103,10 @@ identifikuje telefonním číslem a 6místným kódem přes
 `access_owner_account(name, phone, code)`. Je to jedna funkce pro přihlášení i
 registraci: když účet s daným (normalizovaným) telefonem existuje, ověří kód,
 jinak účet založí. Kód je uložený jako bcrypt hash (`owners.code_hash`) se
-stejným zamykáním po chybných pokusech jako PIN. Funkce vrátí `ownerId` a
+stejným zamykáním po chybných pokusech jako PIN (a chybný kód se stejně vrací
+jako `{ error }`). Funkce vrátí `ownerId` a
 `token`, klient je uloží do `localStorage` (`ruin-owner-identity`) a každá RPC
-nad skupinami a šablonami je ověřuje (`v_owner.token <> p_token`). Token se při
+nad skupinami a šablonami je ověřuje (`v_owner.token is distinct from p_token`). Token se při
 dalším přihlášení nemění.
 
 ### Kdo nahrál fotku: mazací token fotky
@@ -108,9 +121,11 @@ podle SHA-256 hashe tokenu. Databáze drží jen ten hash
 zpátky.
 
 - Pojmenování podle hashe váže token ke konkrétnímu nahrání. Bucket
-  `event-photos` si může vylistovat kdokoli, takže kdyby `record_event_photo`
-  bral libovolný token, mohl by si cizí čerstvě nahranou fotku zapsat se svým
-  tokenem dřív než ten, kdo ji nahrál, a pak ji smazat. `record_event_photo`
+  `event-photos` je veřejný (fotka se načte podle adresy), vypsat ho ale nejde -
+  na `storage.objects` pro něj není žádná select politika. I tak, kdyby
+  `record_event_photo` bral libovolný token, mohl by si kdokoli, kdo adresu
+  čerstvě nahrané fotky zná, zapsat ji se svým tokenem dřív než ten, kdo ji
+  nahrál, a pak ji smazat. `record_event_photo`
   proto uloží hash jen tomu, kdo zná token, jehož hash je název souboru.
 - Kdo smí fotku smazat, rozhoduje `authorize_event_photo_delete()` (jen pro
   service role) a totéž znovu ověří `delete_event_photo()`: platný
@@ -133,8 +148,12 @@ Zavedený vzor v `supabase/sql/all-phases.sql` je:
 
 - RLS je zapnuté na každé tabulce (`alter table ... enable row level
   security`) a bez politiky Postgres pro `anon`/`authenticated` všechno
-  zamítne. Povolující politiky jsou jen tři: čtení `event_realtime_ticks`
-  (realtime) a čtení a upload v bucketu `event-photos`. Všechny najdeš:
+  zamítne. Povolující politiky jsou jen dvě: čtení `event_realtime_ticks`
+  (realtime; tick nese místo id akce jen `event_key`, SHA-256 hash id, takže z
+  tabulky nejde vyčíst seznam akcí) a upload do bucketu `event-photos` (jen
+  JPEG, PNG, WebP a GIF do 10 MB, do složky existující akce). Čtení fotek
+  politiku nepotřebuje, protože bucket je veřejný, a kdyby ji měl, šel by
+  vypsat obsah celého bucketu. Všechny najdeš:
 
   ```bash
   grep -n "create policy" supabase/sql/all-phases.sql
@@ -147,13 +166,17 @@ Zavedený vzor v `supabase/sql/all-phases.sql` je:
   klientského tvrzení jako faktu. Příklad z `moderate_attendee`:
 
   ```sql
-  if v_event.organizer_token <> p_token then
+  if v_event.organizer_token is distinct from p_token then
     raise exception 'Neplatný organizátorský odkaz.';
   end if;
   ```
 
-  Stejný vzor (dohledej si řádek `v_event.organizer_token <> p_token`,
-  `v_poll.creator_token <> p_token` nebo `v_owner.token <> p_token` a exception
+  Vždy `is distinct from`, nikdy `<>`: pro chybějící (NULL) token je
+  `token <> null` taky NULL, `if` ho bere jako nepravdu a funkce by pokračovala
+  bez tokenu. Stejný vzor (dohledej si řádek
+  `v_event.organizer_token is distinct from p_token`,
+  `v_poll.creator_token is distinct from p_token` nebo
+  `v_owner.token is distinct from p_token` a exception
   s českou hláškou) používají `delete_event`, `update_event`,
   `finalize_event_poll`, RPC nad skupinami a šablonami a další - kdykoli funkce
   mění nebo odhaluje něco vázaného na akci, anketu nebo vlastníka, první věc,
@@ -184,12 +207,18 @@ Když přidáváš novou tabulku nebo RPC funkci:
    politiku, dokud neexistuje konkrétní důvod pro přímý přístup z klienta.
 3. Čtení i zápis jde přes `SECURITY DEFINER` RPC, která:
    - je `language plpgsql security definer set search_path = public`,
-   - uvnitř těla ověří autorizaci - typicky `if v_event.organizer_token <>
-     p_token then raise exception '...'` (nebo obdobné scoping podle
+   - uvnitř těla ověří autorizaci - typicky `if v_event.organizer_token is
+     distinct from p_token then raise exception '...'` (nebo obdobné scoping podle
      `event_id`), přesně jako `moderate_attendee`/`delete_event`/
      `update_event`,
    - končí `grant execute on function public.fn_name(...) to anon,
      authenticated;`.
+
+   Pomocná funkce, kterou volají jen jiné funkce, triggery nebo Edge
+   Functions, naopak končí `revoke all on function ... from public, anon,
+   authenticated;` (Supabase jinak EXECUTE na každou novou funkci dá anon i
+   authenticated sám), případně `grant execute ... to service_role;`.
+   Ověřit to jde skriptem `supabase/tests/security.sql`.
 4. Pokud funkce mění existující signaturu (přidává/ubírá/přejmenovává
    parametr), potřebuje před sebou `drop function if exists
    public.fn_name(stare, typy);` - viz obecná konvence popsaná nahoře v

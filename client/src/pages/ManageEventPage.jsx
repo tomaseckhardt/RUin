@@ -91,6 +91,18 @@ function ManageEventPage() {
       }
 
       if (isInvalidOrganizerTokenError(loadError)) {
+        // Hide the organizer data (phones included) loaded with the old token.
+        setPayload(null)
+        hasLoadedOnceRef.current = false
+
+        // A wrong link token doesn't cost this browser its own saved one.
+        const savedToken = getSavedOrganizerToken(id)
+
+        if (urlToken && savedToken && savedToken !== urlToken) {
+          navigate(`/event/${id}/manage`, { replace: true })
+          return
+        }
+
         // Forget the token (the link's one too) and ask for the PIN again.
         clearSavedOrganizerToken(id)
         setUnlockHintKey('manage.unlockAgain')

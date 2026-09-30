@@ -92,10 +92,16 @@ describe('AttendeeList - Accessibility', () => {
       />,
     )
 
-    const buttons = container.querySelectorAll('button')
-    buttons.forEach((button) => {
+    // Bob and Charlie aren't coming, so each gets a ping button; Alice is the viewer.
+    const pingButtons = screen.getAllByRole('button', { name: 'Šťouchnout' })
+    expect(pingButtons).toHaveLength(2)
+
+    container.querySelectorAll('button').forEach((button) => {
       // Buttons should have either text content or aria-label
-      expect(button.textContent.trim() || button.getAttribute('aria-label')).toBeTruthy()
+      expect(button.textContent?.trim() || button.getAttribute('aria-label')).toBeTruthy()
     })
+
+    pingButtons[0].click()
+    expect(mockOnPing).toHaveBeenCalledWith(2)
   })
 })

@@ -11,6 +11,18 @@ const safeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'r-u-in-client-'))
 const command = process.argv[2] || 'dev'
 const extraArgs = process.argv.slice(3)
 
+function cleanUp() {
+  try {
+    fs.rmSync(safeRoot, { recursive: true, force: true })
+  } catch {
+    // Best-effort cleanup of per-process temp workspace.
+  }
+}
+
+// Last resort for any exit path that skips the handlers below (a throw,
+// process.exit elsewhere); rmSync is synchronous, so it works here.
+process.on('exit', cleanUp)
+
 function syncBuildOutput() {
   const sourceDist = path.join(safeRoot, 'dist')
   const targetDist = path.join(clientRoot, 'dist')
@@ -49,18 +61,24 @@ function syncBuildOutput() {
 // fresh directory here for syncBuildOutput() to copy out.
 const LIVE_SYMLINK_ENTRIES = new Set(['src', 'public'])
 
-for (const entry of fs.readdirSync(clientRoot)) {
-  if (entry === 'dist') {
-    continue
-  }
+try {
+  for (const entry of fs.readdirSync(clientRoot)) {
+    if (entry === 'dist') {
+      continue
+    }
 
-  const target = path.join(safeRoot, entry)
+    const target = path.join(safeRoot, entry)
 
-  if (LIVE_SYMLINK_ENTRIES.has(entry)) {
-    fs.symlinkSync(path.join(clientRoot, entry), target)
-  } else {
-    fs.cpSync(path.join(clientRoot, entry), target, { recursive: true, force: true, dereference: true })
+    if (LIVE_SYMLINK_ENTRIES.has(entry)) {
+      fs.symlinkSync(path.join(clientRoot, entry), target)
+    } else {
+      fs.cpSync(path.join(clientRoot, entry), target, { recursive: true, force: true, dereference: true })
+    }
   }
+} catch (error) {
+  console.error(error)
+  cleanUp()
+  process.exit(1)
 }
 
 const viteCli = path.join(safeRoot, 'node_modules', 'vite', 'bin', 'vite.js')
@@ -75,21 +93,26 @@ const child = spawn(process.execPath, ['--preserve-symlinks', '--preserve-symlin
   },
 })
 
-child.on('exit', (code) => {
-  if ((code ?? 0) === 0 && command === 'build') {
+// Ctrl+C / kill: let Vite shut down first, then clean up in the 'exit' handler.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => child.kill(signal))
+}
+
+child.on('exit', (code, signal) => {
+  // A child killed by a signal has code null - that's a failure, and its
+  // dist may be half-written.
+  const failed = signal !== null || code !== 0
+
+  if (!failed && command === 'build') {
     syncBuildOutput()
   }
 
-  try {
-    fs.rmSync(safeRoot, { recursive: true, force: true })
-  } catch {
-    // Best-effort cleanup of per-process temp workspace.
-  }
-
-  process.exit(code ?? 0)
+  cleanUp()
+  process.exit(failed ? code || 1 : 0)
 })
 
 child.on('error', (error) => {
   console.error(error)
+  cleanUp()
   process.exit(1)
 })

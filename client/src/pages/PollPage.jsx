@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import PageShell from '../components/PageShell.jsx'
 import { finalizePoll, getPollPayload, votePoll } from '../lib/api.js'
 import { readStoredValue, writeStoredValue } from '../lib/browserStorage.js'
-import { formatDateTime } from '../lib/format.js'
+import { buildAbsoluteUrl, formatDateTime } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 import { normalizeName } from '../lib/normalizeName.js'
+import { getSavedPollCreatorToken, savePollCreatorToken } from '../lib/pollCreatorStorage.js'
 
 const VOTER_STORAGE_PREFIX = 'ruin-poll-voter'
+// Keeps the counts fresh while the creator decides.
+const AUTO_REFRESH_MS = 10000
+const REFRESH_ERROR_TOAST_ID = 'poll-refresh-error'
 
 function voterStorageKey(pollId) {
   return `${VOTER_STORAGE_PREFIX}:${pollId}`
@@ -19,7 +23,12 @@ function PollPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const token = searchParams.get('token')
+  const urlToken = searchParams.get('token') || ''
+  // A creator link's token is saved and dropped from the address bar (see
+  // loadPoll), so the poll's URL can be shared with voters as-is.
+  const token = urlToken || getSavedPollCreatorToken(id) || null
+  const fieldId = useId()
+  const hasLoadedOnceRef = useRef(false)
   const [payload, setPayload] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -34,21 +43,45 @@ function PollPage() {
     try {
       const data = await getPollPayload(id, token)
       setPayload(data)
+      hasLoadedOnceRef.current = true
       setError('')
+
+      if (urlToken) {
+        if (data.isCreator) {
+          savePollCreatorToken(id, urlToken)
+        }
+
+        navigate(`/poll/${id}`, { replace: true })
+      }
     } catch (loadError) {
-      setError(loadError.message)
+      if (hasLoadedOnceRef.current) {
+        toast.error(loadError.message, { id: REFRESH_ERROR_TOAST_ID })
+      } else {
+        setError(loadError.message)
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    // Fetch-on-mount-and-id/token-change; there's no external system to
-    // "subscribe" to here, just an initial load.
+    // Fetch on mount and id/token change, then poll - there are no realtime
+    // ticks for polls.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPoll()
+    const intervalId = setInterval(() => document.visibilityState === 'visible' && loadPoll(), AUTO_REFRESH_MS)
+    return () => clearInterval(intervalId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, token])
+
+  async function handleCopyVoteLink() {
+    try {
+      await navigator.clipboard.writeText(buildAbsoluteUrl(`/poll/${id}`))
+      toast.success(t('poll.voteLinkCopied'))
+    } catch {
+      toast.error(t('share.copyFailed'))
+    }
+  }
 
   const normalizedVoterName = voterName.trim() ? normalizeName(voterName) : ''
   const myExistingVoteOption =
@@ -133,6 +166,15 @@ function PollPage() {
       title={poll.name}
       subtitle={poll.description || t('poll.createdBy', { name: poll.creatorName })}>
       <main className="grid gap-6">
+        {isCreator ? (
+          <section className="panel">
+            <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{t('poll.shareHint')}</p>
+            <button type="button" className="primary-button mt-4 w-full" onClick={handleCopyVoteLink}>
+              {t('poll.copyVoteLink')}
+            </button>
+          </section>
+        ) : null}
+
         <section className="panel">
           <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('poll.options')}</p>
           <div className="mt-4 space-y-3">
@@ -184,8 +226,11 @@ function PollPage() {
         {!isCreator ? (
           <form className="panel space-y-4" onSubmit={handleVote}>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('common.yourName')}</label>
+              <label htmlFor={`${fieldId}-voter-name`} className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                {t('common.yourName')}
+              </label>
               <input
+                id={`${fieldId}-voter-name`}
                 className="field"
                 value={voterName}
                 onChange={(event) => setVoterName(event.target.value)}
@@ -232,8 +277,12 @@ function PollPage() {
                 })}
               </div>
             ) : null}
-            <p className="text-sm text-slate-600 dark:text-slate-300">{t('poll.finalizeHint')}</p>
+            <p id={`${fieldId}-pin-hint`} className="text-sm text-slate-600 dark:text-slate-300">
+              {t('poll.finalizeHint')}
+            </p>
             <input
+              aria-label={t('pin.label')}
+              aria-describedby={`${fieldId}-pin-hint`}
               type="password"
               inputMode="numeric"
               pattern="[0-9]{4}"

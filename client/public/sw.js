@@ -1,7 +1,10 @@
 // Bump this whenever the caching strategy below changes so the "activate"
 // handler below cleans up the previous version's cache instead of leaving it
 // around forever.
-const APP_SHELL_CACHE = 'ruin-app-shell-v2'
+const APP_SHELL_CACHE = 'ruin-app-shell-v3'
+// Every deploy adds new hashed assets/ files and nothing ever asks for the old
+// ones again; past this many, the oldest are dropped.
+const MAX_CACHED_ASSETS = 100
 
 // Paths (relative to the worker's scope) that only exist on the Vite dev
 // server. Its modules aren't content-hashed like a build's assets/, so the
@@ -34,6 +37,11 @@ self.addEventListener('activate', (event) => {
 // POST/PATCH/DELETE, ...) is left completely untouched by not calling
 // event.respondWith(), so the browser handles it exactly like it would with
 // no service worker installed at all.
+function getRelativePath(url) {
+  const scopePath = new URL(self.registration.scope).pathname
+  return url.pathname.startsWith(scopePath) ? url.pathname.slice(scopePath.length) : url.pathname
+}
+
 function isCacheableAppShellRequest(request) {
   if (request.method !== 'GET') {
     return false
@@ -45,8 +53,7 @@ function isCacheableAppShellRequest(request) {
     return false
   }
 
-  const scopePath = new URL(self.registration.scope).pathname
-  const relativePath = url.pathname.startsWith(scopePath) ? url.pathname.slice(scopePath.length) : url.pathname
+  const relativePath = getRelativePath(url)
 
   if (DEV_SERVER_PATH_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) {
     return false
@@ -90,10 +97,16 @@ async function handleNavigationRequest(request) {
   }
 }
 
-// Other static assets (JS/CSS bundles, icons, manifest, ...): serve from
-// cache immediately when we have it (fast, works offline), otherwise fetch
-// from the network and stash a copy for next time.
-async function handleStaticAssetRequest(request) {
+async function trimCachedAssets(cache) {
+  const assetRequests = (await cache.keys()).filter((request) => getRelativePath(new URL(request.url)).startsWith('assets/'))
+  // cache.keys() lists entries oldest first.
+  await Promise.all(assetRequests.slice(0, -MAX_CACHED_ASSETS).map((request) => cache.delete(request)))
+}
+
+// Build output in assets/ (JS/CSS bundles) has a content hash in its name, so
+// a cached copy can never be stale: serve it from cache when we have it (fast,
+// works offline), otherwise fetch from the network and stash a copy.
+async function handleHashedAssetRequest(request) {
   const cache = await caches.open(APP_SHELL_CACHE)
   const cachedResponse = await cache.match(request)
 
@@ -104,10 +117,34 @@ async function handleStaticAssetRequest(request) {
   const networkResponse = await fetch(request)
 
   if (networkResponse && networkResponse.ok) {
-    cache.put(request, networkResponse.clone())
+    await cache.put(request, networkResponse.clone())
+    await trimCachedAssets(cache)
   }
 
   return networkResponse
+}
+
+// Everything else (manifest, icons, images, ...) keeps its name when it
+// changes: answer from cache right away, but refresh the copy from the network
+// in the background so the next load gets the new version.
+async function handleStaticAssetRequest(event) {
+  const { request } = event
+  const cache = await caches.open(APP_SHELL_CACHE)
+  const cachedResponse = await cache.match(request)
+  const networkFetch = fetch(request).then((networkResponse) => {
+    if (networkResponse && networkResponse.ok) {
+      return cache.put(request, networkResponse.clone()).then(() => networkResponse)
+    }
+
+    return networkResponse
+  })
+
+  if (cachedResponse) {
+    event.waitUntil(networkFetch.catch(() => {}))
+    return cachedResponse
+  }
+
+  return networkFetch
 }
 
 self.addEventListener('fetch', (event) => {
@@ -122,12 +159,24 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  event.respondWith(handleStaticAssetRequest(request))
+  if (getRelativePath(new URL(request.url)).startsWith('assets/')) {
+    event.respondWith(handleHashedAssetRequest(request))
+    return
+  }
+
+  event.respondWith(handleStaticAssetRequest(event))
 })
 
 // send-event-reminders sends title, body, url and tag.
 self.addEventListener('push', (event) => {
-  const data = event.data?.json() || {}
+  let data = {}
+
+  try {
+    data = event.data?.json() || {}
+  } catch {
+    // Not JSON - still show something, a push without a notification can get
+    // the subscription revoked.
+  }
 
   event.waitUntil(
     self.registration.showNotification(data.title || 'RUin?', {
@@ -141,14 +190,20 @@ self.addEventListener('push', (event) => {
 })
 
 self.addEventListener('notificationclick', (event) => {
-  const targetUrl = event.notification.data?.url || '#/'
-  const absoluteTargetUrl = new URL(targetUrl, self.registration.scope).href
+  const targetUrl = new URL(event.notification.data?.url || '#/', self.registration.scope)
+  // Only ever open this app's own pages, whatever the payload says.
+  const absoluteTargetUrl = targetUrl.origin === self.location.origin ? targetUrl.href : self.registration.scope
 
   event.notification.close()
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const focusedClient = clients.find((client) => client.url === absoluteTargetUrl || client.url.startsWith(absoluteTargetUrl))
+      // A prefix match has to end at a path or query boundary, or
+      // "#/event/abc" would also match another event "#/event/abcd".
+      const focusedClient = clients.find(
+        (client) =>
+          client.url === absoluteTargetUrl || (client.url.startsWith(absoluteTargetUrl) && '/?'.includes(client.url[absoluteTargetUrl.length])),
+      )
 
       if (focusedClient) {
         return focusedClient.focus()

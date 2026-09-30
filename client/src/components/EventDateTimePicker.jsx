@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 
@@ -83,6 +83,8 @@ function EventDateTimePicker({ value, onChange }) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef(null)
   const triggerRef = useRef(null)
+  const triggerId = useId()
+  const timeInputId = useId()
 
   const presets = buildPresets()
   const timeValue = selectedDate
@@ -105,17 +107,22 @@ function EventDateTimePicker({ value, onChange }) {
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
+        // Closes only the picker, not a modal it sits in (ModalOverlay skips
+        // a defaultPrevented Escape).
+        event.preventDefault()
+        event.stopPropagation()
         setIsOpen(false)
         triggerRef.current?.focus()
       }
     }
 
     document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
+    // Capture phase, so this runs before ModalOverlay's document listener.
+    document.addEventListener('keydown', handleKeyDown, true)
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keydown', handleKeyDown, true)
     }
   }, [isOpen])
 
@@ -151,7 +158,7 @@ function EventDateTimePicker({ value, onChange }) {
       <button
         ref={triggerRef}
         type="button"
-        id="event-datetime-trigger"
+        id={triggerId}
         className="field inline-block w-auto text-left"
         aria-haspopup="dialog"
         aria-expanded={isOpen}
@@ -162,7 +169,7 @@ function EventDateTimePicker({ value, onChange }) {
       {isOpen ? (
         <div
           role="dialog"
-          aria-labelledby="event-datetime-trigger"
+          aria-labelledby={triggerId}
           className="mt-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30"
           style={{ animation: 'scale-in 0.25s ease both' }}>
           <div className="flex flex-wrap gap-2" style={{ animation: 'fade-up 0.3s ease both' }}>
@@ -250,10 +257,10 @@ function EventDateTimePicker({ value, onChange }) {
           </div>
 
           <div className="mt-3" style={{ animation: 'fade-up 0.3s ease 0.1s both' }}>
-            <label htmlFor="event-datetime-time" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label htmlFor={timeInputId} className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
               {t('common.time')}
             </label>
-            <input id="event-datetime-time" type="time" className="field" value={timeValue} onChange={handleTimeChange} />
+            <input id={timeInputId} type="time" className="field" value={timeValue} onChange={handleTimeChange} />
           </div>
 
           <button

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import CollapsibleCard from './CollapsibleCard.jsx'
 import { addEventStop, deleteEventStop, getEventStops } from '../lib/api.js'
@@ -14,14 +14,25 @@ function EventStops({ eventId, isOrganizer = false, organizerToken = null }) {
   const [location, setLocation] = useState('')
   const [startsAtLabel, setStartsAtLabel] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const latestRequestIdRef = useRef(0)
 
   async function loadStops() {
+    const requestId = ++latestRequestIdRef.current
+
     try {
-      setStops(await getEventStops(eventId))
+      const nextStops = await getEventStops(eventId)
+
+      if (requestId === latestRequestIdRef.current) {
+        setStops(nextStops)
+      }
     } catch (error) {
-      toast.error(error.message)
+      if (requestId === latestRequestIdRef.current) {
+        toast.error(error.message)
+      }
     } finally {
-      setIsLoading(false)
+      if (requestId === latestRequestIdRef.current) {
+        setIsLoading(false)
+      }
     }
   }
 

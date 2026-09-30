@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import AddToHomeButton from '../components/AddToHomeButton.jsx'
@@ -23,7 +23,7 @@ import {
   getOwnerPayload,
   inviteAttendees,
 } from '../lib/api.js'
-import { formatDateTime, parseLocalDateTime, parseOrganizerToken } from '../lib/format.js'
+import { formatDateTime, parseEventDateTime, parseOrganizerToken } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 import { createEmptyInvitee, getFilledInvitees, mergeInvitees } from '../lib/invitees.js'
 import { clearSavedOrganizerToken, getSavedOrganizerEventIds } from '../lib/organizerLinkStorage.js'
@@ -43,12 +43,19 @@ const initialForm = {
   enableStops: false,
 }
 
-// Tlačítka pro rozbalení/sbalení composeru mají barvy aktivní volby z přepínačů v hlavičce (ToggleSwitch).
+// The composer expand/collapse buttons use the active-option colours of the header switches (ToggleSwitch).
 const composerToggleClassName =
   'inline-flex items-center justify-center rounded-full px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-soft)]'
 const composerToggleStyle = { background: '#6f4cff', boxShadow: '0 4px 12px -4px rgba(111, 76, 255, 0.6)' }
 const HERO_STATS = ['speed', 'flow', 'status']
 const STEPS = ['Share', 'Collect', 'Decide']
+
+// Only the server's "no such event" (deleted or expired) forgets a saved
+// organizer link; a network failure must not. Matched against the database's
+// original text - see toRequestError in lib/api.js.
+function isEventGoneError(error) {
+  return typeof error?.serverMessage === 'string' && error.serverMessage.includes('Tahle akce už neexistuje.')
+}
 
 function CreateEventPage() {
   const { t } = useI18n()
@@ -79,6 +86,7 @@ function CreateEventPage() {
   const [isComposerExpanded, setIsComposerExpanded] = useState(false)
 
   const whyItWorks = t('createEvent.whyItWorks')
+  const fieldId = useId()
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -88,10 +96,17 @@ function CreateEventPage() {
       return
     }
 
-    const parsedDatetime = parseLocalDateTime(form.datetime)
+    const parsedDatetime = parseEventDateTime(form.datetime)
 
     if (!parsedDatetime || parsedDatetime.getTime() <= Date.now()) {
       toast.error(t('createEvent.dateMustBeFuture'))
+      return
+    }
+
+    // A half-filled afterparty, or one hidden by turning the itinerary off,
+    // would otherwise be dropped without a word.
+    if (showAfterparty && (afterpartyLocation.trim() || afterpartyTime) && (!form.enableStops || !afterpartyLocation.trim() || !afterpartyTime)) {
+      toast.error(t('createEvent.afterpartyIncomplete'))
       return
     }
 
@@ -210,8 +225,8 @@ function CreateEventPage() {
     setShowAfterparty((current) => !current)
   }
 
-  // Sbalený composer je na xl useknutý ve výšce levého sloupce - když se
-  // klávesnicí dostaneš na pole pod tou hranou, composer se rozbalí, ať ho vidíš.
+  // On xl the collapsed composer is cut off at the height of the left column - when
+  // keyboard focus reaches a field below that edge, the composer expands so you can see it.
   function handleComposerFocus(event) {
     const composer = event.currentTarget
     const visibleBottom = composer.getBoundingClientRect().top + composer.clientHeight
@@ -304,14 +319,15 @@ function CreateEventPage() {
     let cancelled = false
     const ids = getSavedOrganizerEventIds().slice(-6).reverse()
 
-    // An event that no longer loads is forgotten.
+    // An event the server says is gone is forgotten; one that just failed
+    // to load (offline…) stays saved and is only left out of the list.
     Promise.allSettled(ids.map((eventId) => getEvent(eventId))).then((results) => {
       const nextEvents = []
 
       results.forEach((result, index) => {
         if (result.status === 'fulfilled' && result.value?.event) {
           nextEvents.push({ id: ids[index], event: result.value.event })
-        } else {
+        } else if (result.status === 'rejected' && isEventGoneError(result.reason)) {
           clearSavedOrganizerToken(ids[index])
         }
       })
@@ -400,8 +416,8 @@ function CreateEventPage() {
           </section>
         </section>
 
-        {/* Sbalený composer se na xl vytáhne z toku (absolute), takže výšku řádku
-            určuje jen levý sloupec a composer se usekne přesně na jeho spodní hraně. */}
+        {/* On xl the collapsed composer is taken out of the flow (absolute), so only the left
+            column sets the row height and the composer is cut off exactly at its bottom edge. */}
         <div className="relative order-1 xl:order-2">
           <aside
             id="create-form"
@@ -451,8 +467,11 @@ function CreateEventPage() {
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('createEvent.organizerName')}</label>
+                  <label htmlFor={`${fieldId}-organizer-name`} className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+                    {t('createEvent.organizerName')}
+                  </label>
                   <input
+                    id={`${fieldId}-organizer-name`}
                     className="field"
                     value={form.organizerName}
                     onChange={updateField('organizerName')}
@@ -461,8 +480,11 @@ function CreateEventPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('pin.label')}</label>
+                  <label htmlFor={`${fieldId}-pin`} className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+                    {t('pin.label')}
+                  </label>
                   <input
+                    id={`${fieldId}-pin`}
                     type="password"
                     inputMode="numeric"
                     pattern="[0-9]{4}"
@@ -514,10 +536,13 @@ function CreateEventPage() {
                       {showAfterparty ? (
                         <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30 sm:grid-cols-2">
                           <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+                            <label
+                              htmlFor={`${fieldId}-afterparty-location`}
+                              className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
                               {t('createEvent.afterpartyLocation')}
                             </label>
                             <input
+                              id={`${fieldId}-afterparty-location`}
                               className="field"
                               value={afterpartyLocation}
                               onChange={(event) => setAfterpartyLocation(event.target.value)}
@@ -525,8 +550,16 @@ function CreateEventPage() {
                             />
                           </div>
                           <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">{t('common.time')}</label>
-                            <input type="time" className="field" value={afterpartyTime} onChange={(event) => setAfterpartyTime(event.target.value)} />
+                            <label htmlFor={`${fieldId}-afterparty-time`} className="mb-2 block text-sm font-medium text-slate-700 dark:text-white">
+                              {t('common.time')}
+                            </label>
+                            <input
+                              id={`${fieldId}-afterparty-time`}
+                              type="time"
+                              className="field"
+                              value={afterpartyTime}
+                              onChange={(event) => setAfterpartyTime(event.target.value)}
+                            />
                           </div>
                         </div>
                       ) : null}

@@ -38,11 +38,13 @@ Tests and checks:
 
 ```bash
 npm --prefix client run lint
+npm --prefix client run typecheck
 npm test
+npm --prefix client run test:e2e
 npm run build
 ```
 
-CI also runs lint and tests on every pull request to `main` - a PR with a lint or test failure won't pass.
+CI also runs lint, the test type-check, Jest and the E2E test on every pull request to `main` - a PR that fails any of them won't pass. CI doesn't retry failed tests, so a flaky test fails right away.
 
 ## Coding conventions
 
@@ -52,7 +54,7 @@ CI also runs lint and tests on every pull request to `main` - a PR with a lint o
 - When you change the UI, check desktop and mobile, light and dark mode, and both Czech and English.
 - When you change accessibility, add or update the tests.
 - Don't hardcode UI texts in components - add a key to both `client/src/locales/cs.js` and `en.js` and use `t()` (see [Localization in the README](README.en.md#localization-czech-and-english)).
-- Database changes go straight into `supabase/sql/all-phases.sql`, where the object is defined (the file holds only the current state; git keeps the history). Write them idempotently, as the file's header describes. Add every new `raise exception` message to `client/src/locales/serverMessages.en.js`, otherwise a test fails.
+- Database changes go straight into `supabase/sql/all-phases.sql`, where the object is defined (the file holds only the current state; git keeps the history). Write them idempotently, as the file's header describes. Add every new `raise exception` message (and every error returned as `{ error }`, such as the PIN's) to `client/src/locales/serverMessages.en.js`, otherwise a test fails. When you change an RPC the E2E test calls, update its fake backend `client/tests/fakeSupabase.ts` the same way. The database's security rules can be checked with `supabase/tests/security.sql` (see the [README](README.en.md#database-security-test)).
 
 ## Commit conventions
 
@@ -95,7 +97,7 @@ Then open a Pull Request from your branch into `main`.
 Before submitting a PR, check that:
 
 - [ ] the change is covered by tests (or it's clearly explained why not)
-- [ ] lint and the build passed locally
+- [ ] lint, the type-check and the build passed locally
 - [ ] the tests relevant to the change passed locally
 - [ ] new UI texts exist in both Czech and English
 - [ ] the documentation is updated (README or other, in both languages)

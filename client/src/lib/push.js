@@ -1,7 +1,15 @@
+import { isPushSubscribed, registerPushSubscription, unregisterPushSubscription } from './api.js'
+import { readStoredMap, saveStoredMapEntry } from './browserStorage.js'
 import { t } from './i18n.js'
 
 const APP_BASE_PATH = import.meta.env.BASE_URL || '/'
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY?.trim() || ''
+// Events this browser turned reminders on for. The server can't list an
+// endpoint's events, and a VAPID key change forces a new subscription (so a
+// new endpoint) - this is how the old endpoint's events move over to it.
+// is_push_subscribed weeds out the ones turned off since.
+const REMINDER_EVENTS_KEY = 'ruin-push-reminder-events'
+const MAX_SAVED_REMINDER_EVENTS = 100
 
 function isServiceWorkerSupported() {
   return 'serviceWorker' in navigator
@@ -53,7 +61,8 @@ function subscriptionKeyMatches(subscription, applicationServerKey) {
   return existingBytes.every((byte, index) => byte === applicationServerKey[index])
 }
 
-export async function subscribeToEventReminders() {
+// Pass the event the subscription is for, so a later key change can move it.
+export async function subscribeToEventReminders(eventId) {
   if (!isReminderSupported()) {
     throw new Error(t('push.unsupported'))
   }
@@ -72,8 +81,14 @@ export async function subscribeToEventReminders() {
 
   const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
   let subscription = await registration.pushManager.getSubscription()
+  let oldEndpoint = null
+  let movedEventIds = []
 
   if (subscription && !subscriptionKeyMatches(subscription, applicationServerKey)) {
+    oldEndpoint = subscription.endpoint
+    const savedEventIds = Object.keys(readStoredMap(REMINDER_EVENTS_KEY)).filter((savedId) => savedId !== eventId)
+    const checks = await Promise.allSettled(savedEventIds.map((savedId) => isPushSubscribed(savedId, oldEndpoint)))
+    movedEventIds = savedEventIds.filter((_, index) => checks[index].status === 'fulfilled' && checks[index].value)
     await subscription.unsubscribe()
     subscription = null
   }
@@ -86,12 +101,23 @@ export async function subscribeToEventReminders() {
   }
 
   const json = subscription.toJSON()
-
-  return {
+  const result = {
     endpoint: json.endpoint,
     p256dh: json.keys?.p256dh,
     auth: json.keys?.auth,
   }
+
+  if (eventId) {
+    saveStoredMapEntry(REMINDER_EVENTS_KEY, eventId, true, MAX_SAVED_REMINDER_EVENTS)
+  }
+
+  if (oldEndpoint) {
+    // Best effort: an event deleted in the meantime just fails.
+    await Promise.allSettled(movedEventIds.map((movedId) => registerPushSubscription(movedId, result)))
+    await unregisterPushSubscription(oldEndpoint).catch(() => {})
+  }
+
+  return result
 }
 
 // The browser's push endpoint, or null without a subscription. All events

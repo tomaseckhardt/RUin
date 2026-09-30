@@ -104,4 +104,17 @@ export default {
   'Šablona nebyla nalezena.': 'Template not found.',
   'Šablona s tímto názvem už existuje.': 'A template with this name already exists.',
   'Šťouchnout jde jen účastníka, který nejde.': 'You can only nudge guests who aren’t coming.',
+  'Nepodporovaná metoda.': 'Unsupported method.',
+  'Server není správně nakonfigurovaný.': 'The server isn’t configured correctly.',
+  'Neplatný požadavek.': 'Invalid request.',
+  'Akci se nepodařilo ověřit.': 'Couldn’t verify the event.',
+  'Text je moc dlouhý (limit 120 znaků).': 'The text is too long (limit 120 characters).',
+  'Text je moc dlouhý (limit 200 znaků).': 'The text is too long (limit 200 characters).',
+  'Text je moc dlouhý (limit 500 znaků).': 'The text is too long (limit 500 characters).',
+  'Název akce může mít nejvýš 120 znaků, místo 200 a popis 2000.':
+    'The event name can be at most 120 characters, the location 200 and the description 2000.',
+  'Název šablony i akce může mít nejvýš 120 znaků, místo 200 a popis 2000.':
+    'The template and event names can be at most 120 characters, the location 200 and the description 2000.',
+  'Do chatu může psát jen ten, kdo na akci odpověděl.': 'Only people who have replied to the event can write in the chat.',
+  'Zprávy posíláš moc rychle, chvilku počkej.': 'You’re sending messages too fast, wait a moment.',
 }

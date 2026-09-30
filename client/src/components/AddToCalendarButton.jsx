@@ -1,15 +1,13 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { downloadBlob } from '../lib/download.js'
-import { buildAbsoluteUrl } from '../lib/format.js'
+import { buildAbsoluteUrl, parseEventDateTime } from '../lib/format.js'
 import { t, useI18n } from '../lib/i18n.js'
 
 const MOBILE_BROWSER_RE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
 const IN_APP_BROWSER_RE = /Instagram|FBAN|FBAV|TikTok|Line|Slack|WhatsApp|Messenger/i
 const WEBVIEW_RE = /WebView|wv\)|Version\//i
 const APPLE_DEVICE_RE = /iPhone|iPad|iPod/i
-const EVENT_TIME_ZONE = 'Europe/Prague'
-const NAIVE_DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/
 const ICS_LINE_LENGTH_LIMIT = 75
 const ICS_LINE_FOLD_LENGTH = 74
 const CALENDAR_AUTO_OPEN_DELAY_MS = 150
@@ -66,43 +64,6 @@ function addHours(date, hours) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000)
 }
 
-function getTimeZoneOffsetMinutes(utcMillis, timeZone) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(new Date(utcMillis))
-
-  const get = (type) => Number(parts.find((part) => part.type === type).value)
-  const asIfUtcMillis = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'))
-
-  return (asIfUtcMillis - utcMillis) / 60000
-}
-
-// eventData.datetime has no timezone offset (Postgres "timestamp without
-// time zone") and is, by app-wide convention, wall-clock time in Europe/
-// Prague - not the viewer's device timezone. Resolve it to the correct UTC
-// instant using the IANA zone's real offset (which also covers DST) instead
-// of letting `new Date()` assume the browser's local timezone.
-function eventStartToUtcDate(input) {
-  const match = String(input).match(NAIVE_DATETIME_PATTERN)
-
-  if (!match) {
-    return new Date(input)
-  }
-
-  const [, year, month, day, hour, minute, second = '0'] = match
-  const naiveUtcMillis = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second))
-  const offsetMinutes = getTimeZoneOffsetMinutes(naiveUtcMillis, EVENT_TIME_ZONE)
-
-  return new Date(naiveUtcMillis - offsetMinutes * 60000)
-}
-
 function slugify(value) {
   return String(value || t('calendar.fileNameFallback'))
     .normalize('NFD')
@@ -153,7 +114,7 @@ function buildEventUrl(eventData) {
 }
 
 function buildGoogleCalendarUrl(eventData) {
-  const startDate = eventStartToUtcDate(eventData.datetime)
+  const startDate = parseEventDateTime(eventData.datetime) ?? new Date(eventData.datetime)
   const endDate = addHours(startDate, 3)
   const eventUrl = buildEventUrl(eventData)
   const details = [eventData.description || '', eventUrl ? `${t('calendar.googleLinkLabel')} ${eventUrl}` : ''].filter(Boolean).join('\n\n')
@@ -171,7 +132,7 @@ function buildGoogleCalendarUrl(eventData) {
 
 function buildIcs(eventData) {
   const nowUtc = toUtcIcsDateTime(new Date())
-  const startDate = eventStartToUtcDate(eventData.datetime)
+  const startDate = parseEventDateTime(eventData.datetime) ?? new Date(eventData.datetime)
   const startUtc = toUtcIcsDateTime(startDate)
   const endUtc = toUtcIcsDateTime(addHours(startDate, 3))
   const name = eventData.name || ''

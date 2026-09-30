@@ -9,6 +9,17 @@ Result: 91 reported findings → **40 confirmed** (critical/high/medium), **2 re
 
 Reviewed state: the current contents of the files on disk as of the review date (branch `refactoringBranch`), including uncommitted changes.
 
+**Status as of 2026-09-30:** the text below records the state on the review date; its line numbers don't match today's code. Of the findings listed, these are now fixed, among others:
+
+- CI (#3, CI and Build below): every pull request runs lint, the test type-check, Jest (a11y tests included) and the Playwright E2E test, installing with `npm ci`; the tests (#4) run.
+- Token comparison: the Edge Functions compare the scheduler key and the organizer token in constant time (`timingSafeEqualStrings`), and the SQL functions check tokens with `is distinct from`, so a missing (NULL) token doesn't pass. Comparisons inside the SQL functions still aren't constant-time.
+- Upper length limits for names, titles, places, descriptions and texts are enforced by the RPC functions on the server.
+- An uploaded photo's extension comes from the file type (JPEG, PNG, WebP, GIF only - the same as the bucket), not from its name.
+- `send-event-reminders`: a subscription the push service rejects for good (400, 403, 404, 410) is deleted, an endpoint is given up after 5 attempts, and a run has a 60 s time budget; `cleanup-expired-events` catches errors per event and handles at most 50 events per run.
+- `sw.js` handles a push message that isn't JSON; the `.ics` export uses the shared `parseEventDateTime` (Europe/Prague time).
+- `ModalOverlay` locks the background scroll; `PollPage` (and the invite and management pages) render from scratch when switching to another id.
+- `run-vite-safe.mjs` cleans up its temporary copy of the project after SIGINT/SIGTERM too (the E2E test stops the dev server with SIGTERM).
+
 ---
 
 ## Contents

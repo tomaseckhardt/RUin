@@ -26,6 +26,7 @@ jest.mock('../../src/lib/api.js', () => ({
   getEventPhotoLikes: jest.fn(),
   getEventPhotoUrl: jest.fn((path) => `https://photos.example/${path}`),
   getEventPhotos: jest.fn(),
+  PHOTO_EXTENSIONS: { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' },
   recordEventPhoto: jest.fn(),
   toggleEventPhotoLike: jest.fn(),
   uploadEventPhoto: jest.fn(),
