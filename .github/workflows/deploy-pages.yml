@@ -18,7 +18,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  ci:
+  # checks and e2e run side by side, so a PR waits only for the slower one.
+  checks:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -47,13 +48,25 @@ jobs:
         working-directory: client
         run: npm test
 
-      # Headless shell only: the tests never open a visible browser. Caching
-      # the download doesn't pay off - installing the system libraries it
-      # needs takes most of the step either way.
-      - name: Install the Playwright browser
-        working-directory: client
-        run: npx playwright install --with-deps --only-shell chromium
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      # No browser install: in CI Playwright uses the runner's Google Chrome
+      # (see tests/playwright.config.ts).
       - name: E2E test
         working-directory: client
         run: npm run test:e2e
@@ -67,7 +80,7 @@ jobs:
 
   build:
     if: github.event_name != 'pull_request'
-    needs: ci
+    needs: [checks, e2e]
     runs-on: ubuntu-latest
     env:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}

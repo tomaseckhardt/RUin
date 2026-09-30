@@ -212,12 +212,12 @@ Klient (`client/package.json`):
 - Testy lokalizace hlídají, že `cs.js` a `en.js` mají stejné klíče i `{placeholdery}` a že každá hláška z `all-phases.sql` i z Edge Function `delete-event-data` má anglický překlad (viz [Lokalizace](#lokalizace-čeština-a-angličtina)).
 - Jest setup (`client/tests/componentsTests/setup.ts`) přepíná UI do češtiny - jsdom se jinak hlásí jako `en-US` a aplikace by běžela anglicky.
 - E2E test (`npm --prefix client run test:e2e`) běží proti falešnému Supabase v paměti (`client/tests/fakeSupabase.ts`), který kontroluje totéž co SQL tam, kde na tom klient závisí (tokeny, cooldowny, složka a název fotky, …). Při změně RPC, na kterou E2E narazí, uprav i ten.
-- CI (job `ci` v `.github/workflows/deploy-pages.yml`) spouští lint, typovou kontrolu testů, Jest a E2E test (bez opakování neúspěšných testů) při každém pull requestu do `main` i při push do `main`; při selhání E2E nahraje trace jako artefakt. Build a deploy běží jen při push do `main` (nebo ručním spuštění) a jen když `ci` projde.
+- CI (`.github/workflows/deploy-pages.yml`) spouští vedle sebe dva joby: `checks` (lint, typová kontrola testů, Jest) a `e2e` (E2E test bez opakování neúspěšných testů, v CI proti Google Chrome z runneru, takže se nestahuje žádný prohlížeč) při každém pull requestu do `main` i při push do `main`; při selhání E2E nahraje trace jako artefakt. Build a deploy běží jen při push do `main` (nebo ručním spuštění) a jen když `checks` i `e2e` projdou.
 - Jest nefunguje, když cesta k projektu obsahuje `?` - viz [Troubleshooting](#troubleshooting).
 
 ## Nasazení na GitHub Pages
 
-Repo se nasazuje automaticky přes workflow `.github/workflows/deploy-pages.yml`: job `ci` (lint, typová kontrola, Jest a E2E), potom `build` (produkční build `client/dist`) a `deploy` (publikace na GitHub Pages).
+Repo se nasazuje automaticky přes workflow `.github/workflows/deploy-pages.yml`: joby `checks` (lint, typová kontrola, Jest) a `e2e` běží souběžně, potom `build` (produkční build `client/dist`) a `deploy` (publikace na GitHub Pages).
 
 ### 1. Nastav repository variables
 
