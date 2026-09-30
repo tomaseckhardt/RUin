@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 import { SUPABASE_URL } from './fakeSupabase.ts'
 
-const PORT = 5288
+// E2E_PORT: another port when 5288 is taken, e.g. by the VS Code extension's server.
+const PORT = Number(process.env.E2E_PORT) || 5288
 
 export default defineConfig({
   testDir: '.',
@@ -24,6 +25,9 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     viewport: { width: 1280, height: 900 },
     timezoneId: 'Europe/Prague',
+    // Animations off (the app honours prefers-reduced-motion): Playwright waits
+    // for every element to stop moving before it clicks, so they only add time.
+    reducedMotion: 'reduce',
     // Requests from a service worker would bypass the fake backend.
     serviceWorkers: 'block',
     trace: 'retain-on-failure',

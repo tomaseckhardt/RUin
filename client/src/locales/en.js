@@ -36,6 +36,14 @@ export default {
     madeBy: 'Made by EKI',
   },
 
+  notFound: {
+    title: 'Nothing here',
+    subtitle: 'This page doesn’t exist. Probably after last night.',
+    text: 'The link is mistyped, or the page is gone. RUdy doesn’t remember it either.',
+    imageAlt: 'RUdy with a hangover',
+    home: 'Back to the start',
+  },
+
   eventForm: {
     name: 'Event name',
     location: 'Location',

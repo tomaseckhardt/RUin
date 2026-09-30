@@ -51,6 +51,20 @@ function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel
     writeStoredValue('ruin-theme', theme)
   }, [theme])
 
+  // A cross-fade between the themes where view transitions exist, an instant
+  // switch elsewhere.
+  function changeTheme(nextTheme) {
+    if (!document.startViewTransition || nextTheme === theme) {
+      setTheme(nextTheme)
+      return
+    }
+
+    document.startViewTransition(() => {
+      document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+      setTheme(nextTheme)
+    })
+  }
+
   return (
     <div className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.22),transparent_62%)] dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_58%)]" />
@@ -79,7 +93,7 @@ function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel
                 label={t('shell.darkMode')}
                 title={t('shell.theme')}
                 value={theme}
-                onChange={setTheme}
+                onChange={changeTheme}
                 options={[
                   { value: 'light', content: <SunIcon /> },
                   { value: 'dark', content: <MoonIcon /> },
@@ -107,7 +121,7 @@ function PageShell({ eyebrow, title, subtitle, children, actions, mergeNextPanel
             {t('shell.offline')}
           </div>
         )}
-        <main>{children}</main>
+        <main className="page-enter">{children}</main>
         <footer className="mt-auto pt-10 text-center text-xs font-medium uppercase tracking-[0.24em]" style={{ color: 'var(--text-soft)' }}>
           {t('shell.madeBy')}
         </footer>

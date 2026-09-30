@@ -339,7 +339,7 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(page.getByRole('button', { name: t('poll.copyVoteLink') })).toBeVisible()
 
       // The friend votes from their own browser, where the same link is the voting page.
-      const voterContext = await browser.newContext({ baseURL: test.info().project.use.baseURL, serviceWorkers: 'block', timezoneId: 'Europe/Prague' })
+      const voterContext = await browser.newContext({ baseURL: test.info().project.use.baseURL, serviceWorkers: 'block', timezoneId: 'Europe/Prague', reducedMotion: 'reduce' })
       const voterPage = await voterContext.newPage()
       await preparePage(voterPage)
       await voterPage.goto(`/#/poll/${pollId}`)

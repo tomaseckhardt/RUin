@@ -25,7 +25,7 @@ function CollapsibleCard({ eyebrow, title, headerActions, children }) {
         {headerActions ? <div className="shrink-0">{headerActions}</div> : null}
       </div>
 
-      {isOpen ? <div className="mt-4">{children}</div> : null}
+      {isOpen ? <div className="reveal mt-4">{children}</div> : null}
     </section>
   )
 }

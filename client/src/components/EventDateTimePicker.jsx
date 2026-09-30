@@ -174,8 +174,8 @@ function EventDateTimePicker({ value, onChange }) {
           role="dialog"
           aria-labelledby={triggerId}
           className="mt-3 rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-950/30"
-          style={{ animation: 'scale-in 0.25s ease both' }}>
-          <div className="flex flex-wrap gap-2" style={{ animation: 'fade-up 0.3s ease both' }}>
+          style={{ animation: 'scale-in 0.25s var(--ease-smooth) both' }}>
+          <div className="flex flex-wrap gap-2" style={{ animation: 'fade-up 0.3s var(--ease-smooth) both' }}>
             {presets.map((preset) => {
               const isActive =
                 isSameDay(selectedDate, preset.date) &&
@@ -196,7 +196,7 @@ function EventDateTimePicker({ value, onChange }) {
 
           <div
             className="mx-auto mt-3 flex flex-col rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-950/40"
-            style={{ width: '6cm', height: '6cm', animation: 'scale-in 0.3s ease 0.05s both' }}>
+            style={{ width: '6cm', height: '6cm', animation: 'scale-in 0.3s var(--ease-smooth) 0.05s both' }}>
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -259,7 +259,7 @@ function EventDateTimePicker({ value, onChange }) {
             </div>
           </div>
 
-          <div className="mt-3" style={{ animation: 'fade-up 0.3s ease 0.1s both' }}>
+          <div className="mt-3" style={{ animation: 'fade-up 0.3s var(--ease-smooth) 0.1s both' }}>
             <label htmlFor={timeInputId} className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
               {t('common.time')}
             </label>
@@ -273,7 +273,7 @@ function EventDateTimePicker({ value, onChange }) {
               setIsOpen(false)
               triggerRef.current?.focus()
             }}
-            style={{ animation: 'fade-up 0.3s ease 0.15s both' }}>
+            style={{ animation: 'fade-up 0.3s var(--ease-smooth) 0.15s both' }}>
             {t('datePicker.done')}
           </button>
         </div>

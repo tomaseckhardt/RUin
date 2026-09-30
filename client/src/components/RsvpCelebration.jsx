@@ -68,7 +68,7 @@ export function ConfirmCelebration({ name }) {
   const { t } = useI18n()
 
   return (
-    <section className="panel relative overflow-hidden py-12 text-center" style={{ animation: 'scale-in 0.4s ease both' }}>
+    <section className="panel relative overflow-hidden py-12 text-center" style={{ animation: 'scale-in 0.4s var(--ease-smooth) both' }}>
       {/* Original animation - confetti:
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {CONFETTI_DOTS.map((dot, index) => (
@@ -95,7 +95,7 @@ export function ConfirmCelebration({ name }) {
           className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
           style={{
             background: 'linear-gradient(135deg, #6f4cff, #a78bfa)',
-            animation: 'avatar-pop 0.6s cubic-bezier(0.34,1.56,0.64,1) both',
+            animation: 'avatar-pop 0.6s var(--ease-spring) both',
           }}>
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
             <circle
@@ -104,7 +104,7 @@ export function ConfirmCelebration({ name }) {
               r="14"
               fill="#22c55e"
               style={{
-                animation: 'circle-fill 0.5s ease 0.3s both',
+                animation: 'circle-fill 0.5s var(--ease-smooth) 0.3s both',
                 transformOrigin: 'center',
               }}
             />
@@ -117,17 +117,17 @@ export function ConfirmCelebration({ name }) {
               style={{
                 strokeDasharray: 24,
                 strokeDashoffset: 24,
-                animation: 'check-draw 0.4s ease 0.6s both',
+                animation: 'check-draw 0.4s var(--ease-smooth) 0.6s both',
               }}
             />
           </svg>
         </div>
         */}
         <img src={`${RUDY_GIF_PATH}RUdy-party.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
-        <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'fade-up 0.4s ease 0.5s both', opacity: 0 }}>
+        <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'fade-up 0.4s var(--ease-smooth) 0.5s both', opacity: 0 }}>
           {name ? t('celebration.confirmTitleWithName', { name }) : t('celebration.confirmTitle')}
         </h3>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-300" style={{ animation: 'fade-up 0.4s ease 0.65s both', opacity: 0 }}>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-300" style={{ animation: 'fade-up 0.4s var(--ease-smooth) 0.65s both', opacity: 0 }}>
           {t('celebration.confirmText')}
         </p>
       </div>
@@ -139,7 +139,7 @@ export function DeclineCelebration({ name }) {
   const { t } = useI18n()
 
   return (
-    <section className="panel relative overflow-hidden py-12 text-center" style={{ animation: 'scale-in 0.4s ease both' }}>
+    <section className="panel relative overflow-hidden py-12 text-center" style={{ animation: 'scale-in 0.4s var(--ease-smooth) both' }}>
       {/* Original animation - sad particles:
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {SAD_PARTICLES.map((particle, index) => (
@@ -165,16 +165,16 @@ export function DeclineCelebration({ name }) {
           className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
           style={{
             background: 'linear-gradient(135deg, #f87171, #ef4444)',
-            animation: 'thumb-enter 0.7s cubic-bezier(0.34,1.56,0.64,1) both, thumb-wobble 0.6s ease 0.7s both',
+            animation: 'thumb-enter 0.7s var(--ease-spring) both, thumb-wobble 0.6s var(--ease-smooth) 0.7s both',
           }}>
           <span className="text-3xl leading-none">👎</span>
         </div>
         */}
         <img src={`${RUDY_GIF_PATH}RUdy-rejected.gif`} alt="" width={180} height={210} className="mx-auto rounded-[1.5rem]" />
-        <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'fade-up 0.4s ease 0.5s both', opacity: 0 }}>
+        <h3 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50" style={{ animation: 'fade-up 0.4s var(--ease-smooth) 0.5s both', opacity: 0 }}>
           {name ? t('celebration.declineTitleWithName', { name }) : t('celebration.declineTitle')}
         </h3>
-        <p className="mt-1 mb-3 text-sm text-slate-500 dark:text-slate-300" style={{ animation: 'fade-up 0.4s ease 0.65s both', opacity: 0 }}>
+        <p className="mt-1 mb-3 text-sm text-slate-500 dark:text-slate-300" style={{ animation: 'fade-up 0.4s var(--ease-smooth) 0.65s both', opacity: 0 }}>
           {t('celebration.declineText')}
         </p>
         <span
@@ -183,7 +183,7 @@ export function DeclineCelebration({ name }) {
             background: 'rgba(245,158,11,0.1)',
             border: '1px solid rgba(245,158,11,0.2)',
             color: '#d29014',
-            animation: 'fade-up 0.4s ease 0.8s both',
+            animation: 'fade-up 0.4s var(--ease-smooth) 0.8s both',
             opacity: 0,
           }}>
           {t('celebration.excusedBadge')}

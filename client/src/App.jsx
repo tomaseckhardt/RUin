@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { Route, Routes, useParams } from 'react-router-dom'
 import CreateEventPage from './pages/CreateEventPage.jsx'
 import FloatingBugReportButton from './components/FloatingBugReportButton.jsx'
 import PageShell from './components/PageShell.jsx'
@@ -12,6 +12,7 @@ const CreatePollPage = lazy(() => import('./pages/CreatePollPage.jsx'))
 const PollPage = lazy(() => import('./pages/PollPage.jsx'))
 const OwnerDashboardPage = lazy(() => import('./pages/OwnerDashboardPage.jsx'))
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage.jsx'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage.jsx'))
 
 function PageFallback() {
   const { t } = useI18n()
@@ -37,7 +38,7 @@ function App() {
           <Route path="/poll/:id" element={<KeyedById Page={PollPage} />} />
           <Route path="/moje" element={<OwnerDashboardPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
       <FloatingBugReportButton />
