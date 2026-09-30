@@ -39,6 +39,14 @@ export default {
     madeBy: 'Made by EKI',
   },
 
+  notFound: {
+    title: 'Tady nic není',
+    subtitle: 'Tahle stránka neexistuje. Nejspíš po včerejšku.',
+    text: 'Odkaz je špatně napsaný, nebo stránka už zmizela. RUdy si ho taky nepamatuje.',
+    imageAlt: 'RUdy po kocovině',
+    home: 'Zpět na úvod',
+  },
+
   eventForm: {
     name: 'Název akce',
     location: 'Místo',
