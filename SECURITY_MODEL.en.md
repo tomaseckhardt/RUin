@@ -268,6 +268,11 @@ function in `supabase/sql/all-phases.sql`.
   account for it. The name is simply overwritten on sign-in.
 - `/feedback` is public on purpose - anyone can read every report, names
   included (`get_feedback_reports` in `all-phases.sql`).
+- Anyone can call `log_client_error`, so made-up errors can be written to
+  `client_errors`. Truncated fields, a global limit of 30 rows a minute and
+  deletion after 30 days cap the damage; the table can only be read in the
+  Supabase dashboard (no RLS policy). The client strips the query string and
+  any `token=…` from the URL before sending, so link tokens never go out.
 - Other specific findings (a missing ownership check in one RPC, missing
   server-side upload validation, etc.) are tracked as issues/findings in
   [CODE_REVIEW.en.md](CODE_REVIEW.en.md), not duplicated here - this document
