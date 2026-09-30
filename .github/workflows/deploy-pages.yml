@@ -18,7 +18,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # checks and e2e run side by side, so a PR waits only for the slower one.
+  # checks, e2e, sql and edge-functions run side by side, so a PR waits only
+  # for the slowest one.
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -78,9 +79,88 @@ jobs:
           name: e2e-test-results
           path: client/tests/test-results
 
+  # sql and edge-functions run next to checks and e2e. On a pull request that
+  # doesn't touch their files they skip their steps (not the whole job), so
+  # they still pass and build can simply need them. Push and manual runs
+  # always run them.
+  sql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check for SQL changes
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            run:
+              - 'supabase/sql/**'
+              - 'supabase/tests/**'
+              - '.github/workflows/deploy-pages.yml'
+
+      - name: Checkout
+        if: steps.filter.outputs.run != 'false'
+        uses: actions/checkout@v4
+
+      # Plain Postgres plus supabase/tests/supabase-stub.sql (roles, pgcrypto,
+      # storage, realtime publication) instead of the Supabase stack: a small
+      # image that starts in seconds. psql comes with the runner.
+      - name: Start Postgres
+        if: steps.filter.outputs.run != 'false'
+        run: |
+          docker run -d -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine
+          timeout 60 bash -c 'until pg_isready -q -h localhost -U postgres; do sleep 1; done'
+
+      - name: Run all-phases.sql twice, then security.sql
+        if: steps.filter.outputs.run != 'false'
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+        run: |
+          psql -q -v ON_ERROR_STOP=1 -f supabase/tests/supabase-stub.sql
+          # The second run proves the file is idempotent. Warnings only: its
+          # "already exists, skipping" notices would bury the output.
+          for run in 1 2; do
+            PGOPTIONS='-c client_min_messages=warning' psql -q -v ON_ERROR_STOP=1 -f supabase/sql/all-phases.sql
+          done
+          psql -q -v ON_ERROR_STOP=1 -f supabase/tests/security.sql
+
+  edge-functions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check for Edge Function changes
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            run:
+              - 'supabase/functions/**'
+              - '.github/workflows/deploy-pages.yml'
+
+      - name: Checkout
+        if: steps.filter.outputs.run != 'false'
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        if: steps.filter.outputs.run != 'false'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check the Edge Functions
+        if: steps.filter.outputs.run != 'false'
+        working-directory: supabase/functions
+        run: deno check */index.ts
+
   build:
     if: github.event_name != 'pull_request'
-    needs: [checks, e2e]
+    needs: [checks, e2e, sql, edge-functions]
     runs-on: ubuntu-latest
     env:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
