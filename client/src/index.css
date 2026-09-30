@@ -2,6 +2,15 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* One easing for the whole app: a soft ease-out that settles instead of stopping.
+   Tailwind's `transition` utilities pick it up as their default. */
+@theme {
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: var(--ease-smooth);
+}
+
 :root {
   font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI Variable', sans-serif;
   color: #1a1a1a;
@@ -70,10 +79,44 @@
   --badge-text: #a78bfa;
 }
 
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+@keyframes modal-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
 @keyframes fade-up {
   0% {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
   100% {
     opacity: 1;
@@ -83,7 +126,7 @@
 @keyframes scale-in {
   0% {
     opacity: 0;
-    transform: scale(0.92);
+    transform: scale(0.95);
   }
   100% {
     opacity: 1;
@@ -269,7 +312,7 @@ textarea {
   .primary-button {
     background: var(--primary-bg);
     color: var(--primary-text);
-    @apply inline-flex items-center justify-center rounded-full px-5 py-3 font-medium transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center rounded-full px-5 py-3 font-medium transition hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .primary-button:hover {
@@ -280,7 +323,36 @@ textarea {
     background: var(--secondary-bg);
     border-color: var(--secondary-border);
     color: var(--secondary-text);
-    @apply inline-flex items-center justify-center rounded-full border px-5 py-3 font-medium transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center rounded-full border px-5 py-3 font-medium transition hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  /* ModalOverlay: the backdrop fades and its card rises in; data-closing plays
+     both backwards before the modal unmounts. */
+  .modal-overlay {
+    animation: overlay-in 200ms var(--ease-smooth) both;
+  }
+
+  .modal-overlay > * {
+    animation: modal-in 320ms var(--ease-smooth) both;
+  }
+
+  .modal-overlay[data-closing] {
+    pointer-events: none;
+    animation: overlay-out 180ms ease-in both;
+  }
+
+  .modal-overlay[data-closing] > * {
+    animation: modal-out 180ms ease-in both;
+  }
+
+  /* Content that appears on demand (an opened CollapsibleCard). */
+  .reveal {
+    animation: reveal 260ms var(--ease-smooth) both;
+  }
+
+  /* Each page's content when it mounts (routes remount per id). */
+  .page-enter {
+    animation: page-in 360ms var(--ease-smooth) both;
   }
 
   /* The card inside a ModalOverlay: full screen on phones, a centred card from sm up. */
@@ -342,5 +414,32 @@ textarea {
     background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
     border-color: color-mix(in srgb, var(--panel-border) 100%, transparent);
     @apply rounded-[1.5rem] border p-4;
+  }
+}
+
+/* Dark mode switches with a short cross-fade (PageShell wraps it in a view transition). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: var(--ease-smooth);
+}
+
+/* Motion off when the system asks for it: everything still happens, instantly. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after,
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
   }
 }

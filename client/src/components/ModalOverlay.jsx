@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 const FOCUSABLE_SELECTOR =
@@ -15,10 +15,49 @@ let bodyOverflowBeforeModals = ''
 // would throw the draft away with the modal.
 const TEXT_FIELD_SELECTOR = 'textarea, input:not([type]), input[type="text"], input[type="search"]'
 
+// The close animation needs the Web Animations API to know when it's done;
+// without it (jsdom in the tests) the modal just unmounts.
+const CAN_ANIMATE_EXIT = typeof Element !== 'undefined' && 'getAnimations' in Element.prototype
+
 function ModalOverlay({ open, onClose, labelledBy, children }) {
   const containerRef = useRef(null)
   const onCloseRef = useRef(onClose)
   const instanceIdRef = useRef(null)
+  // Stays true after `open` turns false until the close animation finishes,
+  // showing the last children meanwhile (the parent may already have cleared them).
+  const [isRendered, setIsRendered] = useState(open)
+  const [lastChildren, setLastChildren] = useState(children)
+
+  if (open && children !== lastChildren) {
+    setLastChildren(children)
+  }
+
+  if (open && !isRendered) {
+    setIsRendered(true)
+  } else if (!open && isRendered && !CAN_ANIMATE_EXIT) {
+    setIsRendered(false)
+  }
+
+  const isClosing = !open && isRendered
+
+  useEffect(() => {
+    if (!isClosing) {
+      return undefined
+    }
+
+    let cancelled = false
+    const animations = containerRef.current?.getAnimations({ subtree: true }) ?? []
+
+    Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (!cancelled) {
+        setIsRendered(false)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isClosing])
 
   useEffect(() => {
     onCloseRef.current = onClose
@@ -108,7 +147,7 @@ function ModalOverlay({ open, onClose, labelledBy, children }) {
     }
   }, [open])
 
-  if (!open) {
+  if (!isRendered) {
     return null
   }
 
@@ -119,16 +158,18 @@ function ModalOverlay({ open, onClose, labelledBy, children }) {
     <section
       ref={containerRef}
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+      className="modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledBy}
+      data-closing={isClosing ? '' : undefined}
+      inert={isClosing}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onCloseRef.current()
         }
       }}>
-      {children}
+      {open ? children : lastChildren}
     </section>,
     document.body,
   )
