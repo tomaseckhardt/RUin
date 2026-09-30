@@ -1,8 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { formatDateTime, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
+import { formatDateTime, getEventTimeZoneNow, parseLocalDateTime, toDateTimeLocalValue } from '../lib/format.js'
 import { useI18n } from '../lib/i18n.js'
 
 const DEFAULT_TIME = '18:00'
+
+// All dates here are Prague wall-clock time held in local Date fields (see
+// getEventTimeZoneNow), so a viewer abroad picks the same time as in Czechia.
 
 function startOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth(), 1)
@@ -50,7 +53,7 @@ function combineDateAndTime(date, timeStr) {
 }
 
 function nextOccurrence(targetDow, hours, minutes) {
-  const now = new Date()
+  const now = getEventTimeZoneNow()
   const diff = (targetDow - now.getDay() + 7) % 7
   const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff, hours, minutes, 0, 0)
 
@@ -62,7 +65,7 @@ function nextOccurrence(targetDow, hours, minutes) {
 }
 
 function buildPresets() {
-  const now = new Date()
+  const now = getEventTimeZoneNow()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0, 0)
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 18, 0, 0, 0)
 
@@ -79,7 +82,7 @@ function buildPresets() {
 function EventDateTimePicker({ value, onChange }) {
   const { t } = useI18n()
   const selectedDate = parseLocalDateTime(value)
-  const [viewMonth, setViewMonth] = useState(() => startOfMonth(selectedDate || new Date()))
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(selectedDate || getEventTimeZoneNow()))
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef(null)
   const triggerRef = useRef(null)
@@ -91,7 +94,7 @@ function EventDateTimePicker({ value, onChange }) {
     ? `${String(selectedDate.getHours()).padStart(2, '0')}:${String(selectedDate.getMinutes()).padStart(2, '0')}`
     : DEFAULT_TIME
   const weeks = getMonthMatrix(viewMonth.getFullYear(), viewMonth.getMonth())
-  const today = new Date()
+  const today = getEventTimeZoneNow()
   const todayStart = startOfDay(today)
 
   useEffect(() => {
@@ -127,7 +130,7 @@ function EventDateTimePicker({ value, onChange }) {
   }, [isOpen])
 
   function openPanel() {
-    setViewMonth(startOfMonth(selectedDate || new Date()))
+    setViewMonth(startOfMonth(selectedDate || getEventTimeZoneNow()))
     setIsOpen(true)
   }
 
