@@ -1,4 +1,3 @@
-import QRCode from 'qrcode'
 import { t } from './i18n.js'
 
 function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
@@ -56,6 +55,8 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
 
 export async function createQrPosterDataUrl({ inviteUrl, eventName, eventDateLabel, isPastEvent }) {
   const qrCanvas = document.createElement('canvas')
+  // Loaded on demand, so the QR library stays out of the page bundles.
+  const { default: QRCode } = await import('qrcode')
 
   await QRCode.toCanvas(qrCanvas, inviteUrl, {
     width: 900,

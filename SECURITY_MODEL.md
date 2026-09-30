@@ -253,6 +253,11 @@ autorizace reálně vynucuje, je tělo SECURITY DEFINER funkce v
   účet. Jméno se při přihlášení jen přepíše.
 - `/feedback` je záměrně veřejný - kdokoli přečte všechna hlášení včetně jmen
   (`get_feedback_reports` v `all-phases.sql`).
+- `log_client_error` může volat kdokoli, takže do `client_errors` jde zapsat
+  i vymyšlená chyba. Škodu omezuje zkrácení polí, globální limit 30 záznamů za
+  minutu a mazání po 30 dnech; číst tabulku jde jen v Supabase dashboardu
+  (žádná RLS politika). Klient před odesláním odstraní z adresy query string
+  i `token=…` a nikdy neposílá tokeny z odkazů.
 - Další konkrétní nálezy (chybějící ownership check u jedné RPC, chybějící
   server-side validace uploadu apod.) jsou vedené jako issues/nálezy v
   [CODE_REVIEW.md](CODE_REVIEW.md), ne duplikované tady - tenhle dokument

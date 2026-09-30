@@ -57,8 +57,8 @@ function pragueWallTimeToMillis(year, month, day, hour = 0, minute = 0, second =
   return naiveUtcMillis - getTimeZoneOffsetMinutes(naiveUtcMillis - firstOffset * 60000, EVENT_TIME_ZONE) * 60000
 }
 
-// Parses a naive date-time as wall-clock time in the viewer's timezone (what
-// the date picker edits).
+// Parses a naive date-time into a Date with the same local fields (what the
+// date picker edits; compare it with getEventTimeZoneNow, not new Date()).
 export function parseLocalDateTime(dateString) {
   const parts = parseNaiveDateTimeParts(dateString)
 
@@ -68,6 +68,15 @@ export function parseLocalDateTime(dateString) {
 
   const [year, month, day, hour, minute, second] = parts
   return new Date(year, month - 1, day, hour, minute, second)
+}
+
+// Now as a Date whose local fields hold the Prague wall-clock time - the
+// space the date picker works in, so a viewer abroad gets Prague's today.
+// Known limit: a Prague time inside the device's own DST gap shifts by an
+// hour, like parseLocalDateTime; UTC-based fields in the picker would fix it.
+export function getEventTimeZoneNow(date = new Date()) {
+  const wall = new Date(date.getTime() + getTimeZoneOffsetMinutes(date.getTime(), EVENT_TIME_ZONE) * 60000)
+  return new Date(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate(), wall.getUTCHours(), wall.getUTCMinutes(), wall.getUTCSeconds())
 }
 
 // Parses events.datetime (Prague wall-clock time) to the real instant - use
