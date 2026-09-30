@@ -212,12 +212,12 @@ The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-s
 - The localization tests check that `cs.js` and `en.js` have the same keys and `{placeholders}`, and that every message in `all-phases.sql` and in the `delete-event-data` Edge Function has an English translation (see [Localization](#localization-czech-and-english)).
 - The Jest setup (`client/tests/componentsTests/setup.ts`) switches the UI to Czech - jsdom reports itself as `en-US`, so the app would otherwise run in English.
 - The E2E test (`npm --prefix client run test:e2e`) runs against an in-memory fake Supabase (`client/tests/fakeSupabase.ts`) that checks the same things as the SQL wherever the client depends on them (tokens, cooldowns, a photo's folder and file name, …). When you change an RPC the E2E test uses, update the fake too.
-- CI (the `ci` job in `.github/workflows/deploy-pages.yml`) runs lint, the test type-check, Jest and the E2E test (with no retries of failed tests) on every pull request to `main` and on every push to `main`; when E2E fails, it uploads the traces as an artifact. Build and deploy run only on a push to `main` (or a manual run), and only when `ci` passes.
+- CI (`.github/workflows/deploy-pages.yml`) runs two jobs side by side: `checks` (lint, the test type-check, Jest) and `e2e` (the E2E test with no retries of failed tests, run in CI against the runner's Google Chrome, so no browser is downloaded) on every pull request to `main` and on every push to `main`; when E2E fails, it uploads the traces as an artifact. Build and deploy run only on a push to `main` (or a manual run), and only when both `checks` and `e2e` pass.
 - Jest doesn't work when the project path contains a `?` - see [Troubleshooting](#troubleshooting).
 
 ## Deploying to GitHub Pages
 
-The repo is deployed automatically by the `.github/workflows/deploy-pages.yml` workflow: the `ci` job (lint, type-check, Jest and E2E), then `build` (production build of `client/dist`) and `deploy` (publishing to GitHub Pages).
+The repo is deployed automatically by the `.github/workflows/deploy-pages.yml` workflow: the `checks` (lint, type-check, Jest) and `e2e` jobs run side by side, then `build` (production build of `client/dist`) and `deploy` (publishing to GitHub Pages).
 
 ### 1. Set the repository variables
 

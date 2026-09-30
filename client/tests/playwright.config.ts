@@ -19,6 +19,8 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     ...devices['Desktop Chrome'],
+    // CI runners come with Google Chrome, so CI skips downloading a browser.
+    ...(process.env.CI ? { channel: 'chrome' } : {}),
     baseURL: `http://localhost:${PORT}`,
     viewport: { width: 1280, height: 900 },
     timezoneId: 'Europe/Prague',
@@ -29,7 +31,11 @@ export default defineConfig({
   // Always a fresh dev server built against the fake Supabase URL - never
   // one already running, which would talk to the real project.
   webServer: {
-    command: `node scripts/run-vite-safe.mjs dev --port ${PORT} --strictPort`,
+    // run-vite-safe.mjs copies the project to dodge the "?" in the local
+    // folder name; CI's checkout path is plain, so it runs Vite directly.
+    command: process.env.CI
+      ? `npx vite --port ${PORT} --strictPort`
+      : `node scripts/run-vite-safe.mjs dev --port ${PORT} --strictPort`,
     cwd: '..',
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
