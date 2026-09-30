@@ -33,7 +33,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: client
-        run: npm ci --legacy-peer-deps
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
 
       - name: Lint
         working-directory: client
@@ -47,9 +47,30 @@ jobs:
         working-directory: client
         run: npm test
 
-      - name: Install the Playwright browser
+      # The browser download is cached per Playwright version; the system
+      # libraries it needs are not, so they are installed on every run.
+      - name: Read the Playwright version
+        id: playwright
         working-directory: client
-        run: npx playwright install --with-deps chromium
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Playwright browser
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      # Headless shell only: the tests never open a visible browser.
+      - name: Install the Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: client
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Install the Playwright browser's system libraries
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: client
+        run: npx playwright install-deps chromium
 
       - name: E2E test
         working-directory: client
@@ -83,7 +104,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: client
-        run: npm ci --legacy-peer-deps
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
 
       - name: Build frontend
         working-directory: client
