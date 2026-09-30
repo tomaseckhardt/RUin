@@ -255,6 +255,17 @@ create table if not exists public.feedback_reports (
   created_at timestamptz not null default now()
 );
 
+-- Uncaught browser errors (lib/errorReporting.js), read only in the Supabase
+-- dashboard. Written by log_client_error, kept 30 days.
+create table if not exists public.client_errors (
+  id bigint generated always as identity primary key,
+  message text not null,
+  stack text,
+  url text,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.owners (
   id text primary key,
   token text not null unique,
@@ -311,6 +322,7 @@ alter table public.event_photos enable row level security;
 alter table public.event_photo_likes enable row level security;
 alter table public.event_photo_comments enable row level security;
 alter table public.feedback_reports enable row level security;
+alter table public.client_errors enable row level security;
 alter table public.owners enable row level security;
 alter table public.contact_groups enable row level security;
 alter table public.contact_group_members enable row level security;
@@ -357,6 +369,8 @@ create unique index if not exists event_signup_claims_item_lower_name_uidx
   on public.event_signup_claims (item_id, lower(attendee_name));
 create index if not exists feedback_reports_created_at_idx
   on public.feedback_reports (created_at desc);
+create index if not exists client_errors_created_at_idx
+  on public.client_errors (created_at desc);
 create unique index if not exists owners_phone_normalized_uidx
   on public.owners (public.normalize_phone(phone));
 create index if not exists owners_created_at_idx on public.owners (created_at desc);
@@ -2780,6 +2794,40 @@ as $$
   order by r.created_at desc;
 $$;
 grant execute on function public.get_feedback_reports() to anon, authenticated;
+
+-- Anyone can call it, so it never raises (the client ignores the result),
+-- truncates every field and stops at 30 rows a minute across all callers,
+-- which caps how much a flood can write. Old rows go on each call, the same
+-- way _delete_expired_polls cleans up polls.
+create or replace function public.log_client_error(
+  p_message text,
+  p_stack text,
+  p_url text,
+  p_user_agent text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_message text := left(nullif(trim(p_message), ''), 500);
+begin
+  if v_message is null then
+    return;
+  end if;
+
+  delete from public.client_errors where created_at < now() - interval '30 days';
+
+  if (select count(*) from public.client_errors where created_at > now() - interval '1 minute') >= 30 then
+    return;
+  end if;
+
+  insert into public.client_errors (message, stack, url, user_agent)
+  values (v_message, left(p_stack, 4000), left(p_url, 500), left(p_user_agent, 300));
+end;
+$$;
+grant execute on function public.log_client_error(text, text, text, text) to anon, authenticated;
 
 -- ==================== Owner accounts, contact groups and templates ====================
 
