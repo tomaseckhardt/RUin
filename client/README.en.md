@@ -32,6 +32,10 @@ The dev server runs at http://localhost:5173/. `dev`, `build` and `preview` go t
 - `npm run lint` - ESLint
 - `npm test` - Jest (unit, component and a11y tests)
 - `npm run test:a11y` - a11y tests only
+- `npm run typecheck` - type-checks the tests (`tsc -p tests`; the app is JavaScript, the tests TypeScript)
+- `npm run test:e2e` - the Playwright E2E test against an in-memory fake Supabase (`tests/fakeSupabase.ts`); it starts its own dev server. Run `npx playwright install chromium` once first
+
+CI runs `lint`, `typecheck`, `test` and `test:e2e` on every pull request.
 
 ## Structure
 

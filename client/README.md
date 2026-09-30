@@ -32,6 +32,10 @@ Dev server běží na http://localhost:5173/. `dev`, `build` i `preview` jdou p�
 - `npm run lint` - ESLint
 - `npm test` - Jest (jednotkové, komponentové a a11y testy)
 - `npm run test:a11y` - jen a11y testy
+- `npm run typecheck` - typová kontrola testů (`tsc -p tests`; aplikace je v JavaScriptu, testy v TypeScriptu)
+- `npm run test:e2e` - E2E test v Playwrightu proti falešnému Supabase v paměti (`tests/fakeSupabase.ts`), sám si spustí dev server; poprvé je potřeba `npx playwright install chromium`
+
+CI spouští `lint`, `typecheck`, `test` i `test:e2e` u každého pull requestu.
 
 ## Struktura
 

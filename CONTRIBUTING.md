@@ -38,11 +38,13 @@ Testy a kontrola:
 
 ```bash
 npm --prefix client run lint
+npm --prefix client run typecheck
 npm test
+npm --prefix client run test:e2e
 npm run build
 ```
 
-Lint a testy spouští i CI u každého pull requestu do `main` - PR s chybou v lintu nebo v testech neprojde.
+Lint, typovou kontrolu testů, Jest i E2E test spouští i CI u každého pull requestu do `main` - PR s chybou v kterémkoli z nich neprojde. Neúspěšné testy CI neopakuje, nestabilní test tedy selže hned.
 
 ## Kodérské zvyklosti
 
@@ -52,7 +54,7 @@ Lint a testy spouští i CI u každého pull requestu do `main` - PR s chybou v 
 - Když měníš UI, ověř desktop i mobil, světlý i tmavý režim a češtinu i angličtinu.
 - Když měníš přístupnost, doplň nebo uprav testy.
 - Texty v UI nepiš natvrdo do komponent - přidej klíč do `client/src/locales/cs.js` i `en.js` a použij `t()` (viz [Lokalizace v README](README.md#lokalizace-čeština-a-angličtina)).
-- Změny databáze patří přímo do `supabase/sql/all-phases.sql`, na místo, kde je daný objekt definovaný (soubor drží jen aktuální stav, historie je v gitu). Piš je idempotentně, jak popisuje hlavička souboru. Každou novou `raise exception` hlášku doplň do `client/src/locales/serverMessages.en.js`, jinak spadne test.
+- Změny databáze patří přímo do `supabase/sql/all-phases.sql`, na místo, kde je daný objekt definovaný (soubor drží jen aktuální stav, historie je v gitu). Piš je idempotentně, jak popisuje hlavička souboru. Každou novou `raise exception` hlášku (i chybu vrácenou jako `{ error }`, např. u PINu) doplň do `client/src/locales/serverMessages.en.js`, jinak spadne test. Když měníš RPC, které volá E2E test, uprav stejně i jeho falešný backend `client/tests/fakeSupabase.ts`. Bezpečnostní pravidla databáze ověříš skriptem `supabase/tests/security.sql` (viz [README](README.md#bezpečnostní-test-databáze)).
 
 ## Konvence commitů
 
@@ -95,7 +97,7 @@ Pak otevři Pull Request z tvé branche do `main`.
 Před odesláním PR ověř:
 
 - [ ] změna je pokrytá testy (nebo je jasně vysvětlené, proč ne)
-- [ ] lokálně prošel lint i build
+- [ ] lokálně prošel lint, typová kontrola i build
 - [ ] lokálně prošly testy relevantní pro změnu
 - [ ] nové texty v UI jsou v češtině i angličtině
 - [ ] aktualizovaná dokumentace (README nebo jiná, v obou jazycích)

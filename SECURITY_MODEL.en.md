@@ -50,6 +50,12 @@ caller's name, and requires them to match. That stops one field from playing
 two roles, but it doesn't verify identity - whoever sends someone else's name
 twice gets through.
 
+Where it can, the app at least narrows down what a name can do: only a name
+that has answered the invite may write in the chat (`send_event_chat_message`;
+an invited guest who hasn't answered yet may not), at most one message per 3
+seconds and up to 500 characters. That doesn't filter out someone else's name
+from the same event, though.
+
 What this means for new code: never assume that `p_attendee_name`,
 `p_sender_name` etc. prove who actually made the call. They're just a label the
 caller made up.
@@ -75,7 +81,11 @@ Someone without the link can unlock management with the 4-digit admin PIN the
 organizer picks when creating the event (`get_organizer_path_with_pin`). The PIN
 is stored as a bcrypt hash (`events.organizer_pin_hash`), and since 4 digits are
 only 10,000 combinations, it locks after wrong attempts: after 5 for 15 minutes,
-after 10 for an hour, after 15 for 24 hours.
+after 10 for an hour, after 15 for 24 hours. The function **returns** a wrong or
+locked PIN as `{ error }` instead of raising: an exception would roll back the
+whole transaction, the bumped failed-attempt counter included, and the lock
+would never start. The client (`throwReturnedError` in `api.js`) turns
+`{ error }` into an ordinary error.
 
 The token is deliberately stored as readable plain text, not as a one-way hash.
 That's a conscious trade-off, not an oversight - the "forgot the management link?
@@ -91,7 +101,11 @@ decision.
 The same principle (the token is verified on the server against the stored one,
 no session) applies to `event_polls.creator_token` for events that haven't been
 created yet (date/place polls) - the creator's link looks like
-`.../#/poll/:pollId?token=...`.
+`.../#/poll/:pollId?token=...`. The client saves the token in `localStorage`
+(`ruin-poll-creator-tokens`, the last 30 polls, `lib/pollCreatorStorage.js`) and
+removes it from the address, so the poll's address in the creator's browser is
+the public voting link as it is (a button copies it) and the token doesn't get
+shared by mistake.
 
 ### Groups and templates: `owners.token`, phone and a 6-digit code
 
@@ -101,9 +115,9 @@ who is identified by a phone number and a 6-digit code through
 and signing up: if an account with the given (normalized) phone exists, it
 verifies the code, otherwise it creates the account. The code is stored as a
 bcrypt hash (`owners.code_hash`), with the same lock after wrong attempts as the
-PIN. The function returns `ownerId` and `token`, the client saves them in
+PIN (and a wrong code is returned as `{ error }` the same way). The function returns `ownerId` and `token`, the client saves them in
 `localStorage` (`ruin-owner-identity`), and every RPC for groups and templates
-verifies them (`v_owner.token <> p_token`). The token doesn't change on later
+verifies them (`v_owner.token is distinct from p_token`). The token doesn't change on later
 sign-ins.
 
 ### Photo uploader: the photo's delete token
@@ -117,10 +131,12 @@ file after the token's SHA-256 hash. The database stores only that hash
 (`event_photos.delete_token_hash`), since the token never has to be handed
 back.
 
-- Naming the file after the hash ties the token to that one upload. Anyone can
-  list the `event-photos` bucket, so if `record_event_photo` took any token,
-  someone could record a freshly uploaded photo with their own token before the
-  uploader does, and then delete it. `record_event_photo` therefore stores the
+- Naming the file after the hash ties the token to that one upload. The
+  `event-photos` bucket is public (a photo loads by its URL), but it can't be
+  listed - there's no select policy for it on `storage.objects`. Even so, if
+  `record_event_photo` took any token, anyone who knows a freshly uploaded
+  photo's URL could record it with their own token before the uploader does,
+  and then delete it. `record_event_photo` therefore stores the
   hash only for a caller who knows the token whose hash is the file name.
 - Who may delete a photo is decided by `authorize_event_photo_delete()`
   (service role only), and `delete_event_photo()` checks the same again: a
@@ -144,8 +160,12 @@ The established pattern in `supabase/sql/all-phases.sql` is:
 
 - RLS is on for every table (`alter table ... enable row level security`),
   and without a policy Postgres denies `anon`/`authenticated` everything.
-  There are only three allowing policies: reading `event_realtime_ticks`
-  (realtime), and reading and uploading in the `event-photos` bucket. To list
+  There are only two allowing policies: reading `event_realtime_ticks`
+  (realtime; a tick carries only `event_key`, the SHA-256 hash of the event id,
+  instead of the id, so the table can't be used to list events) and uploading
+  to the `event-photos` bucket (JPEG, PNG, WebP and GIF only, up to 10 MB, into
+  an existing event's folder). Reading photos needs no policy because the
+  bucket is public, and one would let anyone list the whole bucket. To list
   them all:
 
   ```bash
@@ -160,13 +180,17 @@ The established pattern in `supabase/sql/all-phases.sql` is:
   `moderate_attendee`:
 
   ```sql
-  if v_event.organizer_token <> p_token then
+  if v_event.organizer_token is distinct from p_token then
     raise exception 'Neplatný organizátorský odkaz.';
   end if;
   ```
 
-  The same pattern (look for the line `v_event.organizer_token <> p_token`,
-  `v_poll.creator_token <> p_token` or `v_owner.token <> p_token` and an
+  Always `is distinct from`, never `<>`: for a missing (NULL) token,
+  `token <> null` is NULL too, `if` treats it as false, and the function would
+  carry on without a token. The same pattern (look for the line
+  `v_event.organizer_token is distinct from p_token`,
+  `v_poll.creator_token is distinct from p_token` or
+  `v_owner.token is distinct from p_token` and an
   exception with a Czech message) is used by `delete_event`, `update_event`,
   `finalize_event_poll`, the RPCs for groups and templates and others - whenever
   a function changes or reveals something tied to an event, a poll or an owner,
@@ -199,10 +223,16 @@ When you add a new table or RPC function:
 3. Reads and writes go through a `SECURITY DEFINER` RPC that:
    - is `language plpgsql security definer set search_path = public`,
    - checks authorization inside its body - typically `if v_event.organizer_token
-     <> p_token then raise exception '...'` (or similar scoping by `event_id`),
+     is distinct from p_token then raise exception '...'` (or similar scoping by `event_id`),
      exactly like `moderate_attendee`/`delete_event`/`update_event`,
    - ends with `grant execute on function public.fn_name(...) to anon,
      authenticated;`.
+
+   A helper that only other functions, triggers or Edge Functions call ends
+   with `revoke all on function ... from public, anon, authenticated;` instead
+   (otherwise Supabase grants EXECUTE on every new function to anon and
+   authenticated by itself), plus `grant execute ... to service_role;` where
+   needed. `supabase/tests/security.sql` checks this.
 4. If a function changes an existing signature (adds/removes/renames a
    parameter), it needs `drop function if exists public.fn_name(old, types);`
    in front of it - see the general convention described at the top of
