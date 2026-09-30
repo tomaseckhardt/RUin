@@ -7,13 +7,13 @@ export default defineConfig({
   testDir: '.',
   testMatch: '*.e2e.ts',
   outputDir: 'test-results',
-  timeout: 180_000,
+  // A whole walk-through takes 10-12 s locally; CI runners are slower.
+  timeout: process.env.CI ? 30_000 : 15_000,
   // Both languages at once. Both tests live in one file, and Playwright only
   // splits a file between workers when fullyParallel is on.
   fullyParallel: true,
   workers: 2,
-  // The RSVP celebration alone keeps the page busy for 4.5 s.
-  expect: { timeout: 15_000 },
+  expect: { timeout: 10_000 },
   // No retries, in CI either: a flaky step should fail loudly, not pass on a rerun.
   retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
@@ -35,7 +35,9 @@ export default defineConfig({
     // folder name; CI's checkout path is plain, so it runs Vite directly.
     command: process.env.CI
       ? `npx vite --port ${PORT} --strictPort`
-      : `node scripts/run-vite-safe.mjs dev --port ${PORT} --strictPort`,
+      : // The Node running Playwright, not `node` from PATH: the VS Code
+        // extension starts this through a shell without nvm's PATH.
+        `"${process.execPath}" scripts/run-vite-safe.mjs dev --port ${PORT} --strictPort`,
     cwd: '..',
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
