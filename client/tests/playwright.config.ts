@@ -8,7 +8,9 @@ export default defineConfig({
   testMatch: '*.e2e.ts',
   outputDir: 'test-results',
   timeout: 180_000,
-  // One language after the other: the dev server is slow when both hit it.
+  // Both languages at once. Both tests live in one file, and Playwright only
+  // splits a file between workers when fullyParallel is on.
+  fullyParallel: true,
   workers: 2,
   // The RSVP celebration alone keeps the page busy for 4.5 s.
   expect: { timeout: 15_000 },
