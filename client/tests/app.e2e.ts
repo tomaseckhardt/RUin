@@ -12,6 +12,7 @@ import en from '../src/locales/en.js'
 import serverMessagesEn from '../src/locales/serverMessages.en.js'
 import { INPUT, type Locale } from './e2eInput.ts'
 import { createFakeSupabase } from './fakeSupabase.ts'
+import { CONTEXT_OPTIONS } from './playwright.config.ts'
 
 // A dictionary entry is a text, a list of texts, plural forms ({ one, other,
 // ... }) or a nested group of entries.
@@ -97,7 +98,22 @@ for (const locale of ['cs', 'en'] as const) {
     const toast = (text: string) => expect(page.getByText(text, { exact: true }).first()).toBeVisible()
     let eventId = ''
 
-    await test.step('the organizer creates an event with a bring list', async () => {
+    // A test.step that also fails on a page error or an unexpected request,
+    // even when the step itself fails: a crash on the page then shows up as
+    // the reason, not as a locator timing out further on.
+    async function step(name: string, body: () => Promise<void>) {
+      await test.step(name, async () => {
+        try {
+          await body()
+        } finally {
+          expect(pageErrors, 'errors thrown on the page').toEqual([])
+          expect(backend.unexpected, 'requests the fake backend doesn’t answer').toEqual([])
+          expect(realSupabaseRequests, 'requests to a real Supabase project').toEqual([])
+        }
+      })
+    }
+
+    await step('the organizer creates an event with a bring list', async () => {
       await page.goto('/')
       await page.getByRole('button', { name: t('createEvent.composerExpand') }).click()
 
@@ -123,7 +139,7 @@ for (const locale of ['cs', 'en'] as const) {
       expect(backend.db.items).toEqual([expect.objectContaining({ label: input.item, capacity: 2, category: 'bring' })])
     })
 
-    await test.step('the organizer sees the weather, edits the event, adds a stop and opens the overview', async () => {
+    await step('the organizer sees the weather, edits the event, adds a stop and opens the overview', async () => {
       await expect(page.getByText('18° / 26°C')).toBeVisible()
 
       await page.getByRole('button', { name: t('manage.editEvent') }).click()
@@ -146,7 +162,7 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(dialog).toBeHidden()
     })
 
-    await test.step('a guest confirms, chats, reacts, claims an item and posts a photo', async () => {
+    await step('a guest confirms, chats, reacts, claims an item and posts a photo', async () => {
       await page.goto(`/#/event/${eventId}`)
       await expect(page.getByText(input.newDescription)).toBeVisible()
       await page.getByLabel(t('common.yourName')).fill(input.guest)
@@ -188,7 +204,7 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(dialog).toBeHidden()
     })
 
-    await test.step('the guest deletes their own photo', async () => {
+    await step('the guest deletes their own photo', async () => {
       const photo = page.getByRole('img', { name: t('photos.photoBy', { name: input.guest }) })
       await photo.click()
       // Only the uploader's browser (it holds the delete token) offers Delete.
@@ -203,7 +219,7 @@ for (const locale of ['cs', 'en'] as const) {
       expect(backend.db.comments).toEqual([])
     })
 
-    await test.step('a second guest excuses themselves', async () => {
+    await step('a second guest excuses themselves', async () => {
       await page.getByRole('button', { name: t('event.notMe') }).click()
       await page.getByLabel(t('common.yourName')).fill(input.secondGuest)
       await page.getByRole('radio', { name: t('event.excuseOption') }).click()
@@ -220,7 +236,7 @@ for (const locale of ['cs', 'en'] as const) {
       ])
     })
 
-    await test.step('the first guest comes back, sees the reaction and pings the second', async () => {
+    await step('the first guest comes back, sees the reaction and pings the second', async () => {
       await page.evaluate(([id, name]) => localStorage.setItem(`ruin-event-identity:${id}`, name), [eventId, input.guest])
       await page.reload()
       await expect(page.getByRole('heading', { level: 2, name: input.guest, exact: true })).toBeVisible()
@@ -235,7 +251,7 @@ for (const locale of ['cs', 'en'] as const) {
       expect(backend.db.pings).toEqual([expect.objectContaining({ source_name: input.guest, message: input.ping })])
     })
 
-    await test.step('a wrong link asks for the PIN, which refuses a wrong one and unlocks the event again', async () => {
+    await step('a wrong link asks for the PIN, which refuses a wrong one and unlocks the event again', async () => {
       // A wrong link doesn't cost this browser its saved organizer link.
       await page.goto(`/#/event/${eventId}/manage?token=not-the-real-token`)
       await expect(page).toHaveURL(new RegExp(`#/event/${eventId}/manage$`))
@@ -263,14 +279,14 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(page.getByRole('heading', { level: 1, name: input.event })).toBeVisible()
     })
 
-    await test.step('the organizer accepts the excuse', async () => {
+    await step('the organizer accepts the excuse', async () => {
       await page.getByRole('button', { name: t('attendees.accept') }).click()
       await toast(t('manage.excuseAccepted'))
       await expect(page.getByText(t('attendees.status.excused_accepted'), { exact: true })).toBeVisible()
       expect(backend.db.attendees[2].status).toBe('excused_accepted')
     })
 
-    await test.step('someone runs a poll, a friend votes and the poll becomes an event', async () => {
+    await step('someone runs a poll, a friend votes and the poll becomes an event', async () => {
       await page.goto('/#/poll/new')
       await page.getByPlaceholder(t('common.namePlaceholder')).fill(input.organizer)
       await page.getByPlaceholder(t('createPoll.namePlaceholder')).fill(input.poll)
@@ -294,22 +310,21 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(page.getByRole('button', { name: t('poll.copyVoteLink') })).toBeVisible()
 
       // The friend votes from their own browser, where the same link is the voting page.
-      const voterContext = await browser.newContext({
-        baseURL: test.info().project.use.baseURL,
-        serviceWorkers: 'block',
-        timezoneId: 'Europe/Prague',
-        reducedMotion: 'reduce',
-      })
-      const voterPage = await voterContext.newPage()
-      await preparePage(voterPage)
-      await voterPage.goto(`/#/poll/${pollId}`)
-      await expect(voterPage.getByRole('button', { name: t('poll.copyVoteLink') })).toBeHidden()
-      await voterPage.getByPlaceholder(t('common.guestNamePlaceholder')).fill(input.voter)
-      await voterPage.getByRole('radio').first().check()
-      await voterPage.getByRole('button', { name: t('poll.vote'), exact: true }).click()
-      await expect(voterPage.getByText(t('poll.voteSaved'), { exact: true }).first()).toBeVisible()
-      await expect(voterPage.getByText(t('poll.votes', { count: 1 }), { exact: true })).toBeVisible()
-      await voterContext.close()
+      const voterContext = await browser.newContext(CONTEXT_OPTIONS)
+
+      try {
+        const voterPage = await voterContext.newPage()
+        await preparePage(voterPage)
+        await voterPage.goto(`/#/poll/${pollId}`)
+        await expect(voterPage.getByRole('button', { name: t('poll.copyVoteLink') })).toBeHidden()
+        await voterPage.getByPlaceholder(t('common.guestNamePlaceholder')).fill(input.voter)
+        await voterPage.getByRole('radio').first().check()
+        await voterPage.getByRole('button', { name: t('poll.vote'), exact: true }).click()
+        await expect(voterPage.getByText(t('poll.voteSaved'), { exact: true }).first()).toBeVisible()
+        await expect(voterPage.getByText(t('poll.votes', { count: 1 }), { exact: true })).toBeVisible()
+      } finally {
+        await voterContext.close()
+      }
 
       await page.reload()
       await expect(page.getByText(t('poll.votes', { count: 1 }), { exact: true })).toBeVisible()
@@ -325,7 +340,7 @@ for (const locale of ['cs', 'en'] as const) {
       expect(backend.db.polls[0].finalized_event_id).toBe(backend.db.events[1].id)
     })
 
-    await test.step('the organizer sends an idea and switches to dark mode', async () => {
+    await step('the organizer sends an idea and switches to dark mode', async () => {
       await page.getByRole('button', { name: t('feedback.fabLabel') }).click()
       await dialog.getByRole('button', { name: t('feedback.types.idea') }).click()
       await expect(dialog.getByRole('heading', { name: t('feedback.idea.title') })).toBeVisible()
@@ -339,7 +354,7 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(page.locator('html')).toHaveClass(/\bdark\b/)
     })
 
-    await test.step('the organizer deletes the first event with everything in it', async () => {
+    await step('the organizer deletes the first event with everything in it', async () => {
       // The PIN unlock saved the organizer link in this browser.
       await page.goto(`/#/event/${eventId}/manage`)
       await expect(page.getByRole('heading', { level: 1, name: input.event })).toBeVisible()
@@ -350,9 +365,5 @@ for (const locale of ['cs', 'en'] as const) {
       expect(backend.db.attendees.filter((attendee) => attendee.event_id === eventId)).toEqual([])
       expect(backend.db.items.filter((item) => item.event_id === eventId)).toEqual([])
     })
-
-    expect(backend.unexpected).toEqual([])
-    expect(realSupabaseRequests).toEqual([])
-    expect(pageErrors).toEqual([])
   })
 }
