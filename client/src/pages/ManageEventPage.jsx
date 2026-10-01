@@ -467,7 +467,7 @@ function ManageEventPage() {
         />
 
         <ModalOverlay open={eventForm !== null} onClose={closeEditEventModal} labelledBy="manage-edit-event-title">
-          <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
+          <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-lg sm:rounded-[1.75rem] sm:p-6">
             <div className="mb-5">
               <p className="accent-copy text-sm font-semibold uppercase tracking-[0.22em]">{t('manage.editEvent')}</p>
               <h3 id="manage-edit-event-title" className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-900 dark:text-slate-50">

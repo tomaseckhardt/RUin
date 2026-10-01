@@ -1,15 +1,30 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices, type BrowserContextOptions } from '@playwright/test'
 import { SUPABASE_URL } from './fakeSupabase.ts'
 
 // E2E_PORT: another port when 5288 is taken, e.g. by the VS Code extension's server.
 const PORT = Number(process.env.E2E_PORT) || 5288
 
+// Every browser context's options: the test's own page gets them through `use`,
+// and app.e2e.ts opens the poll voter's second browser with them.
+export const CONTEXT_OPTIONS = {
+  ...devices['Desktop Chrome'],
+  baseURL: `http://localhost:${PORT}`,
+  viewport: { width: 1280, height: 900 },
+  timezoneId: 'Europe/Prague',
+  // Animations off (the app honours prefers-reduced-motion): Playwright waits
+  // for every element to stop moving before it clicks, so they only add time.
+  reducedMotion: 'reduce',
+  // Requests from a service worker would bypass the fake backend.
+  serviceWorkers: 'block',
+} satisfies BrowserContextOptions
+
 export default defineConfig({
   testDir: '.',
   testMatch: '*.e2e.ts',
   outputDir: 'test-results',
-  // A whole walk-through takes 10-12 s locally; CI runners are slower.
-  timeout: process.env.CI ? 30_000 : 15_000,
+  // A whole walk-through takes 13-15 s locally and longer on CI runners;
+  // twice that leaves room for a slow machine or another step.
+  timeout: 30_000,
   // Both languages at once. Both tests live in one file, and Playwright only
   // splits a file between workers when fullyParallel is on.
   fullyParallel: true,
@@ -19,17 +34,9 @@ export default defineConfig({
   retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    ...devices['Desktop Chrome'],
+    ...CONTEXT_OPTIONS,
     // CI runners come with Google Chrome, so CI skips downloading a browser.
     ...(process.env.CI ? { channel: 'chrome' } : {}),
-    baseURL: `http://localhost:${PORT}`,
-    viewport: { width: 1280, height: 900 },
-    timezoneId: 'Europe/Prague',
-    // Animations off (the app honours prefers-reduced-motion): Playwright waits
-    // for every element to stop moving before it clicks, so they only add time.
-    reducedMotion: 'reduce',
-    // Requests from a service worker would bypass the fake backend.
-    serviceWorkers: 'block',
     trace: 'retain-on-failure',
   },
   // Always a fresh dev server built against the fake Supabase URL - never

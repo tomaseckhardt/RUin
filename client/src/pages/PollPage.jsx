@@ -25,10 +25,11 @@ function PollPage() {
   const [searchParams] = useSearchParams()
   const urlToken = searchParams.get('token') || ''
   // A creator link's token is saved and dropped from the address bar (see
-  // loadPoll), so the poll's URL can be shared with voters as-is.
+  // the effect below loadPoll), so the poll's URL can be shared with voters as-is.
   const token = urlToken || getSavedPollCreatorToken(id) || null
   const fieldId = useId()
   const hasLoadedOnceRef = useRef(false)
+  const latestRequestIdRef = useRef(0)
   const [payload, setPayload] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -40,20 +41,24 @@ function PollPage() {
   const [isFinalizing, setIsFinalizing] = useState(false)
 
   async function loadPoll() {
+    // A refresh that answers after a newer load (the one after a vote) is dropped.
+    const requestId = ++latestRequestIdRef.current
+
     try {
       const data = await getPollPayload(id, token)
+
+      if (requestId !== latestRequestIdRef.current) {
+        return
+      }
+
       setPayload(data)
       hasLoadedOnceRef.current = true
       setError('')
-
-      if (urlToken) {
-        if (data.isCreator) {
-          savePollCreatorToken(id, urlToken)
-        }
-
-        navigate(`/poll/${id}`, { replace: true })
-      }
     } catch (loadError) {
+      if (requestId !== latestRequestIdRef.current) {
+        return
+      }
+
       if (hasLoadedOnceRef.current) {
         toast.error(loadError.message, { id: REFRESH_ERROR_TOAST_ID })
       } else {
@@ -73,6 +78,21 @@ function PollPage() {
     return () => clearInterval(intervalId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, token])
+
+  // Once the first payload says whose token it is, save a creator's and drop
+  // it from the URL. Its own effect: the refresh interval above keeps the
+  // first render's loadPoll, which would still see the URL token.
+  useEffect(() => {
+    if (!urlToken || !payload) {
+      return
+    }
+
+    if (payload.isCreator) {
+      savePollCreatorToken(id, urlToken)
+    }
+
+    navigate(`/poll/${id}`, { replace: true })
+  }, [id, urlToken, payload, navigate])
 
   async function handleCopyVoteLink() {
     try {
