@@ -10,9 +10,9 @@ import { expect, test, type Page } from '@playwright/test'
 import cs from '../src/locales/cs.js'
 import en from '../src/locales/en.js'
 import serverMessagesEn from '../src/locales/serverMessages.en.js'
+import { INPUT, type Locale } from './e2eInput.ts'
 import { createFakeSupabase } from './fakeSupabase.ts'
 
-type Locale = 'cs' | 'en'
 // A dictionary entry is a text, a list of texts, plural forms ({ one, other,
 // ... }) or a nested group of entries.
 type Dictionary = { [key: string]: string | string[] | Dictionary }
@@ -20,51 +20,6 @@ type TextParams = Record<string, string | number>
 
 const DICTIONARIES: Record<Locale, Dictionary> = { cs, en }
 const LOCALE_NAMES: Record<Locale, string> = { cs: 'Czech', en: 'English' }
-
-// What the test types in, per language. `satisfies` checks that both
-// languages fill in the same fields, while keeping each value's own type.
-const INPUT = {
-  cs: {
-    organizer: 'Eva',
-    event: 'Grilovačka na střeše',
-    location: 'Stromovka',
-    description: 'Přineste dobrou náladu.',
-    newDescription: 'Začínáme v 18:00, vezměte si deku.',
-    stop: 'Hospoda U Fleků',
-    item: 'Pivo',
-    guest: 'Petr',
-    secondGuest: 'Jana',
-    excuse: 'Mám noční směnu.',
-    chat: 'Ahoj všichni, těším se!',
-    comment: 'Super fotka!',
-    ping: 'Pojď aspoň na chvíli!',
-    poll: 'Kdy na hokej?',
-    pollPlaceA: 'Zimní stadion',
-    pollPlaceB: 'Hokejová hala',
-    voter: 'Karel',
-    feedback: 'Bylo by fajn exportovat itinerář do kalendáře.',
-  },
-  en: {
-    organizer: 'Eve',
-    event: 'Rooftop barbecue',
-    location: 'Stromovka',
-    description: 'Bring a good mood.',
-    newDescription: 'We start at 6 pm, bring a blanket.',
-    stop: 'The Old Pub',
-    item: 'Beer',
-    guest: 'Peter',
-    secondGuest: 'Jane',
-    excuse: 'I have a night shift.',
-    chat: 'Hi everyone, looking forward to it!',
-    comment: 'Great photo!',
-    ping: 'Come at least for a bit!',
-    poll: 'When do we play hockey?',
-    pollPlaceA: 'Winter stadium',
-    pollPlaceB: 'Hockey hall',
-    voter: 'Charles',
-    feedback: 'It would be nice to export the itinerary to a calendar.',
-  },
-} satisfies Record<Locale, Record<string, string>>
 
 // A 1x1 PNG to upload as a photo.
 const PHOTO = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
@@ -339,7 +294,12 @@ for (const locale of ['cs', 'en'] as const) {
       await expect(page.getByRole('button', { name: t('poll.copyVoteLink') })).toBeVisible()
 
       // The friend votes from their own browser, where the same link is the voting page.
-      const voterContext = await browser.newContext({ baseURL: test.info().project.use.baseURL, serviceWorkers: 'block', timezoneId: 'Europe/Prague', reducedMotion: 'reduce' })
+      const voterContext = await browser.newContext({
+        baseURL: test.info().project.use.baseURL,
+        serviceWorkers: 'block',
+        timezoneId: 'Europe/Prague',
+        reducedMotion: 'reduce',
+      })
       const voterPage = await voterContext.newPage()
       await preparePage(voterPage)
       await voterPage.goto(`/#/poll/${pollId}`)
