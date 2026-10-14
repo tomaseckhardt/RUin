@@ -385,8 +385,8 @@ export default {
     downloaded: 'Calendar file downloaded. The reminder is set for 2 days before.',
     menuLabel: 'Pick a calendar',
     options: {
-      google: 'Google Calendar',
-      apple: 'Apple Calendar',
+      google: 'Google',
+      apple: 'Apple',
       outlook: 'Outlook',
     },
   },
