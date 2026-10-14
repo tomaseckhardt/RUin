@@ -45,7 +45,7 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 - album fotek z akce s rozklikávacím náhledem (šipky mezi fotkami) a hromadným stažením fotek ostatních (jedním klikem jako ZIP, bez těch, které nahrál přihlášený uživatel sám)
 - lajky a komentáře u fotek: kdokoli s pozvánkou může fotku pod svým jménem lajknout a okomentovat, počty jsou vidět rovnou v albu
 - předpověď počasí pro místo a čas akce (Open-Meteo, až 16 dní dopředu)
-- přidání do kalendáře (Google Kalendář, na iPhonu `.ics` soubor s upozorněním 2 dny předem) a na plochu telefonu (PWA)
+- přidání do kalendáře (nabídka: Google Kalendář, Apple Kalendář / iCal, Outlook, nebo stažení `.ics` souboru s upozorněním 2 dny předem) a na plochu telefonu (PWA)
 - sdílení pozvánky (odkaz, QR kód, QR plakátek ke stažení)
 - push připomínky den a hodinu před akcí
 
@@ -60,12 +60,13 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 **Obecně**
 
 - čeština a angličtina - jazyk se vybere podle prohlížeče a přepíná se přepínačem CZ | EN v hlavičce (viz [Lokalizace](#lokalizace-čeština-a-angličtina)); vedle je přepínač světlého a tmavého režimu
+- animace (přechody stránek, modály, oslava po RSVP) se vypnou, když má systém zapnuté omezení pohybu (`prefers-reduced-motion`)
 - offline režim - při výpadku připojení se ukáže upozornění a RSVP, check-in i přihlášení/odhlášení u položek se odešlou, až bude připojení zpátky; aplikaci, kterou prohlížeč už jednou načetl, jde díky service workeru otevřít i bez sítě (data ale bez připojení nenačte)
 - plovoucí tlačítko na každé stránce pro nahlášení chyby nebo nápadu na vylepšení; přehled všech hlášení je na `/feedback` (veřejná stránka, bez PINu)
 
 ## Stránky aplikace
 
-Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguje routing na Pages](#jak-funguje-routing-na-pages)). Neznámá adresa přesměruje na úvod.
+Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguje routing na Pages](#jak-funguje-routing-na-pages)). Neznámá adresa ukáže stránku 404 (s RUdym po kocovině) a odkazem zpátky na úvod.
 
 | Cesta | Stránka |
 | --- | --- |
@@ -76,10 +77,11 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
 | `/poll/:id` | hlasování v anketě; tvůrci (jeho prohlížeč má uložený token) ukáže vyhodnocení. Odkaz s `?token=…` token uloží a z adresy ho odstraní |
 | `/moje` | moje skupiny a šablony |
 | `/feedback` | přehled nahlášených chyb a nápadů |
+| cokoli jiného | stránka 404 s odkazem na úvod |
 
 ## Technologický stack
 
-- Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasty), `qrcode` (QR kódy), `jszip` (ZIP s fotkami)
+- Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasty), `qrcode` (QR kódy), `jszip` (ZIP s fotkami). Úvodní stránka je v hlavním balíčku, ostatní stránky i `qrcode` a `jszip` se stáhnou až ve chvíli, kdy jsou poprvé potřeba.
 - Backend: Supabase - Postgres + RPC funkce (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - Externí služby: Open-Meteo (geokódování a předpověď počasí), Google Fonts (Space Grotesk)
 - Testy: Jest + Testing Library (`client/tests/componentsTests/*.test.ts(x)`), `jest-axe` pro a11y assertions v testech (`npm --prefix client run test:a11y`), E2E test v Playwrightu (`client/tests/app.e2e.ts`) a bezpečnostní test databáze (`supabase/tests/security.sql`)
@@ -93,7 +95,7 @@ Aplikace používá `HashRouter`, adresy tedy začínají `/#/` (viz [Jak funguj
   - `src/lib/` - API vrstva (`api.js` je jediné místo, které volá Supabase RPC), Supabase klient, překlady (`i18n.js`) a helpery (formátování, počasí, push, QR plakátek, localStorage)
   - `src/locales/` - slovníky textů UI (`cs.js`, `en.js`) a anglické znění chybových hlášek z databáze (`serverMessages.en.js`)
   - `tests/componentsTests/` - testy v Jestu (`*.test.ts(x)`), sdílené testovací helpery a Jest setup
-  - `tests/` - E2E test v Playwrightu (`app.e2e.ts`) s falešným Supabase v paměti (`fakeSupabase.ts`) a jeho konfigurace (`playwright.config.ts`)
+  - `tests/` - E2E test v Playwrightu (`app.e2e.ts`) s falešným Supabase v paměti (`fakeSupabase.ts`), texty, které test vyplňuje v obou jazycích (`e2eInput.ts`), a jeho konfigurace (`playwright.config.ts`, včetně nastavení prohlížeče sdíleného s druhým prohlížečem v testu)
   - `public/` - service worker (`sw.js`), ikony a manifest
   - `scripts/run-vite-safe.mjs` - spouští Vite z dočasné kopie projektu (viz [NPM skripty](#npm-skripty))
 - `supabase/sql/all-phases.sql` - celé databázové schéma, jediný SQL soubor
@@ -203,7 +205,7 @@ Klient (`client/package.json`):
 - `npm --prefix client run test` - Jest (jednotkové, komponentové + a11y testy, `*.test.ts(x)`)
 - `npm --prefix client run test:a11y` - jen testy odpovídající vzoru `a11y`
 - `npm --prefix client run typecheck` - typová kontrola testů (`tsc -p tests`). Testy jsou v TypeScriptu, aplikace zůstává v JavaScriptu; Jest i Playwright typy jen odstraní, kontroluje je až tenhle skript (a CI).
-- `npm --prefix client run test:e2e` - E2E test v Playwrightu: projde celou aplikaci (založení akce, úpravy, RSVP, chat, bring list, nahrání a smazání vlastní fotky, šťouchnutí, odemčení PINem včetně chybného PINu, schválení omluvenky, anketa s hlasováním z druhého prohlížeče, feedback, tmavý režim, smazání akce) jednou česky a jednou anglicky. Sám spustí dev server proti falešnému Supabase v paměti, na skutečný projekt nesahá. Poprvé je potřeba `npx playwright install chromium`.
+- `npm --prefix client run test:e2e` - E2E test v Playwrightu: projde celou aplikaci (založení akce, úpravy, RSVP, chat, bring list, nahrání a smazání vlastní fotky, šťouchnutí, odemčení PINem včetně chybného PINu, schválení omluvenky, anketa s hlasováním z druhého prohlížeče, feedback, tmavý režim, smazání akce) jednou česky a jednou anglicky. Sám spustí dev server proti falešnému Supabase v paměti, na skutečný projekt nesahá. Poprvé (a po každém updatu Playwrightu) je potřeba `npx playwright install chromium`. Když je port 5288 obsazený (třeba serverem rozšíření ve VS Code), spusť ho s jiným: `E2E_PORT=5300 npm --prefix client run test:e2e`.
 
 `dev`, `build` i `preview` v klientovi běží přes `client/scripts/run-vite-safe.mjs`. Ten zkopíruje projekt do dočasné složky (`src` a `public` jen nalinkuje) a Vite spustí tam, protože Vite si neporadí s cestou obsahující třeba `?` (složka "Are you in?"). Úpravy v `src/` a `public/` se projeví hned, po změně `vite.config.js` nebo `package.json` je potřeba dev server restartovat. Vlastní parametry pro Vite předej přímo tomuhle skriptu, např. `node scripts/run-vite-safe.mjs dev --host 127.0.0.1` v adresáři `client` - přes `npm run dev -- ...` se neprojdou.
 
@@ -212,7 +214,8 @@ Klient (`client/package.json`):
 - `npm test` spustí Jest (jsdom + Testing Library + `jest-axe`): jednotkové testy `lib/`, testy komponent a a11y testy.
 - Testy lokalizace hlídají, že `cs.js` a `en.js` mají stejné klíče i `{placeholdery}` a že každá hláška z `all-phases.sql` i z Edge Function `delete-event-data` má anglický překlad (viz [Lokalizace](#lokalizace-čeština-a-angličtina)).
 - Jest setup (`client/tests/componentsTests/setup.ts`) přepíná UI do češtiny - jsdom se jinak hlásí jako `en-US` a aplikace by běžela anglicky.
-- E2E test (`npm --prefix client run test:e2e`) běží proti falešnému Supabase v paměti (`client/tests/fakeSupabase.ts`), který kontroluje totéž co SQL tam, kde na tom klient závisí (tokeny, cooldowny, složka a název fotky, …). Při změně RPC, na kterou E2E narazí, uprav i ten.
+- Jest běží v časové zóně `America/Los_Angeles` (nastavuje ji `client/jest.config.js`), aby se projevil kód, který omylem bere místní datum zařízení místo pražského.
+- E2E test (`npm --prefix client run test:e2e`) běží proti falešnému Supabase v paměti (`client/tests/fakeSupabase.ts`), který kontroluje totéž co SQL tam, kde na tom klient závisí (tokeny, cooldowny, složka a název fotky, …). Při změně RPC, na kterou E2E narazí, uprav i ten. Test běží v časové zóně Europe/Prague s omezeným pohybem (animace by jen zdržovaly klikání) a po každém kroku kontroluje, že nešel žádný požadavek, na který falešný backend neumí odpovědět, nebo na skutečný Supabase. Hlídá i chyby stránky (`pageerror`), ty ale nemusí zachytit všechny: výjimka z časovače se kvůli falešným hodinám (`page.clock`) do testu nedostane. Časový limit je 30 s, lokálně běh trvá 14-15 s.
 - CI (`.github/workflows/deploy-pages.yml`) spouští vedle sebe čtyři joby při každém pull requestu do `main` i při push do `main`: `checks` (lint, typová kontrola testů, Jest), `e2e` (E2E test bez opakování neúspěšných testů, v CI proti Google Chrome z runneru, takže se nestahuje žádný prohlížeč; při selhání nahraje trace jako artefakt), `sql` (v čistém Postgresu 17 připraví `supabase/tests/supabase-stub.sql` to, co jinak dodá Supabase - role, `pgcrypto` ve schématu `extensions`, minimální `storage` a publikaci `supabase_realtime` - pak dvakrát spustí `all-phases.sql`, čímž ověří i jeho idempotenci, a nakonec `supabase/tests/security.sql`) a `edge-functions` (`deno check` všech `supabase/functions/*/index.ts`; `supabase/functions/deno.json` vypíná `node_modules` z kořene repa). U pull requestu, který nemění `supabase/sql/` ani `supabase/tests/` (resp. `supabase/functions/`) ani workflow, `sql` (resp. `edge-functions`) jen přeskočí své kroky a projde. Build a deploy běží jen při push do `main` (nebo ručním spuštění) a jen když projdou všechny čtyři joby.
 - Jest nefunguje, když cesta k projektu obsahuje `?` - viz [Troubleshooting](#troubleshooting).
 
@@ -464,6 +467,10 @@ Starší verze service workeru (`ruin-app-shell-v1`) si ukládala i soubory z Vi
 ### Stránka se neotevře na http://127.0.0.1:5173
 
 Vite poslouchá na `localhost`, což se může přeložit jen na IPv6 (`::1`). Otevři http://localhost:5173/, nebo dev server spusť s `--host 127.0.0.1` (viz [NPM skripty](#npm-skripty)).
+
+### E2E test hlásí "Executable doesn't exist at …/ms-playwright/…"
+
+Nová verze Playwrightu potřebuje novou verzi prohlížeče. Spusť `npx playwright install chromium` v adresáři `client`.
 
 ### `npm test` hlásí "Module <rootDir>/tests/componentsTests/setup.ts ... was not found"
 

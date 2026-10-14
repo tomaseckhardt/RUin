@@ -1,16 +1,14 @@
-import { useEffect } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { downloadBlob } from '../lib/download.js'
 import { buildAbsoluteUrl, parseEventDateTime } from '../lib/format.js'
 import { t, useI18n } from '../lib/i18n.js'
 
 const MOBILE_BROWSER_RE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
-const IN_APP_BROWSER_RE = /Instagram|FBAN|FBAV|TikTok|Line|Slack|WhatsApp|Messenger/i
-const WEBVIEW_RE = /WebView|wv\)|Version\//i
 const APPLE_DEVICE_RE = /iPhone|iPad|iPod/i
 const ICS_LINE_LENGTH_LIMIT = 75
 const ICS_LINE_FOLD_LENGTH = 74
-const CALENDAR_AUTO_OPEN_DELAY_MS = 150
 
 // 2026-05-01T18:30:00.000Z -> 20260501T183000Z. toISOString() throws on an
 // invalid date, which sends the callers to their fallback.
@@ -172,104 +170,160 @@ function buildIcs(eventData) {
     .join('\r\n')
 }
 
-function isInAppBrowser() {
-  const userAgent = navigator.userAgent || ''
-  const isInApp = IN_APP_BROWSER_RE.test(userAgent)
-  const hasWebViewMarker = WEBVIEW_RE.test(userAgent)
-  const isStandaloneIOS = APPLE_DEVICE_RE.test(userAgent) && 'standalone' in window.navigator && window.navigator.standalone
+function buildOutlookCalendarUrl(eventData) {
+  const startDate = parseEventDateTime(eventData.datetime) ?? new Date(eventData.datetime)
+  const eventUrl = buildEventUrl(eventData)
+  const params = new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    subject: eventData.name || '',
+    startdt: startDate.toISOString(),
+    enddt: addHours(startDate, 3).toISOString(),
+    body: [eventData.description || '', eventUrl ? `${t('calendar.googleLinkLabel')} ${eventUrl}` : ''].filter(Boolean).join('\n\n'),
+    location: eventData.location || '',
+  })
 
-  return isInApp || hasWebViewMarker || isStandaloneIOS
+  return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`
 }
 
-function isAppleDevice() {
-  return APPLE_DEVICE_RE.test(navigator.userAgent)
-}
+// Google and Outlook are plain https links, so they work from in-app browsers
+// (Instagram, Messenger, ...) too; the .ics options need a real browser.
+const CALENDAR_OPTIONS = [
+  { key: 'google', open: (eventData) => openCalendarUrl(buildGoogleCalendarUrl(eventData)) },
+  { key: 'apple', open: exportIcs, toastKey: 'calendar.downloaded' },
+  { key: 'outlook', open: (eventData) => openCalendarUrl(buildOutlookCalendarUrl(eventData)) },
+  {
+    key: 'download',
+    open: (eventData) => downloadBlob(new Blob([buildIcs(eventData)], { type: 'text/calendar;charset=utf-8' }), getCalendarFileName(eventData)),
+    toastKey: 'calendar.downloaded',
+  },
+]
 
 function AddToCalendarButton({ eventData }) {
   // The helpers above call t() directly when a click builds the calendar
-  // entry; the hook only re-renders the button label on a language switch.
+  // entry; the hook only re-renders the labels on a language switch.
   useI18n()
-  const eventId = eventData?.id ?? ''
-  const eventDateTime = eventData?.datetime
+  const [isOpen, setIsOpen] = useState(false)
+  const triggerContainerRef = useRef(null)
+  const triggerRef = useRef(null)
+  const menuRef = useRef(null)
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 })
+  const menuId = useId()
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return undefined
+    }
+
+    function positionMenu() {
+      const triggerRect = triggerRef.current?.getBoundingClientRect()
+      if (!triggerRect) {
+        return
+      }
+
+      const menuWidth = menuRef.current?.offsetWidth || 224
+      const menuHeight = menuRef.current?.offsetHeight || 160
+      const left = Math.max(8, Math.min(triggerRect.left, window.innerWidth - menuWidth - 8))
+      let top = triggerRect.bottom + 8
+
+      if (top + menuHeight > window.innerHeight - 8 && triggerRect.top - menuHeight - 8 >= 8) {
+        top = triggerRect.top - menuHeight - 8
+      }
+
+      setMenuPosition({ left, top })
+    }
+
+    positionMenu()
+    window.addEventListener('resize', positionMenu)
+    window.addEventListener('scroll', positionMenu, true)
+    return () => {
+      window.removeEventListener('resize', positionMenu)
+      window.removeEventListener('scroll', positionMenu, true)
+    }
+  }, [isOpen])
 
   useEffect(() => {
-    if (!eventDateTime) {
+    if (!isOpen) {
       return undefined
     }
 
-    const params = new URLSearchParams(window.location.search)
-    const shouldAutoOpen = params.get('calendarAutoOpen') === '1' && params.get('calendarEventId') === eventId
+    // The device's own calendar gets the focus, so Enter picks it.
+    const preferredKey = APPLE_DEVICE_RE.test(navigator.userAgent) ? 'apple' : 'google'
+    menuRef.current?.querySelector(`[data-calendar="${preferredKey}"]`)?.focus()
 
-    if (!shouldAutoOpen) {
-      return undefined
-    }
-
-    const url = new URL(window.location.href)
-    url.searchParams.delete('calendarAutoOpen')
-    url.searchParams.delete('calendarEventId')
-    window.history.replaceState({}, '', url)
-
-    const timer = window.setTimeout(() => {
-      try {
-        openCalendarUrl(buildGoogleCalendarUrl(eventData))
-      } catch {
-        try {
-          exportIcs(eventData)
-        } catch {
-          toast.error(t('calendar.error'))
-        }
+    function closeOnOutsideClick(event) {
+      if (!triggerContainerRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) {
+        setIsOpen(false)
       }
-    }, CALENDAR_AUTO_OPEN_DELAY_MS)
+    }
 
-    return () => window.clearTimeout(timer)
-  }, [eventData, eventId, eventDateTime])
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [isOpen])
 
   if (!eventData?.datetime) {
     return null
   }
 
-  function handleInAppBrowserCalendarClick() {
-    const targetUrl = new URL(window.location.href)
-    targetUrl.searchParams.set('calendarAutoOpen', '1')
-    targetUrl.searchParams.set('calendarEventId', eventData.id ?? '')
-
-    toast.info(t('calendar.openingExternalBrowser'))
-    openCalendarUrl(targetUrl.toString())
-  }
-
-  // Apple devices get the .ics file, which opens their native calendar;
-  // everyone else gets Google Calendar, with the file as the fallback.
-  function handleNormalBrowserCalendarClick() {
-    if (!isAppleDevice()) {
-      try {
-        openCalendarUrl(buildGoogleCalendarUrl(eventData))
-        return
-      } catch {
-        // Fall through to ICS export below.
-      }
-    }
+  function handlePick(option) {
+    setIsOpen(false)
 
     try {
-      exportIcs(eventData)
-      toast.success(t('calendar.downloaded'))
+      option.open(eventData)
+
+      if (option.toastKey) {
+        toast.success(t(option.toastKey))
+      }
     } catch {
       toast.error(t('calendar.error'))
     }
   }
 
-  function handleCalendarClick() {
-    if (isInAppBrowser()) {
-      handleInAppBrowserCalendarClick()
-      return
-    }
-
-    handleNormalBrowserCalendarClick()
-  }
-
   return (
-    <button type="button" className="secondary-button" onClick={handleCalendarClick}>
-      {t('calendar.button')}
-    </button>
+    <div ref={triggerContainerRef} className="relative inline-block">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="secondary-button"
+        aria-expanded={isOpen}
+        aria-controls={menuId}
+        onClick={() => setIsOpen((current) => !current)}>
+        {t('calendar.button')}
+      </button>
+      {isOpen
+        ? createPortal(
+            <ul
+              ref={menuRef}
+              id={menuId}
+              aria-label={t('calendar.menuLabel')}
+              className="fixed z-20 w-56 max-w-[calc(100vw-1rem)] rounded-2xl border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+              style={menuPosition}>
+              {CALENDAR_OPTIONS.map((option) => (
+                <li key={option.key}>
+                  <button
+                    type="button"
+                    data-calendar={option.key}
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 focus:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800 dark:focus:bg-slate-800"
+                    onClick={() => handlePick(option)}>
+                    {t(`calendar.options.${option.key}`)}
+                  </button>
+                </li>
+              ))}
+            </ul>,
+            document.body,
+          )
+        : null}
+    </div>
   )
 }
 

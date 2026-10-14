@@ -45,7 +45,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 - an event photo album with a clickable preview (arrows between photos) and a bulk download of everyone else's photos (one click, as a ZIP, without the ones the signed-in user uploaded themselves)
 - likes and comments on photos: anyone with the invite can like and comment on a photo under their name, and the counts show right in the album
 - a weather forecast for the event's place and time (Open-Meteo, up to 16 days ahead)
-- adding the event to a calendar (Google Calendar; on iPhone an `.ics` file with a reminder 2 days before) and the app to the phone's home screen (PWA)
+- adding the event to a calendar (a menu: Google Calendar, Apple Calendar / iCal, Outlook, or downloading an `.ics` file with a reminder 2 days before) and the app to the phone's home screen (PWA)
 - sharing the invite (link, QR code, downloadable QR poster)
 - push reminders a day and an hour before an event
 
@@ -60,12 +60,13 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 **General**
 
 - Czech and English - the language is picked from the browser and switched with the CZ | EN toggle in the header (see [Localization](#localization-czech-and-english)); next to it is the light/dark mode toggle
+- animations (page transitions, modals, the celebration after an RSVP) are turned off when the system asks for reduced motion (`prefers-reduced-motion`)
 - offline mode - when the connection drops, a notice appears, and RSVPs, check-ins and signing up for or backing out of items are sent once the connection is back; an app the browser has loaded before opens even without a network thanks to the service worker (it can't load data without a connection, though)
 - a floating button on every page for reporting a bug or suggesting an improvement; all reports are listed at `/feedback` (a public page, no PIN)
 
 ## App pages
 
-The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works on Pages](#how-routing-works-on-pages)). An unknown address redirects to the home page.
+The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works on Pages](#how-routing-works-on-pages)). An unknown address shows a 404 page (with a hungover RUdy) and a link back to the home page.
 
 | Path | Page |
 | --- | --- |
@@ -76,10 +77,11 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
 | `/poll/:id` | voting in a poll; its creator (whose browser has the token saved) gets the results view. A link with `?token=…` saves the token and drops it from the address |
 | `/moje` | my groups & templates |
 | `/feedback` | the list of reported bugs and ideas |
+| anything else | a 404 page with a link home |
 
 ## Tech stack
 
-- Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasts), `qrcode` (QR codes), `jszip` (photo ZIPs)
+- Frontend: React 19, Vite 8, Tailwind CSS 4, React Router 7, `sonner` (toasts), `qrcode` (QR codes), `jszip` (photo ZIPs). The home page is in the main bundle; the other pages, `qrcode` and `jszip` download only when they're first needed.
 - Backend: Supabase - Postgres + RPC functions (`SECURITY DEFINER`) + RLS + Realtime + Storage + Edge Functions (Deno)
 - External services: Open-Meteo (geocoding and weather forecast), Google Fonts (Space Grotesk)
 - Tests: Jest + Testing Library (`client/tests/componentsTests/*.test.ts(x)`), `jest-axe` for a11y assertions in tests (`npm --prefix client run test:a11y`), a Playwright E2E test (`client/tests/app.e2e.ts`) and a database security test (`supabase/tests/security.sql`)
@@ -93,7 +95,7 @@ The app uses `HashRouter`, so addresses start with `/#/` (see [How routing works
   - `src/lib/` - the API layer (`api.js` is the only place that calls Supabase RPCs), the Supabase client, translations (`i18n.js`) and helpers (formatting, weather, push, QR poster, localStorage)
   - `src/locales/` - UI text dictionaries (`cs.js`, `en.js`) and the English wording of the database error messages (`serverMessages.en.js`)
   - `tests/componentsTests/` - the Jest tests (`*.test.ts(x)`), shared test helpers and the Jest setup
-  - `tests/` - the Playwright E2E test (`app.e2e.ts`) with an in-memory fake Supabase (`fakeSupabase.ts`) and its config (`playwright.config.ts`)
+  - `tests/` - the Playwright E2E test (`app.e2e.ts`) with an in-memory fake Supabase (`fakeSupabase.ts`), the texts the test types in both languages (`e2eInput.ts`) and its config (`playwright.config.ts`, including the browser options shared with the test's second browser)
   - `public/` - service worker (`sw.js`), icons and the manifest
   - `scripts/run-vite-safe.mjs` - runs Vite from a temporary copy of the project (see [NPM scripts](#npm-scripts))
 - `supabase/sql/all-phases.sql` - the whole database schema, a single SQL file
@@ -203,7 +205,7 @@ Client (`client/package.json`):
 - `npm --prefix client run test` - Jest (unit, component + a11y tests, `*.test.ts(x)`)
 - `npm --prefix client run test:a11y` - only the tests matching the `a11y` pattern
 - `npm --prefix client run typecheck` - type-checks the tests (`tsc -p tests`). The tests are TypeScript while the app stays JavaScript; Jest and Playwright only strip the types, so this script (and CI) is what checks them.
-- `npm --prefix client run test:e2e` - the Playwright E2E test: walks through the whole app (creating an event, editing it, RSVPs, chat, bring list, uploading and deleting your own photo, pings, unlocking with the PIN including a wrong one, accepting an excuse, a poll voted on from a second browser, feedback, dark mode, deleting the event) once in Czech and once in English. It starts its own dev server against an in-memory fake Supabase and never touches the real project. Run `npx playwright install chromium` once first.
+- `npm --prefix client run test:e2e` - the Playwright E2E test: walks through the whole app (creating an event, editing it, RSVPs, chat, bring list, uploading and deleting your own photo, pings, unlocking with the PIN including a wrong one, accepting an excuse, a poll voted on from a second browser, feedback, dark mode, deleting the event) once in Czech and once in English. It starts its own dev server against an in-memory fake Supabase and never touches the real project. Run `npx playwright install chromium` first (and after every Playwright update). When port 5288 is taken (e.g. by the VS Code extension's server), pick another one: `E2E_PORT=5300 npm --prefix client run test:e2e`.
 
 The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-safe.mjs`. It copies the project into a temporary folder (only symlinking `src` and `public`) and runs Vite there, because Vite can't cope with a path that contains e.g. a `?` (the "Are you in?" folder). Changes in `src/` and `public/` show up right away; after changing `vite.config.js` or `package.json`, restart the dev server. Pass your own Vite options straight to this script, e.g. `node scripts/run-vite-safe.mjs dev --host 127.0.0.1` in the `client` directory - they don't get through `npm run dev -- ...`.
 
@@ -212,7 +214,8 @@ The client's `dev`, `build` and `preview` run through `client/scripts/run-vite-s
 - `npm test` runs Jest (jsdom + Testing Library + `jest-axe`): unit tests for `lib/`, component tests and a11y tests.
 - The localization tests check that `cs.js` and `en.js` have the same keys and `{placeholders}`, and that every message in `all-phases.sql` and in the `delete-event-data` Edge Function has an English translation (see [Localization](#localization-czech-and-english)).
 - The Jest setup (`client/tests/componentsTests/setup.ts`) switches the UI to Czech - jsdom reports itself as `en-US`, so the app would otherwise run in English.
-- The E2E test (`npm --prefix client run test:e2e`) runs against an in-memory fake Supabase (`client/tests/fakeSupabase.ts`) that checks the same things as the SQL wherever the client depends on them (tokens, cooldowns, a photo's folder and file name, …). When you change an RPC the E2E test uses, update the fake too.
+- Jest runs in the `America/Los_Angeles` timezone (set by `client/jest.config.js`), so code that wrongly uses the device's local date instead of Prague's shows up.
+- The E2E test (`npm --prefix client run test:e2e`) runs against an in-memory fake Supabase (`client/tests/fakeSupabase.ts`) that checks the same things as the SQL wherever the client depends on them (tokens, cooldowns, a photo's folder and file name, …). When you change an RPC the E2E test uses, update the fake too. The test runs in the Europe/Prague timezone with reduced motion (animations would only slow the clicks down) and after every step checks that no request went unanswered by the fake backend or out to a real Supabase. It watches for page errors (`pageerror`) too, but may not catch all of them: an exception thrown from a timer doesn't reach the test because of the fake clock (`page.clock`). The timeout is 30 s; a local run takes 14-15 s.
 - CI (`.github/workflows/deploy-pages.yml`) runs four jobs side by side on every pull request to `main` and on every push to `main`: `checks` (lint, the test type-check, Jest), `e2e` (the E2E test with no retries of failed tests, run in CI against the runner's Google Chrome, so no browser is downloaded; when it fails, it uploads the traces as an artifact), `sql` (in a plain Postgres 17, `supabase/tests/supabase-stub.sql` sets up what Supabase otherwise provides - the roles, `pgcrypto` in the `extensions` schema, a minimal `storage` and the `supabase_realtime` publication - then `all-phases.sql` runs twice, which also proves it is idempotent, and finally `supabase/tests/security.sql`) and `edge-functions` (`deno check` on every `supabase/functions/*/index.ts`; `supabase/functions/deno.json` turns off the repo root's `node_modules`). On a pull request that changes neither `supabase/sql/` nor `supabase/tests/` (or `supabase/functions/` respectively) nor the workflow, `sql` (or `edge-functions`) just skips its steps and passes. Build and deploy run only on a push to `main` (or a manual run), and only when all four jobs pass.
 - Jest doesn't work when the project path contains a `?` - see [Troubleshooting](#troubleshooting).
 
@@ -464,6 +467,10 @@ An older version of the service worker (`ruin-app-shell-v1`) also cached files f
 ### The page won't open at http://127.0.0.1:5173
 
 Vite listens on `localhost`, which may resolve to IPv6 only (`::1`). Open http://localhost:5173/, or start the dev server with `--host 127.0.0.1` (see [NPM scripts](#npm-scripts)).
+
+### The E2E test reports "Executable doesn't exist at …/ms-playwright/…"
+
+A new Playwright version needs a new browser build. Run `npx playwright install chromium` in the `client` directory.
 
 ### `npm test` reports "Module <rootDir>/tests/componentsTests/setup.ts ... was not found"
 
