@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { downloadBlob } from '../lib/download.js'
 import { buildAbsoluteUrl, parseEventDateTime } from '../lib/format.js'
@@ -203,8 +204,43 @@ function AddToCalendarButton({ eventData }) {
   // entry; the hook only re-renders the labels on a language switch.
   useI18n()
   const [isOpen, setIsOpen] = useState(false)
+  const triggerContainerRef = useRef(null)
+  const triggerRef = useRef(null)
   const menuRef = useRef(null)
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 })
   const menuId = useId()
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return undefined
+    }
+
+    function positionMenu() {
+      const triggerRect = triggerRef.current?.getBoundingClientRect()
+      if (!triggerRect) {
+        return
+      }
+
+      const menuWidth = menuRef.current?.offsetWidth || 224
+      const menuHeight = menuRef.current?.offsetHeight || 160
+      const left = Math.max(8, Math.min(triggerRect.left, window.innerWidth - menuWidth - 8))
+      let top = triggerRect.bottom + 8
+
+      if (top + menuHeight > window.innerHeight - 8 && triggerRect.top - menuHeight - 8 >= 8) {
+        top = triggerRect.top - menuHeight - 8
+      }
+
+      setMenuPosition({ left, top })
+    }
+
+    positionMenu()
+    window.addEventListener('resize', positionMenu)
+    window.addEventListener('scroll', positionMenu, true)
+    return () => {
+      window.removeEventListener('resize', positionMenu)
+      window.removeEventListener('scroll', positionMenu, true)
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) {
@@ -216,7 +252,7 @@ function AddToCalendarButton({ eventData }) {
     menuRef.current?.querySelector(`[data-calendar="${preferredKey}"]`)?.focus()
 
     function closeOnOutsideClick(event) {
-      if (!menuRef.current?.contains(event.target)) {
+      if (!triggerContainerRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) {
         setIsOpen(false)
       }
     }
@@ -254,8 +290,9 @@ function AddToCalendarButton({ eventData }) {
   }
 
   return (
-    <div ref={menuRef} className="relative inline-block">
+    <div ref={triggerContainerRef} className="relative inline-block">
       <button
+        ref={triggerRef}
         type="button"
         className="secondary-button"
         aria-expanded={isOpen}
@@ -263,24 +300,29 @@ function AddToCalendarButton({ eventData }) {
         onClick={() => setIsOpen((current) => !current)}>
         {t('calendar.button')}
       </button>
-      {isOpen ? (
-        <ul
-          id={menuId}
-          aria-label={t('calendar.menuLabel')}
-          className="absolute left-0 z-20 mt-2 w-56 rounded-2xl border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-          {CALENDAR_OPTIONS.map((option) => (
-            <li key={option.key}>
-              <button
-                type="button"
-                data-calendar={option.key}
-                className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 focus:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800 dark:focus:bg-slate-800"
-                onClick={() => handlePick(option)}>
-                {t(`calendar.options.${option.key}`)}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {isOpen
+        ? createPortal(
+            <ul
+              ref={menuRef}
+              id={menuId}
+              aria-label={t('calendar.menuLabel')}
+              className="fixed z-20 w-56 max-w-[calc(100vw-1rem)] rounded-2xl border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+              style={menuPosition}>
+              {CALENDAR_OPTIONS.map((option) => (
+                <li key={option.key}>
+                  <button
+                    type="button"
+                    data-calendar={option.key}
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 focus:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800 dark:focus:bg-slate-800"
+                    onClick={() => handlePick(option)}>
+                    {t(`calendar.options.${option.key}`)}
+                  </button>
+                </li>
+              ))}
+            </ul>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }

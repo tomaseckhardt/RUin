@@ -34,6 +34,7 @@ describe('AddToCalendarButton', () => {
     await openMenu()
 
     expect(screen.getByRole('button', { name: t('calendar.button') })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('list', { name: t('calendar.menuLabel') }).parentElement).toBe(document.body)
     for (const key of ['google', 'apple', 'outlook', 'download']) {
       expect(screen.getByRole('button', { name: t(`calendar.options.${key}`) })).toBeInTheDocument()
     }
