@@ -5,7 +5,6 @@ import { downloadBlob } from '../lib/download.js'
 import { buildAbsoluteUrl, parseEventDateTime } from '../lib/format.js'
 import { t, useI18n } from '../lib/i18n.js'
 
-const MOBILE_BROWSER_RE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
 const APPLE_DEVICE_RE = /iPhone|iPad|iPod/i
 const ICS_LINE_LENGTH_LIMIT = 75
 const ICS_LINE_FOLD_LENGTH = 74
@@ -76,26 +75,21 @@ function getCalendarFileName(eventData) {
 }
 
 function openCalendarUrl(url) {
-  const calendarWindow = window.open(url, '_blank', 'noopener,noreferrer')
+  // No 'noopener' feature: with it window.open() always returns null, even
+  // when the tab opened, and the fallback below opened the page a second time.
+  const calendarWindow = window.open(url, '_blank')
 
-  if (!calendarWindow) {
+  if (calendarWindow) {
+    calendarWindow.opener = null
+  } else {
+    // A blocked pop-up.
     window.location.href = url
   }
 }
 
 function exportIcs(eventData) {
-  const content = buildIcs(eventData)
-  const isMobileBrowser = MOBILE_BROWSER_RE.test(navigator.userAgent) || window.matchMedia('(pointer: coarse)').matches
-
-  if (isMobileBrowser) {
-    // Mobile browsers often block download links or blob URLs, but they do
-    // intercept a direct data:text/calendar navigation and open the native
-    // calendar sheet to add the event.
-    window.location.href = `data:text/calendar;charset=utf-8,${encodeURIComponent(content)}`
-    return
-  }
-
-  downloadBlob(new Blob([content], { type: 'text/calendar;charset=utf-8' }), getCalendarFileName(eventData))
+  // Downloaded on phones too; the phone offers to open the file in its calendar.
+  downloadBlob(new Blob([buildIcs(eventData)], { type: 'text/calendar;charset=utf-8' }), getCalendarFileName(eventData))
 }
 
 // Google Calendar's "render" endpoint is a plain https URL that opens a

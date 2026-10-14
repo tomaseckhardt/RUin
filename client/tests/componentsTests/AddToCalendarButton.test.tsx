@@ -15,7 +15,11 @@ let openWindow: jest.SpyInstance
 
 beforeEach(() => {
   jest.clearAllMocks()
-  openWindow = jest.spyOn(window, 'open').mockReturnValue({} as Window)
+  // Like a browser: with the 'noopener' feature window.open() returns null
+  // even though the tab opened.
+  openWindow = jest
+    .spyOn(window, 'open')
+    .mockImplementation((_url, _target, features) => (String(features ?? '').includes('noopener') ? null : ({ opener: window } as unknown as Window)))
 })
 
 afterEach(() => {
@@ -76,6 +80,35 @@ describe('AddToCalendarButton', () => {
     })
     expect(ics).toContain('DTSTART:20260701T163000Z')
     expect(ics).toContain('TRIGGER:-P2D')
+  })
+
+  it('downloads the .ics file on a touch device too', async () => {
+    const matchMedia = jest.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query.includes('coarse'),
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    )
+
+    try {
+      const user = await openMenu()
+      await user.click(screen.getByRole('button', { name: t('calendar.options.apple') }))
+
+      expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'grilovacka.ics')
+    } finally {
+      matchMedia.mockRestore()
+    }
+  })
+
+  it('opens the calendar page once, in a new tab cut off from this one', async () => {
+    const user = await openMenu()
+    await user.click(screen.getByRole('button', { name: t('calendar.options.google') }))
+
+    expect(openWindow).toHaveBeenCalledTimes(1)
+    expect(openWindow.mock.results[0].value).toEqual({ opener: null })
   })
 
   it('closes with Escape without opening anything', async () => {

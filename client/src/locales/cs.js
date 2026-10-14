@@ -387,8 +387,8 @@ export default {
     downloaded: 'Kalendář stažen. Upozornění je nastavené na 2 dny předem.',
     menuLabel: 'Vyber kalendář',
     options: {
-      google: 'Google Kalendář',
-      apple: 'Apple Kalendář',
+      google: 'Google',
+      apple: 'Apple',
       outlook: 'Outlook',
     },
   },
