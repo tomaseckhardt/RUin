@@ -45,7 +45,7 @@ The frontend is a static app (React + Vite) deployed to GitHub Pages; data and l
 - an event photo album with a clickable preview (arrows between photos) and a bulk download of everyone else's photos (one click, as a ZIP, without the ones the signed-in user uploaded themselves)
 - likes and comments on photos: anyone with the invite can like and comment on a photo under their name, and the counts show right in the album
 - a weather forecast for the event's place and time (Open-Meteo, up to 16 days ahead)
-- adding the event to a calendar (a menu: Google Calendar, Apple Calendar / iCal, Outlook, or downloading an `.ics` file with a reminder 2 days before) and the app to the phone's home screen (PWA)
+- adding the event to a calendar, on phones and tablets only (a menu: Google Calendar, Outlook, or Apple Calendar - an `.ics` file with a reminder 2 days before, which a phone opens straight in its calendar and a computer downloads) and the app to the phone's home screen (PWA)
 - sharing the invite (link, QR code, downloadable QR poster)
 - push reminders a day and an hour before an event
 

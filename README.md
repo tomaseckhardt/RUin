@@ -45,7 +45,7 @@ Frontend je statická aplikace (React + Vite) nasazená na GitHub Pages, data a 
 - album fotek z akce s rozklikávacím náhledem (šipky mezi fotkami) a hromadným stažením fotek ostatních (jedním klikem jako ZIP, bez těch, které nahrál přihlášený uživatel sám)
 - lajky a komentáře u fotek: kdokoli s pozvánkou může fotku pod svým jménem lajknout a okomentovat, počty jsou vidět rovnou v albu
 - předpověď počasí pro místo a čas akce (Open-Meteo, až 16 dní dopředu)
-- přidání do kalendáře (nabídka: Google Kalendář, Apple Kalendář / iCal, Outlook, nebo stažení `.ics` souboru s upozorněním 2 dny předem) a na plochu telefonu (PWA)
+- přidání do kalendáře, jen na telefonu a tabletu (nabídka: Google Kalendář, Outlook, nebo Apple Kalendář - soubor `.ics` s upozorněním 2 dny předem, který telefon rovnou otevře v kalendáři a počítač stáhne) a na plochu telefonu (PWA)
 - sdílení pozvánky (odkaz, QR kód, QR plakátek ke stažení)
 - push připomínky den a hodinu před akcí
 

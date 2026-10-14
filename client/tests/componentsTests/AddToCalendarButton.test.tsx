@@ -35,7 +35,7 @@ describe('AddToCalendarButton', () => {
 
     expect(screen.getByRole('button', { name: t('calendar.button') })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('list', { name: t('calendar.menuLabel') }).parentElement).toBe(document.body)
-    for (const key of ['google', 'apple', 'outlook', 'download']) {
+    for (const key of ['google', 'apple', 'outlook']) {
       expect(screen.getByRole('button', { name: t(`calendar.options.${key}`) })).toBeInTheDocument()
     }
     expect(screen.getByRole('button', { name: t('calendar.options.google') })).toHaveFocus()
@@ -64,7 +64,7 @@ describe('AddToCalendarButton', () => {
 
   it('downloads an .ics file with a two-day reminder', async () => {
     const user = await openMenu()
-    await user.click(screen.getByRole('button', { name: t('calendar.options.download') }))
+    await user.click(screen.getByRole('button', { name: t('calendar.options.apple') }))
 
     const [blob, fileName] = jest.mocked(downloadBlob).mock.calls[0] as [Blob, string]
     expect(fileName).toBe('grilovacka.ics')

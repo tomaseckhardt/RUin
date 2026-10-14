@@ -192,11 +192,6 @@ const CALENDAR_OPTIONS = [
   { key: 'google', open: (eventData) => openCalendarUrl(buildGoogleCalendarUrl(eventData)) },
   { key: 'apple', open: exportIcs, toastKey: 'calendar.downloaded' },
   { key: 'outlook', open: (eventData) => openCalendarUrl(buildOutlookCalendarUrl(eventData)) },
-  {
-    key: 'download',
-    open: (eventData) => downloadBlob(new Blob([buildIcs(eventData)], { type: 'text/calendar;charset=utf-8' }), getCalendarFileName(eventData)),
-    toastKey: 'calendar.downloaded',
-  },
 ]
 
 function AddToCalendarButton({ eventData }) {
@@ -289,8 +284,10 @@ function AddToCalendarButton({ eventData }) {
     }
   }
 
+  // Phones and tablets only: a device whose main pointer is a mouse or
+  // trackpad (pointer: fine) doesn't show the button.
   return (
-    <div ref={triggerContainerRef} className="relative inline-block">
+    <div ref={triggerContainerRef} className="relative inline-block pointer-fine:hidden">
       <button
         ref={triggerRef}
         type="button"

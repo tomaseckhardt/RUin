@@ -386,9 +386,8 @@ export default {
     menuLabel: 'Pick a calendar',
     options: {
       google: 'Google Calendar',
-      apple: 'Apple Calendar / iCal',
+      apple: 'Apple Calendar',
       outlook: 'Outlook',
-      download: 'Download an .ics file',
     },
   },
 
