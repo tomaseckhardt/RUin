@@ -192,11 +192,6 @@ const CALENDAR_OPTIONS = [
   { key: 'google', open: (eventData) => openCalendarUrl(buildGoogleCalendarUrl(eventData)) },
   { key: 'apple', open: exportIcs, toastKey: 'calendar.downloaded' },
   { key: 'outlook', open: (eventData) => openCalendarUrl(buildOutlookCalendarUrl(eventData)) },
-  {
-    key: 'download',
-    open: (eventData) => downloadBlob(new Blob([buildIcs(eventData)], { type: 'text/calendar;charset=utf-8' }), getCalendarFileName(eventData)),
-    toastKey: 'calendar.downloaded',
-  },
 ]
 
 function AddToCalendarButton({ eventData }) {

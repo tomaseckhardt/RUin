@@ -388,9 +388,8 @@ export default {
     menuLabel: 'Vyber kalendář',
     options: {
       google: 'Google Kalendář',
-      apple: 'Apple Kalendář / iCal',
+      apple: 'Apple Kalendář',
       outlook: 'Outlook',
-      download: 'Stáhnout soubor .ics',
     },
   },
 
