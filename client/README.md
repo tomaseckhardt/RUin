@@ -33,7 +33,7 @@ Dev server běží na http://localhost:5173/. `dev`, `build` i `preview` jdou p�
 - `npm test` - Jest (jednotkové, komponentové a a11y testy)
 - `npm run test:a11y` - jen a11y testy
 - `npm run typecheck` - typová kontrola testů (`tsc -p tests`; aplikace je v JavaScriptu, testy v TypeScriptu)
-- `npm run test:e2e` - E2E test v Playwrightu proti falešnému Supabase v paměti (`tests/fakeSupabase.ts`), sám si spustí dev server; poprvé je potřeba `npx playwright install chromium`
+- `npm run test:e2e` - E2E test v Playwrightu proti falešnému Supabase v paměti (`tests/fakeSupabase.ts`), sám si spustí dev server; poprvé (a po každém updatu Playwrightu) je potřeba `npx playwright install chromium`; jiný port než obsazený 5288 nastavíš přes `E2E_PORT`
 
 CI spouští `lint`, `typecheck`, `test` i `test:e2e` u každého pull requestu.
 
@@ -44,7 +44,7 @@ CI spouští `lint`, `typecheck`, `test` i `test:e2e` u každého pull requestu.
 - `src/lib/` - API vrstva (`api.js`), Supabase klient, překlady (`i18n.js`) a helpery
 - `src/locales/` - české a anglické texty UI
 - `tests/componentsTests/` - testy v Jestu (`*.test.ts(x)`), Jest setup a testovací helpery
-- `tests/` - E2E test v Playwrightu (`app.e2e.ts`, `fakeSupabase.ts`, `playwright.config.ts`)
+- `tests/` - E2E test v Playwrightu (`app.e2e.ts`, `fakeSupabase.ts`, `e2eInput.ts` s vyplňovanými texty, `playwright.config.ts`)
 - `public/` - service worker, ikony a manifest
 
 ## Důležité pro contributory

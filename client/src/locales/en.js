@@ -383,7 +383,13 @@ export default {
     fileNameFallback: 'event',
     error: 'Couldn’t create the calendar invite.',
     downloaded: 'Calendar file downloaded. The reminder is set for 2 days before.',
-    openingExternalBrowser: 'Opening an external browser to add the event to your calendar.',
+    menuLabel: 'Pick a calendar',
+    options: {
+      google: 'Google Calendar',
+      apple: 'Apple Calendar / iCal',
+      outlook: 'Outlook',
+      download: 'Download an .ics file',
+    },
   },
 
   addToHome: {

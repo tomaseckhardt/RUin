@@ -33,7 +33,7 @@ The dev server runs at http://localhost:5173/. `dev`, `build` and `preview` go t
 - `npm test` - Jest (unit, component and a11y tests)
 - `npm run test:a11y` - a11y tests only
 - `npm run typecheck` - type-checks the tests (`tsc -p tests`; the app is JavaScript, the tests TypeScript)
-- `npm run test:e2e` - the Playwright E2E test against an in-memory fake Supabase (`tests/fakeSupabase.ts`); it starts its own dev server. Run `npx playwright install chromium` once first
+- `npm run test:e2e` - the Playwright E2E test against an in-memory fake Supabase (`tests/fakeSupabase.ts`); it starts its own dev server. Run `npx playwright install chromium` first (and after every Playwright update); `E2E_PORT` picks another port when 5288 is taken
 
 CI runs `lint`, `typecheck`, `test` and `test:e2e` on every pull request.
 
@@ -44,7 +44,7 @@ CI runs `lint`, `typecheck`, `test` and `test:e2e` on every pull request.
 - `src/lib/` - the API layer (`api.js`), the Supabase client, translations (`i18n.js`) and helpers
 - `src/locales/` - Czech and English UI texts
 - `tests/componentsTests/` - the Jest tests (`*.test.ts(x)`), Jest setup and test helpers
-- `tests/` - the Playwright E2E test (`app.e2e.ts`, `fakeSupabase.ts`, `playwright.config.ts`)
+- `tests/` - the Playwright E2E test (`app.e2e.ts`, `fakeSupabase.ts`, `e2eInput.ts` with the texts it types in, `playwright.config.ts`)
 - `public/` - service worker, icons and the manifest
 
 ## Important for contributors

@@ -385,7 +385,13 @@ export default {
     fileNameFallback: 'udalost',
     error: 'Nepodařilo se vytvořit kalendářovou pozvánku.',
     downloaded: 'Kalendář stažen. Upozornění je nastavené na 2 dny předem.',
-    openingExternalBrowser: 'Otevírá se externí prohlížeč pro přidání události do kalendáře.',
+    menuLabel: 'Vyber kalendář',
+    options: {
+      google: 'Google Kalendář',
+      apple: 'Apple Kalendář / iCal',
+      outlook: 'Outlook',
+      download: 'Stáhnout soubor .ics',
+    },
   },
 
   addToHome: {
