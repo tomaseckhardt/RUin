@@ -284,8 +284,10 @@ function AddToCalendarButton({ eventData }) {
     }
   }
 
+  // Phones and tablets only: a device whose main pointer is a mouse or
+  // trackpad (pointer: fine) doesn't show the button.
   return (
-    <div ref={triggerContainerRef} className="relative inline-block">
+    <div ref={triggerContainerRef} className="relative inline-block pointer-fine:hidden">
       <button
         ref={triggerRef}
         type="button"
